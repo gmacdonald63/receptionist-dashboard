@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Phone, Calendar, FileText, Clock, DollarSign, Settings, Download, Play, Pause, Search, Filter, RefreshCw, Menu, X, ChevronRight, ChevronDown } from 'lucide-react';
+import { retellService } from './retellService';
 
 const Dashboard = () => {
   const [activeTab, setActiveTab] = useState('overview');
@@ -8,53 +9,51 @@ const Dashboard = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [expandedAppointment, setExpandedAppointment] = useState(null);
+  
+  // Real data from Retell API
+  const [callLogs, setCallLogs] = useState([]);
+  const [appointments, setAppointments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({
+    totalCalls: 0,
+    appointments: 0,
+    totalMinutes: 0,
+    monthlyBill: 0
+  });
 
-  // Sample data
-  const stats = {
-    totalCalls: 247,
-    appointments: 43,
-    totalMinutes: 1847,
-    monthlyBill: 184.70
+  // Fetch data from Retell API
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      // Fetch calls
+      const calls = await retellService.getCalls();
+      const transformedCalls = calls.map(call => retellService.transformCallData(call));
+      setCallLogs(transformedCalls);
+
+      // Get appointments from calls
+      const appointmentsList = await retellService.getAppointments();
+      setAppointments(appointmentsList);
+
+      // Calculate stats
+      const totalMinutes = calls.reduce((sum, call) => sum + (call.call_duration || 0), 0) / 60;
+      const monthlyBill = totalMinutes * 0.10;
+
+      setStats({
+        totalCalls: calls.length,
+        appointments: appointmentsList.length,
+        totalMinutes: Math.round(totalMinutes),
+        monthlyBill: monthlyBill.toFixed(2)
+      });
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    } finally {
+      setLoading(false);
+    }
   };
-
-  const recentAppointments = [
-    { id: 1, name: 'Sarah Johnson', date: '2026-02-03', time: '10:00 AM', service: 'Consultation', status: 'confirmed', phone: '(555) 123-4567' },
-    { id: 2, name: 'Michael Chen', date: '2026-02-03', time: '2:30 PM', service: 'Follow-up', status: 'confirmed', phone: '(555) 246-8135' },
-    { id: 3, name: 'Emily Rodriguez', date: '2026-02-04', time: '9:00 AM', service: 'Initial Visit', status: 'pending', phone: '(555) 369-2580' },
-    { id: 4, name: 'David Park', date: '2026-02-04', time: '11:30 AM', service: 'Consultation', status: 'confirmed', phone: '(555) 159-7530' },
-    { id: 5, name: 'Jessica Williams', date: '2026-02-05', time: '1:00 PM', service: 'Review', status: 'pending', phone: '(555) 753-9514' }
-  ];
-
-  const callLogs = [
-    { id: 1, caller: 'Sarah Johnson', number: '(555) 123-4567', duration: '4:32', time: '2026-01-29 09:15 AM', outcome: 'Appointment Booked', hasRecording: true, hasTranscript: true },
-    { id: 2, caller: 'Unknown', number: '(555) 987-6543', duration: '2:18', time: '2026-01-29 08:45 AM', outcome: 'Information Request', hasRecording: true, hasTranscript: true },
-    { id: 3, caller: 'Michael Chen', number: '(555) 246-8135', duration: '6:12', time: '2026-01-28 04:30 PM', outcome: 'Appointment Booked', hasRecording: true, hasTranscript: true },
-    { id: 4, caller: 'Emily Rodriguez', number: '(555) 369-2580', duration: '3:45', time: '2026-01-28 02:15 PM', outcome: 'Appointment Booked', hasRecording: true, hasTranscript: true },
-    { id: 5, caller: 'David Park', number: '(555) 159-7530', duration: '5:20', time: '2026-01-28 11:00 AM', outcome: 'Rescheduled', hasRecording: true, hasTranscript: true },
-    { id: 6, caller: 'Jessica Williams', number: '(555) 753-9514', duration: '2:55', time: '2026-01-27 03:45 PM', outcome: 'Appointment Booked', hasRecording: true, hasTranscript: true },
-    { id: 7, caller: 'Robert Anderson', number: '(555) 852-4163', duration: '1:30', time: '2026-01-27 10:20 AM', outcome: 'Voicemail Left', hasRecording: true, hasTranscript: false }
-  ];
-
-  const sampleTranscript = {
-    caller: 'Sarah Johnson',
-    date: '2026-01-29 09:15 AM',
-    transcript: [
-      { speaker: 'AI', text: 'Thank you for calling ABC Medical Services. How may I help you today?' },
-      { speaker: 'Caller', text: 'Hi, I\'d like to schedule an appointment with Dr. Smith.' },
-      { speaker: 'AI', text: 'I\'d be happy to help you schedule an appointment with Dr. Smith. May I have your name please?' },
-      { speaker: 'Caller', text: 'Yes, it\'s Sarah Johnson.' },
-      { speaker: 'AI', text: 'Thank you, Sarah. What type of appointment would you like to schedule?' },
-      { speaker: 'Caller', text: 'I need a consultation for a new patient visit.' },
-      { speaker: 'AI', text: 'Perfect. I have availability on February 3rd at 10:00 AM or February 5th at 2:00 PM. Which works better for you?' },
-      { speaker: 'Caller', text: 'February 3rd at 10 AM works great.' },
-      { speaker: 'AI', text: 'Excellent. I\'ve scheduled you for February 3rd at 10:00 AM with Dr. Smith. Can I have a phone number where we can reach you?' },
-      { speaker: 'Caller', text: 'Sure, it\'s 555-123-4567.' },
-      { speaker: 'AI', text: 'Perfect. You\'re all set, Sarah. You\'ll receive a confirmation text shortly. Is there anything else I can help you with?' },
-      { speaker: 'Caller', text: 'No, that\'s all. Thank you!' },
-      { speaker: 'AI', text: 'You\'re welcome! Have a great day.' }
-    ]
-  };
-
   const StatCard = ({ icon: Icon, label, value, color }) => (
     <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
       <div className="flex items-center justify-between">
@@ -71,53 +70,73 @@ const Dashboard = () => {
 
   const renderOverview = () => (
     <div className="space-y-4 md:space-y-6">
-      <div className="grid grid-cols-2 gap-3 md:gap-6">
-        <StatCard icon={Phone} label="Total Calls" value={stats.totalCalls} color="bg-blue-600" />
-        <StatCard icon={Calendar} label="Appointments" value={stats.appointments} color="bg-green-600" />
-        <StatCard icon={Clock} label="Total Minutes" value={stats.totalMinutes} color="bg-purple-600" />
-        <StatCard icon={DollarSign} label="Monthly Bill" value={`$${stats.monthlyBill}`} color="bg-orange-600" />
-      </div>
-
-      <div className="bg-gray-800 rounded-lg p-4 md:p-6 border border-gray-700">
-        <h3 className="text-lg md:text-xl font-semibold mb-4 text-white">Recent Appointments</h3>
-        <div className="space-y-3">
-          {recentAppointments.slice(0, 5).map(apt => (
-            <div key={apt.id} className="p-3 bg-gray-750 rounded-lg">
-              <div className="flex items-start justify-between mb-2">
-                <div className="flex-1">
-                  <p className="font-medium text-white">{apt.name}</p>
-                  <p className="text-sm text-gray-400">{apt.service}</p>
-                </div>
-                <span className={`px-2 py-1 rounded text-xs whitespace-nowrap ${apt.status === 'confirmed' ? 'bg-green-900 text-green-300' : 'bg-yellow-900 text-yellow-300'}`}>
-                  {apt.status}
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <p className="text-gray-400">{apt.date}</p>
-                <p className="text-white">{apt.time}</p>
-              </div>
-            </div>
-          ))}
+      {loading ? (
+        <div className="text-center py-12">
+          <RefreshCw className="w-8 h-8 animate-spin text-blue-500 mx-auto mb-4" />
+          <p className="text-gray-400">Loading data...</p>
         </div>
-      </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3 md:gap-6">
+            <StatCard icon={Phone} label="Total Calls" value={stats.totalCalls} color="bg-blue-600" />
+            <StatCard icon={Calendar} label="Appointments" value={stats.appointments} color="bg-green-600" />
+            <StatCard icon={Clock} label="Total Minutes" value={stats.totalMinutes} color="bg-purple-600" />
+            <StatCard icon={DollarSign} label="Monthly Bill" value={`$${stats.monthlyBill}`} color="bg-orange-600" />
+          </div>
 
-      <div className="bg-gray-800 rounded-lg p-4 md:p-6 border border-gray-700">
-        <h3 className="text-lg md:text-xl font-semibold mb-4 text-white">Recent Calls</h3>
-        <div className="space-y-3">
-          {callLogs.slice(0, 5).map(call => (
-            <div key={call.id} className="p-3 bg-gray-750 rounded-lg">
-              <div className="flex items-start justify-between mb-2">
-                <div className="flex-1">
-                  <p className="font-medium text-white">{call.caller}</p>
-                  <p className="text-sm text-gray-400">{call.number}</p>
-                </div>
-                <p className="text-sm text-white">{call.duration}</p>
+          <div className="bg-gray-800 rounded-lg p-4 md:p-6 border border-gray-700">
+            <h3 className="text-lg md:text-xl font-semibold mb-4 text-white">Recent Appointments</h3>
+            {appointments.length === 0 ? (
+              <p className="text-gray-400 text-center py-8">No appointments booked yet</p>
+            ) : (
+              <div className="space-y-3">
+                {appointments.slice(0, 5).map(apt => (
+                  <div key={apt.id} className="p-3 bg-gray-750 rounded-lg">
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex-1">
+                        <p className="font-medium text-white">{apt.name}</p>
+                        <p className="text-sm text-gray-400">{apt.service}</p>
+                      </div>
+                      <span className={`px-2 py-1 rounded text-xs whitespace-nowrap ${apt.status === 'confirmed' ? 'bg-green-900 text-green-300' : 'bg-yellow-900 text-yellow-300'}`}>
+                        {apt.status}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <p className="text-gray-400">{apt.date}</p>
+                      <p className="text-white">{apt.time}</p>
+                    </div>
+                    {apt.address && (
+                      <p className="text-xs text-gray-500 mt-1">{apt.address}</p>
+                    )}
+                  </div>
+                ))}
               </div>
-              <p className="text-sm text-gray-400">{call.outcome}</p>
-            </div>
-          ))}
-        </div>
-      </div>
+            )}
+          </div>
+
+          <div className="bg-gray-800 rounded-lg p-4 md:p-6 border border-gray-700">
+            <h3 className="text-lg md:text-xl font-semibold mb-4 text-white">Recent Calls</h3>
+            {callLogs.length === 0 ? (
+              <p className="text-gray-400 text-center py-8">No calls yet</p>
+            ) : (
+              <div className="space-y-3">
+                {callLogs.slice(0, 5).map(call => (
+                  <div key={call.id} className="p-3 bg-gray-750 rounded-lg">
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex-1">
+                        <p className="font-medium text-white">{call.caller}</p>
+                        <p className="text-sm text-gray-400">{call.number}</p>
+                      </div>
+                      <p className="text-sm text-white">{call.duration}</p>
+                    </div>
+                    <p className="text-sm text-gray-400">{call.outcome}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 
@@ -125,59 +144,90 @@ const Dashboard = () => {
     <div className="space-y-3">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg md:text-xl font-semibold text-white">All Appointments</h3>
-        <button className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
-          <Download className="w-4 h-4" />
-          <span className="hidden sm:inline">Export</span>
+        <button 
+          onClick={fetchData}
+          className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+        >
+          <RefreshCw className="w-4 h-4" />
+          <span className="hidden sm:inline">Refresh</span>
         </button>
       </div>
       
-      {recentAppointments.map(apt => (
-        <div key={apt.id} className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
-          <div 
-            className="p-4 cursor-pointer"
-            onClick={() => setExpandedAppointment(expandedAppointment === apt.id ? null : apt.id)}
-          >
-            <div className="flex items-start justify-between mb-2">
-              <div className="flex-1">
-                <p className="font-medium text-white text-lg">{apt.name}</p>
-                <p className="text-sm text-gray-400 mt-1">{apt.service}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className={`px-2 py-1 rounded text-xs ${apt.status === 'confirmed' ? 'bg-green-900 text-green-300' : 'bg-yellow-900 text-yellow-300'}`}>
-                  {apt.status}
-                </span>
-                {expandedAppointment === apt.id ? <ChevronDown className="w-5 h-5 text-gray-400" /> : <ChevronRight className="w-5 h-5 text-gray-400" />}
-              </div>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <p className="text-gray-300">{apt.date}</p>
-              <p className="text-white font-medium">{apt.time}</p>
-            </div>
-          </div>
-          
-          {expandedAppointment === apt.id && (
-            <div className="px-4 pb-4 pt-2 border-t border-gray-700 bg-gray-750">
-              <div className="space-y-2">
-                <div>
-                  <p className="text-xs text-gray-400">Phone</p>
-                  <p className="text-white">{apt.phone}</p>
-                </div>
-                <div className="flex gap-2 mt-3">
-                  <button className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
-                    Call Patient
-                  </button>
-                  <button className="flex-1 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 text-sm">
-                    Reschedule
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
+      {loading ? (
+        <div className="text-center py-12">
+          <RefreshCw className="w-8 h-8 animate-spin text-blue-500 mx-auto mb-4" />
+          <p className="text-gray-400">Loading appointments...</p>
         </div>
-      ))}
+      ) : appointments.length === 0 ? (
+        <div className="bg-gray-800 rounded-lg p-8 border border-gray-700 text-center">
+          <Calendar className="w-12 h-12 text-gray-600 mx-auto mb-4" />
+          <p className="text-gray-400">No appointments booked yet</p>
+        </div>
+      ) : (
+        appointments.map(apt => (
+          <div key={apt.id} className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
+            <div 
+              className="p-4 cursor-pointer"
+              onClick={() => setExpandedAppointment(expandedAppointment === apt.id ? null : apt.id)}
+            >
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex-1">
+                  <p className="font-medium text-white text-lg">{apt.name}</p>
+                  <p className="text-sm text-gray-400 mt-1">{apt.service}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`px-2 py-1 rounded text-xs ${apt.status === 'confirmed' ? 'bg-green-900 text-green-300' : 'bg-yellow-900 text-yellow-300'}`}>
+                    {apt.status}
+                  </span>
+                  {expandedAppointment === apt.id ? <ChevronDown className="w-5 h-5 text-gray-400" /> : <ChevronRight className="w-5 h-5 text-gray-400" />}
+                </div>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <p className="text-gray-300">{apt.date}</p>
+                <p className="text-white font-medium">{apt.time}</p>
+              </div>
+              {apt.address && (
+                <p className="text-xs text-gray-500 mt-2">{apt.address}</p>
+              )}
+            </div>
+            
+            {expandedAppointment === apt.id && (
+              <div className="px-4 pb-4 pt-2 border-t border-gray-700 bg-gray-750">
+                <div className="space-y-2">
+                  <div>
+                    <p className="text-xs text-gray-400">Phone</p>
+                    <p className="text-white">{apt.phone}</p>
+                  </div>
+                  {apt.address && (
+                    <div>
+                      <p className="text-xs text-gray-400">Address</p>
+                      <p className="text-white">{apt.address}</p>
+                    </div>
+                  )}
+                  <div className="flex gap-2 mt-3">
+                    <button 
+                      onClick={() => window.open(`tel:${apt.phone}`, '_self')}
+                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+                    >
+                      Call Patient
+                    </button>
+                    <button className="flex-1 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 text-sm">
+                      View Details
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        ))
+      )}
     </div>
   );
 
+  const filteredCalls = callLogs.filter(call => 
+    call.caller.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    call.number.includes(searchTerm)
+  );
   const renderCallLogs = () => (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row gap-3">
@@ -192,9 +242,12 @@ const Dashboard = () => {
           />
         </div>
         <div className="flex gap-2">
-          <button className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-800 border border-gray-700 text-white rounded-lg hover:bg-gray-750">
-            <Filter className="w-4 h-4" />
-            <span className="hidden sm:inline">Filter</span>
+          <button 
+            onClick={fetchData}
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-800 border border-gray-700 text-white rounded-lg hover:bg-gray-750"
+          >
+            <RefreshCw className="w-4 h-4" />
+            <span className="hidden sm:inline">Refresh</span>
           </button>
           <button className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
             <Download className="w-4 h-4" />
@@ -203,127 +256,169 @@ const Dashboard = () => {
         </div>
       </div>
 
-      <div className="space-y-3">
-        {callLogs.map(call => (
-          <div 
-            key={call.id} 
-            className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden"
-            onClick={() => setSelectedCall(selectedCall === call.id ? null : call.id)}
-          >
-            <div className="p-4 cursor-pointer">
-              <div className="flex items-start justify-between mb-2">
-                <div className="flex items-start gap-3 flex-1">
-                  <Phone className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-white truncate">{call.caller}</p>
-                    <p className="text-sm text-gray-400">{call.number}</p>
-                  </div>
-                </div>
-                <ChevronRight className={`w-5 h-5 text-gray-400 transition-transform flex-shrink-0 ${selectedCall === call.id ? 'rotate-90' : ''}`} />
-              </div>
-              <div className="flex items-center justify-between text-sm mt-2">
-                <span className="text-gray-400">{call.duration}</span>
-                <span className="text-white font-medium">{call.outcome}</span>
-              </div>
-              <p className="text-xs text-gray-500 mt-1">{call.time}</p>
-            </div>
-
-            {selectedCall === call.id && (
-              <div className="px-4 pb-4 border-t border-gray-700 bg-gray-750 space-y-3">
-                <div className="pt-4 space-y-2">
-                  <div>
-                    <p className="text-xs text-gray-400 mb-1">Duration</p>
-                    <p className="text-white">{call.duration}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-400 mb-1">Outcome</p>
-                    <p className="text-white">{call.outcome}</p>
-                  </div>
-                </div>
-                
-                {call.hasRecording && (
-                  <div className="bg-gray-800 p-3 rounded-lg">
-                    <p className="text-xs text-gray-400 mb-2">Recording</p>
-                    <div className="flex items-center gap-3">
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setPlayingRecording(playingRecording === call.id ? null : call.id);
-                        }}
-                        className="p-2 bg-blue-600 rounded-full hover:bg-blue-700"
-                      >
-                        {playingRecording === call.id ? 
-                          <Pause className="w-4 h-4 text-white" /> : 
-                          <Play className="w-4 h-4 text-white" />
-                        }
-                      </button>
-                      <div className="flex-1 h-2 bg-gray-600 rounded-full">
-                        <div className="h-full w-1/3 bg-blue-500 rounded-full"></div>
-                      </div>
-                      <span className="text-xs text-gray-400 whitespace-nowrap">1:32</span>
+      {loading ? (
+        <div className="text-center py-12">
+          <RefreshCw className="w-8 h-8 animate-spin text-blue-500 mx-auto mb-4" />
+          <p className="text-gray-400">Loading calls...</p>
+        </div>
+      ) : filteredCalls.length === 0 ? (
+        <div className="bg-gray-800 rounded-lg p-8 border border-gray-700 text-center">
+          <Phone className="w-12 h-12 text-gray-600 mx-auto mb-4" />
+          <p className="text-gray-400">
+            {searchTerm ? 'No calls match your search' : 'No calls yet'}
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {filteredCalls.map(call => (
+            <div 
+              key={call.id} 
+              className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden"
+              onClick={() => setSelectedCall(selectedCall === call.id ? null : call.id)}
+            >
+              <div className="p-4 cursor-pointer">
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex items-start gap-3 flex-1">
+                    <Phone className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-white truncate">{call.caller}</p>
+                      <p className="text-sm text-gray-400">{call.number}</p>
                     </div>
                   </div>
-                )}
-
-                {call.hasTranscript && (
-                  <button 
-                    onClick={() => setActiveTab('transcripts')}
-                    className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2"
-                  >
-                    <FileText className="w-4 h-4" />
-                    View Transcript
-                  </button>
-                )}
+                  <ChevronRight className={`w-5 h-5 text-gray-400 transition-transform flex-shrink-0 ${selectedCall === call.id ? 'rotate-90' : ''}`} />
+                </div>
+                <div className="flex items-center justify-between text-sm mt-2">
+                  <span className="text-gray-400">{call.duration}</span>
+                  <span className="text-white font-medium">{call.outcome}</span>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">{call.time}</p>
               </div>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
 
-  const renderTranscripts = () => (
-    <div className="space-y-4">
-      <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-white">Call Transcript</h3>
-          <button className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-            <Download className="w-4 h-4" />
-          </button>
-        </div>
-        
-        <div className="mb-4 p-3 bg-gray-750 rounded-lg space-y-2">
-          <div>
-            <p className="text-xs text-gray-400">Caller</p>
-            <p className="text-white font-medium">{sampleTranscript.caller}</p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-400">Date & Time</p>
-            <p className="text-white">{sampleTranscript.date}</p>
-          </div>
-        </div>
+              {selectedCall === call.id && (
+                <div className="px-4 pb-4 border-t border-gray-700 bg-gray-750 space-y-3">
+                  <div className="pt-4 space-y-2">
+                    <div>
+                      <p className="text-xs text-gray-400 mb-1">Duration</p>
+                      <p className="text-white">{call.duration}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-400 mb-1">Outcome</p>
+                      <p className="text-white">{call.outcome}</p>
+                    </div>
+                    {call.call_summary && (
+                      <div>
+                        <p className="text-xs text-gray-400 mb-1">Summary</p>
+                        <p className="text-white text-sm">{call.call_summary}</p>
+                      </div>
+                    )}
+                    {call.appointment.date && call.appointment.time && (
+                      <div className="bg-green-900/20 border border-green-800 rounded-lg p-3 mt-2">
+                        <p className="text-xs text-gray-400 mb-1">Appointment Booked</p>
+                        <p className="text-white font-medium">{call.appointment.date} at {call.appointment.time}</p>
+                        {call.appointment.address && (
+                          <p className="text-sm text-gray-300 mt-1">{call.appointment.address}</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  
+                  {call.hasRecording && call.recording_url && (
+                    <div className="bg-gray-800 p-3 rounded-lg">
+                      <p className="text-xs text-gray-400 mb-2">Recording</p>
+                      <a 
+                        href={call.recording_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Play className="w-4 h-4" />
+                        Play Recording
+                      </a>
+                    </div>
+                  )}
 
-        <div className="space-y-3 max-h-[60vh] overflow-y-auto">
-          {sampleTranscript.transcript.map((line, idx) => (
-            <div key={idx} className={`p-3 rounded-lg ${line.speaker === 'AI' ? 'bg-blue-900/30 ml-4' : 'bg-gray-750 mr-4'}`}>
-              <p className="text-xs font-semibold mb-1 text-gray-400">{line.speaker}</p>
-              <p className="text-white text-sm leading-relaxed">{line.text}</p>
+                  {call.hasTranscript && call.transcript && (
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedCall(call.id);
+                        setActiveTab('transcripts');
+                      }}
+                      className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2"
+                    >
+                      <FileText className="w-4 h-4" />
+                      View Transcript
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>
-      </div>
-
-      <div className="flex gap-2">
-        <button className="flex-1 px-4 py-3 bg-gray-800 border border-gray-700 text-white rounded-lg hover:bg-gray-750">
-          Previous
-        </button>
-        <button className="flex-1 px-4 py-3 bg-gray-800 border border-gray-700 text-white rounded-lg hover:bg-gray-750">
-          Next
-        </button>
-      </div>
+      )}
     </div>
   );
 
+  const renderTranscripts = () => {
+    const currentCall = callLogs.find(call => call.id === selectedCall) || callLogs[0];
+    
+    if (!currentCall || !currentCall.transcript) {
+      return (
+        <div className="bg-gray-800 rounded-lg p-8 border border-gray-700 text-center">
+          <FileText className="w-12 h-12 text-gray-600 mx-auto mb-4" />
+          <p className="text-gray-400">No transcript available</p>
+          <button 
+            onClick={() => setActiveTab('calls')}
+            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            Go to Calls
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-4">
+        <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-white">Call Transcript</h3>
+            <button className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+              <Download className="w-4 h-4" />
+            </button>
+          </div>
+          
+          <div className="mb-4 p-3 bg-gray-750 rounded-lg space-y-2">
+            <div>
+              <p className="text-xs text-gray-400">Caller</p>
+              <p className="text-white font-medium">{currentCall.caller}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-400">Phone</p>
+              <p className="text-white">{currentCall.number}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-400">Date & Time</p>
+              <p className="text-white">{currentCall.time}</p>
+            </div>
+          </div>
+
+          <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+            <div className="p-3 rounded-lg bg-gray-750">
+              <p className="text-white text-sm leading-relaxed whitespace-pre-wrap">{currentCall.transcript}</p>
+            </div>
+          </div>
+
+          {currentCall.call_summary && (
+            <div className="mt-4 p-4 bg-blue-900/20 border border-blue-800 rounded-lg">
+              <p className="text-xs text-blue-400 font-semibold mb-2">CALL SUMMARY</p>
+              <p className="text-white text-sm leading-relaxed">{currentCall.call_summary}</p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
   const renderSettings = () => (
     <div className="space-y-4">
       <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
@@ -425,14 +520,14 @@ const Dashboard = () => {
         <h3 className="text-lg font-semibold mb-4 text-white">Billing History</h3>
         <div className="space-y-3">
           {[
+            { month: 'Jan 2026', minutes: stats.totalMinutes, amount: `$${stats.monthlyBill}`, status: 'Current' },
             { month: 'Dec 2025', minutes: '1,642', amount: '$164.20', status: 'Paid' },
-            { month: 'Nov 2025', minutes: '1,523', amount: '$152.30', status: 'Paid' },
-            { month: 'Oct 2025', minutes: '1,789', amount: '$178.90', status: 'Paid' }
+            { month: 'Nov 2025', minutes: '1,523', amount: '$152.30', status: 'Paid' }
           ].map((bill, idx) => (
             <div key={idx} className="p-3 bg-gray-750 rounded-lg">
               <div className="flex items-center justify-between mb-2">
                 <p className="font-medium text-white">{bill.month}</p>
-                <span className="px-2 py-1 bg-green-900 text-green-300 rounded text-xs">
+                <span className={`px-2 py-1 rounded text-xs ${bill.status === 'Current' ? 'bg-blue-900 text-blue-300' : 'bg-green-900 text-green-300'}`}>
                   {bill.status}
                 </span>
               </div>
@@ -440,9 +535,11 @@ const Dashboard = () => {
                 <span className="text-gray-400">{bill.minutes} minutes</span>
                 <span className="text-white font-medium">{bill.amount}</span>
               </div>
-              <button className="mt-2 w-full px-3 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 text-sm">
-                Download Invoice
-              </button>
+              {bill.status === 'Paid' && (
+                <button className="mt-2 w-full px-3 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 text-sm">
+                  Download Invoice
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -469,8 +566,11 @@ const Dashboard = () => {
             <h1 className="text-lg md:text-2xl font-bold text-white">AI Receptionist</h1>
           </div>
           <div className="flex items-center gap-3">
-            <button className="p-2 hover:bg-gray-700 rounded-lg hidden md:block">
-              <RefreshCw className="w-5 h-5 text-gray-400" />
+            <button 
+              onClick={fetchData}
+              className="p-2 hover:bg-gray-700 rounded-lg hidden md:block"
+            >
+              <RefreshCw className={`w-5 h-5 text-gray-400 ${loading ? 'animate-spin' : ''}`} />
             </button>
             <button 
               className="p-2 hover:bg-gray-700 rounded-lg md:hidden"
