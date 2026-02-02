@@ -6,7 +6,7 @@ export const retellService = {
   async getCalls(limit = 100) {
     try {
       const response = await fetch(`${RETELL_API_BASE}/list-calls`, {
-        method: 'GET',
+        method: 'POST',
         headers: {
           'Authorization': `Bearer ${RETELL_API_KEY}`,
           'Content-Type': 'application/json'
