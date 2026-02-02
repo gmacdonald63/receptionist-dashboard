@@ -4,26 +4,44 @@ const RETELL_API_BASE = 'https://api.retellai.com/v2';
 export const retellService = {
   // Fetch all calls
   async getCalls(limit = 100) {
-    try {
-      const response = await fetch(`${RETELL_API_BASE}/list-calls`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${RETELL_API_KEY}`,
-          'Content-Type': 'application/json'
-        }
-      });
+  console.log('Calling Retell API...');
+  console.log('API Key (first 10 chars):', RETELL_API_KEY?.substring(0, 10));
+  console.log('API Base:', RETELL_API_BASE);
+  
+  try {
+    const url = `${RETELL_API_BASE}/list-calls`;
+    console.log('Full URL:', url);
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${RETELL_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        limit: limit,
+        sort_order: 'descending'
+      })
+    });
 
-      if (!response.ok) {
-        throw new Error(`API Error: ${response.status}`);
-      }
+    console.log('Response status:', response.status);
+    console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+    
+    const responseText = await response.text();
+    console.log('Response body:', responseText);
 
-      const data = await response.json();
-      return data.calls || [];
-    } catch (error) {
-      console.error('Error fetching calls:', error);
-      return [];
+    if (!response.ok) {
+      throw new Error(`API Error: ${response.status} - ${responseText}`);
     }
-  },
+
+    const data = JSON.parse(responseText);
+    console.log('Parsed data:', data);
+    return data || [];
+  } catch (error) {
+    console.error('Error fetching calls:', error);
+    return [];
+  }
+},
 
   // Get a specific call by ID
   async getCalls(limit = 100) {
