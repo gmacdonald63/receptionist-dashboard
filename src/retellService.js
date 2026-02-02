@@ -1,4 +1,4 @@
-const RETELL_API_KEY = import.meta.env.VITE_RETELL_API_KEY;
+const RETELL_API_KEY = 'key_867f30efed6c101d9e2d8776e206';
 const RETELL_API_BASE = 'https://api.retellai.com/v2';
 
 export const retellService = {
