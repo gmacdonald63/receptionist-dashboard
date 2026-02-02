@@ -26,15 +26,34 @@ export const retellService = {
   },
 
   // Get a specific call by ID
-  async getCall(callId) {
-    try {
-      const response = await fetch(`${RETELL_API_BASE}/get-call/${callId}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${RETELL_API_KEY}`,
-          'Content-Type': 'application/json'
-        }
-      });
+  async getCalls(limit = 100) {
+  try {
+    const response = await fetch(`${RETELL_API_BASE}/list-calls`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${RETELL_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        limit: limit,
+        sort_order: 'descending'
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('API Error Response:', errorText);
+      throw new Error(`API Error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log('API Response:', data);
+    return data || [];
+  } catch (error) {
+    console.error('Error fetching calls:', error);
+    return [];
+  }
+},
 
       if (!response.ok) {
         throw new Error(`API Error: ${response.status}`);
