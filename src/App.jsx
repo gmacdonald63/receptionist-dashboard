@@ -1,14 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { Phone, Calendar, FileText, Clock, DollarSign, Settings, Download, Play, Pause, Search, Filter, RefreshCw, Menu, X, ChevronRight, ChevronDown } from 'lucide-react';
 import { retellService } from './retellService';
+import logo from './assets/RELIANT SOLUTIONS LOGO.svg';
 
-const Dashboard = () => {
-  const [activeTab, setActiveTab] = useState('overview');
+const App = () => {
+  const [activeTab, setActiveTab] = useState('appointments');
   const [selectedCall, setSelectedCall] = useState(null);
   const [playingRecording, setPlayingRecording] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [expandedAppointment, setExpandedAppointment] = useState(null);
+  const [currentWeekStart, setCurrentWeekStart] = useState(() => {
+    const today = new Date();
+    const first = today.getDate() - today.getDay();
+    return new Date(today.setDate(first));
+  });
   
   // Real data from Retell API
   const [callLogs, setCallLogs] = useState([]);
@@ -140,89 +146,205 @@ const Dashboard = () => {
     </div>
   );
 
-  const renderAppointments = () => (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg md:text-xl font-semibold text-white">All Appointments</h3>
-        <button 
-          onClick={fetchData}
-          className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
-        >
-          <RefreshCw className="w-4 h-4" />
-          <span className="hidden sm:inline">Refresh</span>
-        </button>
-      </div>
-      
-      {loading ? (
-        <div className="text-center py-12">
-          <RefreshCw className="w-8 h-8 animate-spin text-blue-500 mx-auto mb-4" />
-          <p className="text-gray-400">Loading appointments...</p>
-        </div>
-      ) : appointments.length === 0 ? (
-        <div className="bg-gray-800 rounded-lg p-8 border border-gray-700 text-center">
-          <Calendar className="w-12 h-12 text-gray-600 mx-auto mb-4" />
-          <p className="text-gray-400">No appointments booked yet</p>
-        </div>
-      ) : (
-        appointments.map(apt => (
-          <div key={apt.id} className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
-            <div 
-              className="p-4 cursor-pointer"
-              onClick={() => setExpandedAppointment(expandedAppointment === apt.id ? null : apt.id)}
+  const getWeekDates = (weekStart) => {
+    const dates = [];
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(weekStart);
+      date.setDate(date.getDate() + i);
+      dates.push(date);
+    }
+    return dates;
+  };
+
+  const getAppointmentsForDate = (date) => {
+    return appointments.filter(apt => {
+      if (!apt.date) return false;
+      const aptDate = new Date(apt.date);
+      return aptDate.toDateString() === date.toDateString();
+    });
+  };
+
+  const formatDateForDisplay = (date) => {
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  const formatDayOfWeek = (date) => {
+    return date.toLocaleDateString('en-US', { weekday: 'short' });
+  };
+
+  const goToToday = () => {
+    const today = new Date();
+    const first = today.getDate() - today.getDay();
+    setCurrentWeekStart(new Date(today.getFullYear(), today.getMonth(), first));
+  };
+
+  const goPreviousWeek = () => {
+    const newDate = new Date(currentWeekStart);
+    newDate.setDate(newDate.getDate() - 7);
+    setCurrentWeekStart(newDate);
+  };
+
+  const goNextWeek = () => {
+    const newDate = new Date(currentWeekStart);
+    newDate.setDate(newDate.getDate() + 7);
+    setCurrentWeekStart(newDate);
+  };
+
+  const renderAppointments = () => {
+    const weekDates = getWeekDates(currentWeekStart);
+    const isCurrentWeek = getWeekDates(new Date())[0].toDateString() === weekDates[0].toDateString();
+
+    return (
+      <div className="space-y-4">
+        {/* Week Navigation */}
+        <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={goPreviousWeek}
+              className="px-3 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 border border-gray-700 text-sm"
             >
-              <div className="flex items-start justify-between mb-2">
-                <div className="flex-1">
-                  <p className="font-medium text-white text-lg">{apt.name}</p>
-                  <p className="text-sm text-gray-400 mt-1">{apt.service}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className={`px-2 py-1 rounded text-xs ${apt.status === 'confirmed' ? 'bg-green-900 text-green-300' : 'bg-yellow-900 text-yellow-300'}`}>
-                    {apt.status}
-                  </span>
-                  {expandedAppointment === apt.id ? <ChevronDown className="w-5 h-5 text-gray-400" /> : <ChevronRight className="w-5 h-5 text-gray-400" />}
-                </div>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <p className="text-gray-300">{apt.date}</p>
-                <p className="text-white font-medium">{apt.time}</p>
-              </div>
-              {apt.address && (
-                <p className="text-xs text-gray-500 mt-2">{apt.address}</p>
-              )}
-            </div>
-            
-            {expandedAppointment === apt.id && (
-              <div className="px-4 pb-4 pt-2 border-t border-gray-700 bg-gray-750">
-                <div className="space-y-2">
-                  <div>
-                    <p className="text-xs text-gray-400">Phone</p>
-                    <p className="text-white">{apt.phone}</p>
+              ← Previous
+            </button>
+            <button 
+              onClick={goToToday}
+              className={`px-3 py-2 rounded-lg text-sm font-medium ${
+                isCurrentWeek 
+                  ? 'bg-blue-600 text-white' 
+                  : 'bg-gray-800 text-white hover:bg-gray-700 border border-gray-700'
+              }`}
+            >
+              Today
+            </button>
+            <button 
+              onClick={goNextWeek}
+              className="px-3 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 border border-gray-700 text-sm"
+            >
+              Next →
+            </button>
+          </div>
+          <button 
+            onClick={fetchData}
+            className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+          >
+            <RefreshCw className="w-4 h-4" />
+            <span className="hidden sm:inline">Refresh</span>
+          </button>
+        </div>
+
+        {/* Week Display */}
+        <div className="text-center mb-4">
+          <p className="text-gray-400 text-sm">
+            Week of {formatDateForDisplay(weekDates[0])} - {formatDateForDisplay(weekDates[6])}
+          </p>
+        </div>
+
+        {loading ? (
+          <div className="text-center py-12">
+            <RefreshCw className="w-8 h-8 animate-spin text-blue-500 mx-auto mb-4" />
+            <p className="text-gray-400">Loading appointments...</p>
+          </div>
+        ) : appointments.length === 0 ? (
+          <div className="bg-gray-800 rounded-lg p-8 border border-gray-700 text-center">
+            <Calendar className="w-12 h-12 text-gray-600 mx-auto mb-4" />
+            <p className="text-gray-400">No appointments booked yet</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-7 gap-3">
+            {weekDates.map((date) => {
+              const dayAppointments = getAppointmentsForDate(date);
+              const isToday = date.toDateString() === new Date().toDateString();
+
+              return (
+                <div 
+                  key={date.toDateString()}
+                  className={`p-3 rounded-lg border min-h-[300px] ${
+                    isToday 
+                      ? 'border-blue-500 bg-blue-900/20' 
+                      : 'border-gray-700 bg-gray-800'
+                  }`}
+                >
+                  {/* Day Header */}
+                  <div className="mb-3 pb-3 border-b border-gray-700">
+                    <p className="text-gray-400 text-xs font-medium">{formatDayOfWeek(date)}</p>
+                    <p className={`text-lg font-semibold ${isToday ? 'text-blue-400' : 'text-white'}`}>
+                      {date.getDate()}
+                    </p>
                   </div>
-                  {apt.address && (
-                    <div>
-                      <p className="text-xs text-gray-400">Address</p>
-                      <p className="text-white">{apt.address}</p>
+
+                  {/* Appointments for the day */}
+                  {dayAppointments.length === 0 ? (
+                    <p className="text-gray-500 text-xs text-center py-4">No appointments</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {dayAppointments.map(apt => (
+                        <div
+                          key={apt.id}
+                          className={`p-2 rounded-lg cursor-pointer transition-colors ${
+                            expandedAppointment === apt.id
+                              ? 'bg-blue-600'
+                              : 'bg-gray-750 hover:bg-gray-700'
+                          }`}
+                          onClick={() => setExpandedAppointment(expandedAppointment === apt.id ? null : apt.id)}
+                        >
+                          <div className="flex items-start justify-between gap-1">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-white text-xs font-medium truncate">{apt.name}</p>
+                              <p className="text-gray-300 text-xs mt-1">{apt.time}</p>
+                              {apt.address && (
+                                <p className="text-gray-400 text-xs mt-1 truncate">{apt.address}</p>
+                              )}
+                            </div>
+                            {expandedAppointment === apt.id && (
+                              <ChevronDown className="w-4 h-4 text-white flex-shrink-0" />
+                            )}
+                          </div>
+
+                          {/* Expanded Details */}
+                          {expandedAppointment === apt.id && (
+                            <div className="mt-3 pt-3 border-t border-blue-500/30 space-y-2">
+                              {apt.phone && (
+                                <div>
+                                  <p className="text-xs text-gray-300">Phone</p>
+                                  <p className="text-white text-xs font-medium">{apt.phone}</p>
+                                </div>
+                              )}
+                              {apt.summary && (
+                                <div>
+                                  <p className="text-xs text-gray-300">Summary</p>
+                                  <p className="text-white text-xs">{apt.summary}</p>
+                                </div>
+                              )}
+                              {apt.service && (
+                                <div>
+                                  <p className="text-xs text-gray-300">Service</p>
+                                  <p className="text-white text-xs">{apt.service}</p>
+                                </div>
+                              )}
+                              {apt.status && (
+                                <div className="pt-1">
+                                  <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${
+                                    apt.status === 'confirmed' 
+                                      ? 'bg-green-900 text-green-300' 
+                                      : 'bg-yellow-900 text-yellow-300'
+                                  }`}>
+                                    {apt.status}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
                     </div>
                   )}
-                  <div className="flex gap-2 mt-3">
-                    <button 
-                      onClick={() => window.open(`tel:${apt.phone}`, '_self')}
-                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
-                    >
-                      Call Patient
-                    </button>
-                    <button className="flex-1 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 text-sm">
-                      View Details
-                    </button>
-                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })}
           </div>
-        ))
-      )}
-    </div>
-  );
+        )}
+      </div>
+    );
+  };
 
   const filteredCalls = callLogs.filter(call => 
     call.caller.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -559,9 +681,9 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen bg-gray-900 pb-20 md:pb-0">
       {/* Mobile Header */}
-      <header className="bg-gray-800 border-b border-gray-700 px-4 py-3 sticky top-0 z-50">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+      <header className="bg-gray-800 border-b border-gray-700 px-4 sticky top-0 z-50 flex items-center justify-between" style={{ height: '72px' }}>
+        <>
+          <div className="flex items-center justify-center gap-2 h-full">
             <Phone className="w-6 h-6 md:w-8 md:h-8 text-blue-500" />
             <h1 className="text-lg md:text-2xl font-bold text-white">AI Receptionist</h1>
           </div>
@@ -578,11 +700,9 @@ const Dashboard = () => {
             >
               {mobileMenuOpen ? <X className="w-6 h-6 text-white" /> : <Menu className="w-6 h-6 text-white" />}
             </button>
-            <div className="w-8 h-8 md:w-10 md:h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold text-sm">
-              AC
-            </div>
+            <img src={logo} alt="Reliant Solutions" style={{ height: '40px', width: 'auto' }} />
           </div>
-        </div>
+        </>
       </header>
 
       {/* Mobile Drawer Menu */}
@@ -669,4 +789,5 @@ const Dashboard = () => {
   );
 };
 
-export default Dashboard;
+export default App;
+
