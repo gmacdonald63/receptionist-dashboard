@@ -436,7 +436,7 @@ const App = () => {
                       </div>
                     )}
                     {call.appointment.date && call.appointment.time && (
-                      <div className="bg-green-900/20 border border-green-800 rounded-lg p-3 mt-2">
+                      <div className="bg-gray-900 border border-gray-700 rounded-lg p-3 mt-2">
                         <p className="text-xs text-gray-400 mb-1">Appointment Booked</p>
                         <p className="text-white font-medium">{call.appointment.date} at {call.appointment.time}</p>
                         {call.appointment.address && (
