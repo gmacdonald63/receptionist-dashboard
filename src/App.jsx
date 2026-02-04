@@ -429,20 +429,7 @@ const App = () => {
               </div>
 
               {selectedCall === call.id && (
-                <div className="px-4 pb-4 border-t border-gray-700 bg-gray-750 space-y-3">
-                  <div className="pt-4 space-y-2">
-                    <div>
-                      <p className="text-xs text-gray-400 mb-1">Outcome</p>
-                      <p className="text-white">{call.outcome}</p>
-                    </div>
-                    {call.call_summary && (
-                      <div>
-                        <p className="text-xs text-gray-400 mb-1">Summary</p>
-                        <p className="text-white text-sm">{call.call_summary}</p>
-                      </div>
-                    )}
-                  </div>
-                  
+                <div className="px-4 pb-4 border-t border-gray-700 bg-gray-750 space-y-3 pt-4">
                   {call.hasRecording && call.recording_url && (
                     <div className="bg-gray-800 p-3 rounded-lg">
                       <p className="text-xs text-gray-400 mb-2">Recording</p>
