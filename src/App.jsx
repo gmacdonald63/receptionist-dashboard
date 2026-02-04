@@ -679,8 +679,7 @@ const App = () => {
     { id: 'overview', label: 'Overview', icon: Phone },
     { id: 'appointments', label: 'Appointments', icon: Calendar },
     { id: 'calls', label: 'Calls', icon: Phone },
-    { id: 'billing', label: 'Billing', icon: DollarSign },
-    { id: 'settings', label: 'Settings', icon: Settings }
+    { id: 'billing', label: 'Billing', icon: DollarSign }
   ];
 
   return (
@@ -767,13 +766,12 @@ const App = () => {
         {activeTab === 'appointments' && renderAppointments()}
         {activeTab === 'calls' && renderCallLogs()}
         {activeTab === 'billing' && renderBilling()}
-        {activeTab === 'settings' && renderSettings()}
       </main>
 
       {/* Mobile Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 md:hidden z-30">
-        <div className="grid grid-cols-5 gap-1">
-          {navItems.slice(0, 5).map(item => (
+        <div className="grid grid-cols-4 gap-1">
+          {navItems.map(item => (
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
