@@ -13,8 +13,9 @@ const App = () => {
   const [currentWeekStart, setCurrentWeekStart] = useState(() => {
     const today = new Date();
     const first = today.getDate() - today.getDay();
-    return new Date(today.setDate(first));
+    return new Date(today.getFullYear(), today.getMonth(), first);
   });
+  const audioRef = React.useRef(null);
   
   // Real data from Retell API
   const [callLogs, setCallLogs] = useState([]);
@@ -60,6 +61,52 @@ const App = () => {
       setLoading(false);
     }
   };
+
+  // Calendar helper functions
+  const getWeekDates = (weekStart) => {
+    const dates = [];
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(weekStart);
+      date.setDate(date.getDate() + i);
+      dates.push(date);
+    }
+    return dates;
+  };
+
+  const getAppointmentsForDate = (date) => {
+    return appointments.filter(apt => {
+      if (!apt.date) return false;
+      const aptDate = new Date(apt.date);
+      return aptDate.toDateString() === date.toDateString();
+    });
+  };
+
+  const formatDateForDisplay = (date) => {
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  const formatDayOfWeek = (date) => {
+    return date.toLocaleDateString('en-US', { weekday: 'short' });
+  };
+
+  const goToToday = () => {
+    const today = new Date();
+    const first = today.getDate() - today.getDay();
+    setCurrentWeekStart(new Date(today.getFullYear(), today.getMonth(), first));
+  };
+
+  const goPreviousWeek = () => {
+    const newDate = new Date(currentWeekStart);
+    newDate.setDate(newDate.getDate() - 7);
+    setCurrentWeekStart(newDate);
+  };
+
+  const goNextWeek = () => {
+    const newDate = new Date(currentWeekStart);
+    newDate.setDate(newDate.getDate() + 7);
+    setCurrentWeekStart(newDate);
+  };
+
   const StatCard = ({ icon: Icon, label, value, color }) => (
     <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
       <div className="flex items-center justify-between">
@@ -145,50 +192,6 @@ const App = () => {
       )}
     </div>
   );
-
-  const getWeekDates = (weekStart) => {
-    const dates = [];
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(weekStart);
-      date.setDate(date.getDate() + i);
-      dates.push(date);
-    }
-    return dates;
-  };
-
-  const getAppointmentsForDate = (date) => {
-    return appointments.filter(apt => {
-      if (!apt.date) return false;
-      const aptDate = new Date(apt.date);
-      return aptDate.toDateString() === date.toDateString();
-    });
-  };
-
-  const formatDateForDisplay = (date) => {
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  };
-
-  const formatDayOfWeek = (date) => {
-    return date.toLocaleDateString('en-US', { weekday: 'short' });
-  };
-
-  const goToToday = () => {
-    const today = new Date();
-    const first = today.getDate() - today.getDay();
-    setCurrentWeekStart(new Date(today.getFullYear(), today.getMonth(), first));
-  };
-
-  const goPreviousWeek = () => {
-    const newDate = new Date(currentWeekStart);
-    newDate.setDate(newDate.getDate() - 7);
-    setCurrentWeekStart(newDate);
-  };
-
-  const goNextWeek = () => {
-    const newDate = new Date(currentWeekStart);
-    newDate.setDate(newDate.getDate() + 7);
-    setCurrentWeekStart(newDate);
-  };
 
   const renderAppointments = () => {
     const weekDates = getWeekDates(currentWeekStart);
@@ -350,6 +353,7 @@ const App = () => {
     call.caller.toLowerCase().includes(searchTerm.toLowerCase()) ||
     call.number.includes(searchTerm)
   );
+
   const renderCallLogs = () => (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row gap-3">
@@ -447,16 +451,40 @@ const App = () => {
                   {call.hasRecording && call.recording_url && (
                     <div className="bg-gray-800 p-3 rounded-lg">
                       <p className="text-xs text-gray-400 mb-2">Recording</p>
-                      <a 
-                        href={call.recording_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <Play className="w-4 h-4" />
-                        Play Recording
-                      </a>
+                      {playingRecording === call.id ? (
+                        <div className="space-y-2">
+                          <audio
+                            ref={audioRef}
+                            src={call.recording_url}
+                            autoPlay
+                            controls
+                            className="w-full"
+                            onEnded={() => setPlayingRecording(null)}
+                          />
+                          <button
+                            onClick={() => {
+                              if (audioRef.current) {
+                                audioRef.current.pause();
+                              }
+                              setPlayingRecording(null);
+                            }}
+                            className="w-full px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 text-sm"
+                          >
+                            Close Player
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPlayingRecording(call.id);
+                          }}
+                          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 w-full justify-center"
+                        >
+                          <Play className="w-4 h-4" />
+                          Play Recording
+                        </button>
+                      )}
                     </div>
                   )}
 
@@ -541,6 +569,7 @@ const App = () => {
       </div>
     );
   };
+
   const renderSettings = () => (
     <div className="space-y-4">
       <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
@@ -682,27 +711,25 @@ const App = () => {
     <div className="min-h-screen bg-gray-900 pb-20 md:pb-0">
       {/* Mobile Header */}
       <header className="bg-gray-800 border-b border-gray-700 px-4 sticky top-0 z-50 flex items-center justify-between" style={{ height: '72px' }}>
-        <>
-          <div className="flex items-center justify-center gap-2 h-full">
-            <Phone className="w-6 h-6 md:w-8 md:h-8 text-blue-500" />
-            <h1 className="text-lg md:text-2xl font-bold text-white">AI Receptionist</h1>
-          </div>
-          <div className="flex items-center gap-3">
-            <button 
-              onClick={fetchData}
-              className="p-2 hover:bg-gray-700 rounded-lg hidden md:block"
-            >
-              <RefreshCw className={`w-5 h-5 text-gray-400 ${loading ? 'animate-spin' : ''}`} />
-            </button>
-            <button 
-              className="p-2 hover:bg-gray-700 rounded-lg md:hidden"
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            >
-              {mobileMenuOpen ? <X className="w-6 h-6 text-white" /> : <Menu className="w-6 h-6 text-white" />}
-            </button>
-            <img src={logo} alt="Reliant Solutions" style={{ height: '40px', width: 'auto' }} />
-          </div>
-        </>
+        <div className="flex items-center justify-center gap-2 h-full">
+          <Phone className="w-6 h-6 md:w-8 md:h-8 text-blue-500" />
+          <h1 className="text-lg md:text-2xl font-bold text-white">AI Receptionist</h1>
+        </div>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={fetchData}
+            className="p-2 hover:bg-gray-700 rounded-lg hidden md:block"
+          >
+            <RefreshCw className={`w-5 h-5 text-gray-400 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+          <button 
+            className="p-2 hover:bg-gray-700 rounded-lg md:hidden"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          >
+            {mobileMenuOpen ? <X className="w-6 h-6 text-white" /> : <Menu className="w-6 h-6 text-white" />}
+          </button>
+          <img src={logo} alt="Reliant Solutions" style={{ height: '40px', width: 'auto' }} />
+        </div>
       </header>
 
       {/* Mobile Drawer Menu */}
@@ -790,4 +817,3 @@ const App = () => {
 };
 
 export default App;
-
