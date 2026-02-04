@@ -86,7 +86,7 @@ export const retellService = {
         date: customData.appointment_date || null,
         time: customData.appointment_time || null,
         address: customData.appointment_address || null,
-        service: this.extractServiceType(customData, analysis.call_summary)
+        service: this.extractIssue(customData, analysis.call_summary)
       }
     };
   },
@@ -126,23 +126,50 @@ export const retellService = {
     return 'Call Completed';
   },
 
-  // Extract service type from custom data or summary
-  extractServiceType(customData, summary) {
-    // First check if you added a service_type field
+  // Extract the issue/reason from call summary
+  extractIssue(customData, summary) {
+    // First check if there's a specific issue field in custom data
+    if (customData.issue) {
+      return customData.issue;
+    }
     if (customData.service_type) {
       return customData.service_type;
     }
     
-    // Otherwise try to extract from summary
     if (summary) {
-      // Simple keyword matching - you can enhance this
-      if (summary.toLowerCase().includes('consultation')) return 'Consultation';
-      if (summary.toLowerCase().includes('follow-up')) return 'Follow-up';
-      if (summary.toLowerCase().includes('initial')) return 'Initial Visit';
-      if (summary.toLowerCase().includes('review')) return 'Review';
+      // Try to extract issue from patterns like "because his/her/their [issue]"
+      // Pattern: "because his/her/their [something] was [condition]"
+      const becausePattern = /because (?:his|her|their|the) (.+?)(?:\.|The agent|,|$)/i;
+      const becauseMatch = summary.match(becausePattern);
+      if (becauseMatch) {
+        let issue = becauseMatch[1].trim();
+        // Capitalize first letter
+        issue = issue.charAt(0).toUpperCase() + issue.slice(1);
+        // Remove trailing period if present
+        issue = issue.replace(/\.$/, '');
+        return issue;
+      }
+      
+      // Alternative pattern: "to schedule a [type] appointment"
+      const schedulePattern = /to schedule (?:a|an) (.+?) (?:appointment|visit|service)/i;
+      const scheduleMatch = summary.match(schedulePattern);
+      if (scheduleMatch) {
+        let service = scheduleMatch[1].trim();
+        service = service.charAt(0).toUpperCase() + service.slice(1);
+        return service;
+      }
+      
+      // Alternative pattern: "issue with [something]" or "problem with [something]"
+      const issuePattern = /(?:issue|problem) with (.+?)(?:\.|,|$)/i;
+      const issueMatch = summary.match(issuePattern);
+      if (issueMatch) {
+        let issue = issueMatch[1].trim();
+        issue = issue.charAt(0).toUpperCase() + issue.slice(1);
+        return issue;
+      }
     }
     
-    return 'General';
+    return 'Service Request';
   },
 
   // Get appointments from calls
@@ -159,7 +186,8 @@ export const retellService = {
         service: call.appointment.service,
         address: call.appointment.address,
         status: this.getAppointmentStatus(call.appointment.date),
-        phone: call.number
+        phone: call.number,
+        summary: call.call_summary
       }));
 
     return appointments;
