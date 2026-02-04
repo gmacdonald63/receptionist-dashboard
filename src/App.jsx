@@ -413,15 +413,12 @@ const App = () => {
                   </div>
                   <ChevronRight className={`w-5 h-5 text-gray-400 transition-transform flex-shrink-0 ${selectedCall === call.id ? 'rotate-90' : ''}`} />
                 </div>
-                <div className="flex items-center justify-between text-sm mt-2">
-                  <span className="text-white font-medium">{call.outcome}</span>
-                </div>
                 <p className="text-xs text-gray-500 mt-1">{call.time}</p>
                 {call.call_summary && (
                   <p className="text-sm text-gray-300 mt-2">{call.call_summary}</p>
                 )}
                 {call.appointment && call.appointment.date && call.appointment.time && (
-                  <div className="bg-gray-900 border border-gray-700 rounded-lg p-3 mt-3">
+                  <div className="bg-gray-900 border border-gray-700 rounded-lg p-3 mt-3" onClick={(e) => e.stopPropagation()}>
                     <p className="text-xs text-gray-400 mb-1">Appointment Booked</p>
                     <p className="text-white font-medium">{call.appointment.date} at {call.appointment.time}</p>
                     {call.appointment.address && (
