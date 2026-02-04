@@ -414,19 +414,17 @@ const App = () => {
                   <ChevronRight className={`w-5 h-5 text-gray-400 transition-transform flex-shrink-0 ${selectedCall === call.id ? 'rotate-90' : ''}`} />
                 </div>
                 <div className="flex items-center justify-between text-sm mt-2">
-                  <span className="text-gray-400">{call.duration}</span>
                   <span className="text-white font-medium">{call.outcome}</span>
                 </div>
                 <p className="text-xs text-gray-500 mt-1">{call.time}</p>
+                {call.call_summary && (
+                  <p className="text-sm text-gray-300 mt-2">{call.call_summary}</p>
+                )}
               </div>
 
               {selectedCall === call.id && (
                 <div className="px-4 pb-4 border-t border-gray-700 bg-gray-750 space-y-3">
                   <div className="pt-4 space-y-2">
-                    <div>
-                      <p className="text-xs text-gray-400 mb-1">Duration</p>
-                      <p className="text-white">{call.duration}</p>
-                    </div>
                     <div>
                       <p className="text-xs text-gray-400 mb-1">Outcome</p>
                       <p className="text-white">{call.outcome}</p>
@@ -489,17 +487,12 @@ const App = () => {
                   )}
 
                   {call.hasTranscript && call.transcript && (
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedCall(call.id);
-                        setActiveTab('transcripts');
-                      }}
-                      className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2"
-                    >
-                      <FileText className="w-4 h-4" />
-                      View Transcript
-                    </button>
+                    <div className="bg-gray-800 p-3 rounded-lg">
+                      <p className="text-xs text-gray-400 mb-2">Transcript</p>
+                      <div className="p-3 rounded-lg bg-gray-750 max-h-[200px] overflow-y-auto">
+                        <p className="text-white text-sm leading-relaxed whitespace-pre-wrap">{call.transcript}</p>
+                      </div>
+                    </div>
                   )}
                 </div>
               )}
@@ -702,7 +695,6 @@ const App = () => {
     { id: 'overview', label: 'Overview', icon: Phone },
     { id: 'appointments', label: 'Appointments', icon: Calendar },
     { id: 'calls', label: 'Calls', icon: Phone },
-    { id: 'transcripts', label: 'Transcripts', icon: FileText },
     { id: 'billing', label: 'Billing', icon: DollarSign },
     { id: 'settings', label: 'Settings', icon: Settings }
   ];
@@ -790,7 +782,6 @@ const App = () => {
         {activeTab === 'overview' && renderOverview()}
         {activeTab === 'appointments' && renderAppointments()}
         {activeTab === 'calls' && renderCallLogs()}
-        {activeTab === 'transcripts' && renderTranscripts()}
         {activeTab === 'billing' && renderBilling()}
         {activeTab === 'settings' && renderSettings()}
       </main>
