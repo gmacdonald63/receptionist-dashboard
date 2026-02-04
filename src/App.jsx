@@ -89,6 +89,18 @@ const App = () => {
     return date.toLocaleDateString('en-US', { weekday: 'short' });
   };
 
+  const formatCallTime = (timeString) => {
+    // Convert "02/03/2026, 08:01 PM" to "2/3/2026 at 8:01 PM"
+    if (!timeString) return '';
+    const [datePart, timePart] = timeString.split(', ');
+    if (!datePart || !timePart) return timeString;
+    const [month, day, year] = datePart.split('/');
+    // Remove leading zeros and format time
+    const formattedDate = `${parseInt(month)}/${parseInt(day)}/${year}`;
+    const formattedTime = timePart.replace(/^0/, '');
+    return `${formattedDate} at ${formattedTime}`;
+  };
+
   const goToToday = () => {
     const today = new Date();
     const first = today.getDate() - today.getDay();
@@ -413,7 +425,7 @@ const App = () => {
                   </div>
                   <ChevronRight className={`w-5 h-5 text-gray-400 transition-transform flex-shrink-0 ${selectedCall === call.id ? 'rotate-90' : ''}`} />
                 </div>
-                <p className="text-xs text-gray-500 mt-1">{call.time}</p>
+                <p className="text-xs text-gray-500 mt-1">{formatCallTime(call.time)}</p>
                 {call.call_summary && (
                   <p className="text-sm text-gray-300 mt-2">{call.call_summary}</p>
                 )}
