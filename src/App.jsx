@@ -101,6 +101,14 @@ const App = () => {
     return `${formattedDate} at ${formattedTime}`;
   };
 
+  const formatAppointmentDate = (dateString) => {
+    // Convert "2026-02-06" to "2/6/2026"
+    if (!dateString) return '';
+    const [year, month, day] = dateString.split('-');
+    if (!year || !month || !day) return dateString;
+    return `${parseInt(month)}/${parseInt(day)}/${year}`;
+  };
+
   const goToToday = () => {
     const today = new Date();
     const first = today.getDate() - today.getDay();
@@ -432,7 +440,7 @@ const App = () => {
                 {call.appointment && call.appointment.date && call.appointment.time && (
                   <div className="bg-gray-900 border border-gray-700 rounded-lg p-3 mt-3" onClick={(e) => e.stopPropagation()}>
                     <p className="text-xs text-gray-400 mb-1">Appointment Booked</p>
-                    <p className="text-white font-medium">{call.appointment.date} at {call.appointment.time}</p>
+                    <p className="text-white font-medium">{formatAppointmentDate(call.appointment.date)} at {call.appointment.time}</p>
                     {call.appointment.address && (
                       <p className="text-sm text-gray-300 mt-1">{call.appointment.address}</p>
                     )}
