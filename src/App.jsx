@@ -109,6 +109,28 @@ const App = () => {
     return `${parseInt(month)}/${parseInt(day)}/${year}`;
   };
 
+  const formatAppointmentTime = (timeString) => {
+    // Convert "14:00 to 16:00" to "2:00 PM to 4:00 PM"
+    if (!timeString) return '';
+    
+    const convert24to12 = (time24) => {
+      const [hours, minutes] = time24.split(':');
+      const hour = parseInt(hours);
+      const ampm = hour >= 12 ? 'PM' : 'AM';
+      const hour12 = hour % 12 || 12;
+      return `${hour12}:${minutes} ${ampm}`;
+    };
+    
+    // Handle "HH:MM to HH:MM" format
+    if (timeString.includes(' to ')) {
+      const [startTime, endTime] = timeString.split(' to ');
+      return `${convert24to12(startTime)} to ${convert24to12(endTime)}`;
+    }
+    
+    // Handle single time
+    return convert24to12(timeString);
+  };
+
   const goToToday = () => {
     const today = new Date();
     const first = today.getDate() - today.getDay();
@@ -312,7 +334,7 @@ const App = () => {
                           <div className="flex items-start justify-between gap-1">
                             <div className="flex-1 min-w-0">
                               <p className="text-white text-xs font-medium truncate">{apt.name}</p>
-                              <p className="text-gray-300 text-xs mt-1">{apt.time}</p>
+                              <p className="text-gray-300 text-xs mt-1">{formatAppointmentTime(apt.time)}</p>
                               {apt.address && (
                                 <p className="text-gray-400 text-xs mt-1 truncate">{apt.address}</p>
                               )}
