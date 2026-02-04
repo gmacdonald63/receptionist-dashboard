@@ -420,7 +420,7 @@ const App = () => {
                 {call.call_summary && (
                   <p className="text-sm text-gray-300 mt-2">{call.call_summary}</p>
                 )}
-                {call.appointment.date && call.appointment.time && (
+                {call.appointment && call.appointment.date && call.appointment.time && (
                   <div className="bg-gray-900 border border-gray-700 rounded-lg p-3 mt-3">
                     <p className="text-xs text-gray-400 mb-1">Appointment Booked</p>
                     <p className="text-white font-medium">{call.appointment.date} at {call.appointment.time}</p>
