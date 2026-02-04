@@ -420,6 +420,15 @@ const App = () => {
                 {call.call_summary && (
                   <p className="text-sm text-gray-300 mt-2">{call.call_summary}</p>
                 )}
+                {call.appointment.date && call.appointment.time && (
+                  <div className="bg-gray-900 border border-gray-700 rounded-lg p-3 mt-3">
+                    <p className="text-xs text-gray-400 mb-1">Appointment Booked</p>
+                    <p className="text-white font-medium">{call.appointment.date} at {call.appointment.time}</p>
+                    {call.appointment.address && (
+                      <p className="text-sm text-gray-300 mt-1">{call.appointment.address}</p>
+                    )}
+                  </div>
+                )}
               </div>
 
               {selectedCall === call.id && (
@@ -433,15 +442,6 @@ const App = () => {
                       <div>
                         <p className="text-xs text-gray-400 mb-1">Summary</p>
                         <p className="text-white text-sm">{call.call_summary}</p>
-                      </div>
-                    )}
-                    {call.appointment.date && call.appointment.time && (
-                      <div className="bg-gray-900 border border-gray-700 rounded-lg p-3 mt-2">
-                        <p className="text-xs text-gray-400 mb-1">Appointment Booked</p>
-                        <p className="text-white font-medium">{call.appointment.date} at {call.appointment.time}</p>
-                        {call.appointment.address && (
-                          <p className="text-sm text-gray-300 mt-1">{call.appointment.address}</p>
-                        )}
                       </div>
                     )}
                   </div>
