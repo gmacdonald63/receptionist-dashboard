@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Phone, Calendar, FileText, Clock, DollarSign, Settings, Download, Play, Pause, Search, Filter, RefreshCw, Menu, X, ChevronRight, ChevronDown } from 'lucide-react';
+import { Phone, Calendar, FileText, Clock, DollarSign, Download, Play, Pause, Search, Filter, RefreshCw, ChevronRight, ChevronDown } from 'lucide-react';
 import { retellService } from './retellService';
 import logo from './assets/RELIANT SOLUTIONS LOGO.svg';
 
@@ -8,7 +8,6 @@ const App = () => {
   const [selectedCall, setSelectedCall] = useState(null);
   const [playingRecording, setPlayingRecording] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [expandedAppointment, setExpandedAppointment] = useState(null);
   const [currentWeekStart, setCurrentWeekStart] = useState(() => {
     const today = new Date();
@@ -726,61 +725,10 @@ const App = () => {
 
   return (
     <div className="min-h-screen bg-gray-900 pb-20 md:pb-0">
-      {/* Mobile Header */}
-      <header className="bg-gray-800 border-b border-gray-700 px-4 sticky top-0 z-50 flex items-center justify-between" style={{ height: '72px' }}>
-        <div className="flex items-center justify-center gap-2 h-full">
-          <Phone className="w-6 h-6 md:w-8 md:h-8 text-blue-500" />
-          <h1 className="text-lg md:text-2xl font-bold text-white">AI Receptionist</h1>
-        </div>
-        <div className="flex items-center gap-3">
-          <button 
-            onClick={fetchData}
-            className="p-2 hover:bg-gray-700 rounded-lg hidden md:block"
-          >
-            <RefreshCw className={`w-5 h-5 text-gray-400 ${loading ? 'animate-spin' : ''}`} />
-          </button>
-          <button 
-            className="p-2 hover:bg-gray-700 rounded-lg md:hidden"
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          >
-            {mobileMenuOpen ? <X className="w-6 h-6 text-white" /> : <Menu className="w-6 h-6 text-white" />}
-          </button>
-          <img src={logo} alt="Reliant Solutions" style={{ height: '40px', width: 'auto' }} />
-        </div>
+      {/* Header */}
+      <header className="bg-gray-800 border-b border-gray-700 px-4 sticky top-0 z-50 flex items-center justify-center" style={{ height: '72px' }}>
+        <img src={logo} alt="Reliant Solutions" style={{ height: '40px', width: 'auto' }} />
       </header>
-
-      {/* Mobile Drawer Menu */}
-      {mobileMenuOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden" onClick={() => setMobileMenuOpen(false)}>
-          <div 
-            className="absolute right-0 top-0 bottom-0 w-64 bg-gray-800 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="p-4 border-b border-gray-700">
-              <p className="text-white font-semibold">Menu</p>
-            </div>
-            <nav className="p-2">
-              {navItems.map(item => (
-                <button
-                  key={item.id}
-                  onClick={() => {
-                    setActiveTab(item.id);
-                    setMobileMenuOpen(false);
-                  }}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg mb-1 ${
-                    activeTab === item.id
-                      ? 'bg-blue-600 text-white'
-                      : 'text-gray-400 hover:bg-gray-750 hover:text-white'
-                  }`}
-                >
-                  <item.icon className="w-5 h-5" />
-                  {item.label}
-                </button>
-              ))}
-            </nav>
-          </div>
-        </div>
-      )}
 
       {/* Desktop Navigation */}
       <nav className="bg-gray-800 border-b border-gray-700 px-6 hidden md:block">
