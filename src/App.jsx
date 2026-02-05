@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Phone, Calendar, FileText, Clock, DollarSign, Download, Play, Pause, Search, Filter, RefreshCw, ChevronRight, ChevronDown } from 'lucide-react';
 import { retellService } from './retellService';
-import logo from './assets/RELIANT SOLUTIONS LOGO.svg';
+import logo from './assets/RELIANT ASSISTANT LOGO.svg';
 
 const App = () => {
   const [activeTab, setActiveTab] = useState('appointments');
