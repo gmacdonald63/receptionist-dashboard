@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Phone, Calendar, FileText, Clock, DollarSign, Download, Play, Pause, Search, Filter, RefreshCw, ChevronRight, ChevronDown } from 'lucide-react';
 import { retellService } from './retellService';
-import logo from './assets/RELIANT ASSISTANT LOGO.svg';
+import logo from './assets/RELIANT SOLUTIONS LOGO.svg';
 
 const App = () => {
   const [activeTab, setActiveTab] = useState('appointments');
@@ -14,7 +14,8 @@ const App = () => {
     const first = today.getDate() - today.getDay();
     return new Date(today.getFullYear(), today.getMonth(), first);
   });
-  const audioRef = React.useRef(null);
+  const audioRef = useRef(null);
+  const todayRef = useRef(null);
   
   // Real data from Retell API
   const [callLogs, setCallLogs] = useState([]);
@@ -31,6 +32,15 @@ const App = () => {
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Scroll to today when appointments tab is active
+  useEffect(() => {
+    if (activeTab === 'appointments' && todayRef.current && !loading) {
+      setTimeout(() => {
+        todayRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
+    }
+  }, [activeTab, loading]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -301,6 +311,7 @@ const App = () => {
               return (
                 <div 
                   key={date.toDateString()}
+                  ref={isToday ? todayRef : null}
                   className={`p-3 rounded-lg border min-h-[300px] ${
                     isToday 
                       ? 'border-blue-500 bg-blue-900/20' 
@@ -726,8 +737,8 @@ const App = () => {
   return (
     <div className="min-h-screen bg-gray-900 pb-20 md:pb-0">
       {/* Header */}
-      <header className="bg-gray-800 border-b border-gray-700 px-4 sticky top-0 z-50 flex items-center justify-center" style={{ height: '60px' }}>
-        <img src={logo} alt="Reliant Solutions" style={{ height: '50px', width: 'auto' }} />
+      <header className="bg-gray-800 border-b border-gray-700 px-4 sticky top-0 z-50 flex items-center justify-center" style={{ height: '72px' }}>
+        <img src={logo} alt="Reliant Solutions" style={{ height: '40px', width: 'auto' }} />
       </header>
 
       {/* Desktop Navigation */}
