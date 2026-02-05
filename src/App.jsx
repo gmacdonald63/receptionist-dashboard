@@ -727,7 +727,7 @@ const App = () => {
     <div className="min-h-screen bg-gray-900 pb-20 md:pb-0">
       {/* Header */}
       <header className="bg-gray-800 border-b border-gray-700 px-4 sticky top-0 z-50 flex items-center justify-center" style={{ height: '72px' }}>
-        <img src={logo} alt="Reliant Solutions" style={{ height: '70px', width: 'auto' }} />
+        <img src={logo} alt="Reliant Solutions" style={{ height: '60px', width: 'auto' }} />
       </header>
 
       {/* Desktop Navigation */}
