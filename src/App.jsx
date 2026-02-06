@@ -37,7 +37,7 @@ const App = () => {
     if (activeTab === 'appointments' && todayRef.current && !loading) {
       setTimeout(() => {
         const element = todayRef.current;
-        const yOffset = -120; // Offset to leave space for header and navigation
+        const yOffset = -80; // Offset to leave space for header and navigation
         const y = element.getBoundingClientRect().top + window.pageYOffset + yOffset;
         window.scrollTo({ top: y, behavior: 'smooth' });
       }, 100);
