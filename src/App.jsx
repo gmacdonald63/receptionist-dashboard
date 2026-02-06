@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Phone, Calendar, FileText, Clock, DollarSign, Download, Play, Pause, Search, Filter, RefreshCw, ChevronRight, ChevronDown } from 'lucide-react';
 import { retellService } from './retellService';
-import logo from './assets/RELIANT SOLUTIONS LOGO.svg';
+import logo from './assets/RELIANT SUPPORT LOGO.svg';
 
 const App = () => {
   const [activeTab, setActiveTab] = useState('appointments');
@@ -16,7 +16,6 @@ const App = () => {
   });
   const audioRef = useRef(null);
   const todayRef = useRef(null);
-  
   // Real data from Retell API
   const [callLogs, setCallLogs] = useState([]);
   const [appointments, setAppointments] = useState([]);
