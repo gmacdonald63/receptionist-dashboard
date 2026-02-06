@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Phone, Calendar, FileText, Clock, DollarSign, Download, Play, Pause, Search, Filter, RefreshCw, ChevronRight, ChevronDown } from 'lucide-react';
 import { retellService } from './retellService';
-import logo from './assets/RELIANT ASSISTANT LOGO.svg';
+import logo from './assets/RELIANT SOLUTIONS LOGO.svg';
 
 const App = () => {
   const [activeTab, setActiveTab] = useState('appointments');
@@ -37,7 +37,10 @@ const App = () => {
   useEffect(() => {
     if (activeTab === 'appointments' && todayRef.current && !loading) {
       setTimeout(() => {
-        todayRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        const element = todayRef.current;
+        const yOffset = -120; // Offset to leave space for header and navigation
+        const y = element.getBoundingClientRect().top + window.pageYOffset + yOffset;
+        window.scrollTo({ top: y, behavior: 'smooth' });
       }, 100);
     }
   }, [activeTab, loading]);
