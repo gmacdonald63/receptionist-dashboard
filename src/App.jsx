@@ -16,6 +16,7 @@ const App = () => {
   });
   const audioRef = useRef(null);
   const todayRef = useRef(null);
+  
   // Real data from Retell API
   const [callLogs, setCallLogs] = useState([]);
   const [appointments, setAppointments] = useState([]);
