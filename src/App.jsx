@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Phone, Calendar, FileText, Clock, DollarSign, Download, Play, Pause, Search, Filter, RefreshCw, ChevronRight, ChevronDown } from 'lucide-react';
 import { retellService } from './retellService';
-import logo from './assets/RELIANT SUPPORT LOGO.svg';
+import logo from './assets/RELIANT SOLUTIONS LOGO.svg';
 
 const App = () => {
   const [activeTab, setActiveTab] = useState('appointments');
@@ -38,7 +38,7 @@ const App = () => {
     if (activeTab === 'appointments' && todayRef.current && !loading) {
       setTimeout(() => {
         const element = todayRef.current;
-        const yOffset = -80; // Offset to leave space for header and navigation
+        const yOffset = -120; // Offset to leave space for header and navigation
         const y = element.getBoundingClientRect().top + window.pageYOffset + yOffset;
         window.scrollTo({ top: y, behavior: 'smooth' });
       }, 100);
@@ -738,31 +738,11 @@ const App = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-900 pb-20 md:pb-0">
+    <div className="min-h-screen bg-gray-900 pb-20">
       {/* Header */}
       <header className="bg-gray-800 border-b border-gray-700 px-4 sticky top-0 z-50 flex items-center justify-center" style={{ height: '72px' }}>
         <img src={logo} alt="Reliant Solutions" style={{ height: '40px', width: 'auto' }} />
       </header>
-
-      {/* Desktop Navigation */}
-      <nav className="bg-gray-800 border-b border-gray-700 px-6 hidden md:block">
-        <div className="flex gap-1 overflow-x-auto">
-          {navItems.map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-colors whitespace-nowrap ${
-                activeTab === tab.id
-                  ? 'border-blue-500 text-blue-500'
-                  : 'border-transparent text-gray-400 hover:text-gray-300'
-              }`}
-            >
-              <tab.icon className="w-4 h-4" />
-              {tab.label}
-            </button>
-          ))}
-        </div>
-      </nav>
 
       {/* Main Content */}
       <main className="p-4 md:p-6">
@@ -772,8 +752,8 @@ const App = () => {
         {activeTab === 'billing' && renderBilling()}
       </main>
 
-      {/* Mobile Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 md:hidden z-30">
+      {/* Bottom Navigation */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 z-30">
         <div className="grid grid-cols-4 gap-1">
           {navItems.map(item => (
             <button
