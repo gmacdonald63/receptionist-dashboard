@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
 import { Phone, Calendar, FileText, Clock, DollarSign, Download, Play, Pause, Search, Filter, RefreshCw, ChevronRight, ChevronDown, LogOut, Settings } from 'lucide-react';
 import { retellService } from './retellService';
 import { supabase } from './supabaseClient';
 import Login from './Login';
 import Admin from './Admin';
-import logo from './assets/RELIANT SUPPORT LOGO.svg';
+impimport React, { useState, useEffect, useRef } from 'react';
+ort logo from './assets/RELIANT SUPPORT LOGO.svg';
 
 const App = () => {
   // Authentication state
@@ -143,7 +143,10 @@ const App = () => {
   const getAppointmentsForDate = (date) => {
     return appointments.filter(apt => {
       if (!apt.date) return false;
-      const aptDate = new Date(apt.date);
+      // Parse the date string as local time, not UTC
+      // apt.date is in format "2026-02-17"
+      const [year, month, day] = apt.date.split('-');
+      const aptDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
       return aptDate.toDateString() === date.toDateString();
     });
   };
@@ -537,7 +540,7 @@ const App = () => {
                 {call.appointment && call.appointment.date && call.appointment.time && (
                   <div className="bg-gray-900 border border-gray-700 rounded-lg p-3 mt-3" onClick={(e) => e.stopPropagation()}>
                     <p className="text-xs text-gray-400 mb-1">Appointment Booked</p>
-                    <p className="text-white font-medium">{formatAppointmentDate(call.appointment.date)} at {call.appointment.time}</p>
+                    <p className="text-white font-medium">{formatAppointmentDate(call.appointment.date)} at {formatAppointmentTime(call.appointment.time)}</p>
                     {call.appointment.address && (
                       <p className="text-sm text-gray-300 mt-1">{call.appointment.address}</p>
                     )}
