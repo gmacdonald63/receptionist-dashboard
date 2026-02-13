@@ -796,7 +796,6 @@ const App = () => {
   );
 
   const navItems = [
-    { id: 'overview', label: 'Overview', icon: Phone },
     { id: 'appointments', label: 'Appointments', icon: Calendar },
     { id: 'calls', label: 'Calls', icon: Phone },
     { id: 'billing', label: 'Billing', icon: DollarSign }
@@ -856,7 +855,7 @@ const App = () => {
 
       {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 z-30">
-        <div className="grid grid-cols-4 gap-1">
+        <div className="grid grid-cols-3 gap-1">
           {navItems.map(item => (
             <button
               key={item.id}
@@ -875,4 +874,4 @@ const App = () => {
   );
 };
 
-export default App
+export default App;
