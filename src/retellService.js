@@ -19,11 +19,6 @@ export const retellService = {
         sort_order: 'descending'
       };
       
-      // Add agent_id filter if provided
-      if (agentId) {
-        requestBody.agent_id = agentId;
-      }
-      
       console.log('Request body:', JSON.stringify(requestBody));
       
       const response = await fetch(url, {
@@ -36,17 +31,22 @@ export const retellService = {
       });
   
       console.log('Response status:', response.status);
-      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
       
       const responseText = await response.text();
-      console.log('Response body:', responseText);
   
       if (!response.ok) {
         throw new Error(`API Error: ${response.status} - ${responseText}`);
       }
   
-      const data = JSON.parse(responseText);
-      console.log('Parsed data:', data);
+      let data = JSON.parse(responseText);
+      console.log('Total calls from API:', data?.length || 0);
+      
+      // Filter by agent_id client-side if provided
+      if (agentId && data && Array.isArray(data)) {
+        data = data.filter(call => call.agent_id === agentId);
+        console.log('Calls after agent_id filter:', data.length);
+      }
+      
       return data || [];
     } catch (error) {
       console.error('Error fetching calls:', error);
