@@ -178,11 +178,18 @@ const App = () => {
 
   const formatAppointmentTime = (timeString) => {
     // Convert "14:00 to 16:00" to "2:00 PM to 4:00 PM"
+    // Also handles times that already have AM/PM
     if (!timeString) return '';
+    
+    // If it already contains AM or PM, return as-is (avoid double AM/PM)
+    if (timeString.toUpperCase().includes('AM') || timeString.toUpperCase().includes('PM')) {
+      return timeString;
+    }
     
     const convert24to12 = (time24) => {
       const [hours, minutes] = time24.split(':');
       const hour = parseInt(hours);
+      if (isNaN(hour)) return time24; // Return original if can't parse
       const ampm = hour >= 12 ? 'PM' : 'AM';
       const hour12 = hour % 12 || 12;
       return `${hour12}:${minutes} ${ampm}`;
