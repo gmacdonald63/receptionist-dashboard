@@ -1,10 +1,10 @@
+import React, { useState, useEffect, useRef } from 'react';
 import { Phone, Calendar, FileText, Clock, DollarSign, Download, Play, Pause, Search, Filter, RefreshCw, ChevronRight, ChevronDown, LogOut, Settings } from 'lucide-react';
 import { retellService } from './retellService';
 import { supabase } from './supabaseClient';
 import Login from './Login';
 import Admin from './Admin';
-impimport React, { useState, useEffect, useRef } from 'react';
-ort logo from './assets/RELIANT SUPPORT LOGO.svg';
+import logo from './assets/RELIANT SUPPORT LOGO.svg';
 
 const App = () => {
   // Authentication state
