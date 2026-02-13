@@ -1,9 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Phone, Calendar, FileText, Clock, DollarSign, Download, Play, Pause, Search, Filter, RefreshCw, ChevronRight, ChevronDown } from 'lucide-react';
+import { Phone, Calendar, FileText, Clock, DollarSign, Download, Play, Pause, Search, Filter, RefreshCw, ChevronRight, ChevronDown, LogOut } from 'lucide-react';
 import { retellService } from './retellService';
+import { supabase } from './supabaseClient';
+import Login from './Login';
 import logo from './assets/RELIANT SUPPORT LOGO.svg';
 
 const App = () => {
+  // Authentication state
+  const [user, setUser] = useState(null);
+  const [clientData, setClientData] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
   const [activeTab, setActiveTab] = useState('appointments');
   const [selectedCall, setSelectedCall] = useState(null);
   const [playingRecording, setPlayingRecording] = useState(null);
@@ -28,33 +35,79 @@ const App = () => {
     monthlyBill: 0
   });
 
+  // Check for existing session on load
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUser(session.user);
+        // Fetch client data
+        supabase
+          .from('clients')
+          .select('*')
+          .eq('email', session.user.email)
+          .single()
+          .then(({ data }) => {
+            setClientData(data);
+            setAuthLoading(false);
+          });
+      } else {
+        setAuthLoading(false);
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user || null);
+      if (!session) {
+        setClientData(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
   // Fetch data from Retell API
   useEffect(() => {
-    fetchData();
-  }, []);
+    if (user && clientData) {
+      fetchData();
+    }
+  }, [user, clientData]);
 
   // Scroll to today when appointments tab is active
   useEffect(() => {
     if (activeTab === 'appointments' && todayRef.current && !loading) {
       setTimeout(() => {
         const element = todayRef.current;
-        const yOffset = -80; // Offset to leave space for header and navigation
+        const yOffset = -120; // Offset to leave space for header and navigation
         const y = element.getBoundingClientRect().top + window.pageYOffset + yOffset;
         window.scrollTo({ top: y, behavior: 'smooth' });
       }, 100);
     }
   }, [activeTab, loading]);
 
+  const handleLogin = (user, clientData) => {
+    setUser(user);
+    setClientData(clientData);
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    setClientData(null);
+  };
+
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Fetch calls
-      const calls = await retellService.getCalls();
+      // Get the agent_id from client data (if available)
+      const agentId = clientData?.retell_agent_id || null;
+      
+      // Fetch calls filtered by agent_id
+      const calls = await retellService.getCalls(100, agentId);
       const transformedCalls = calls.map(call => retellService.transformCallData(call));
       setCallLogs(transformedCalls);
 
-      // Get appointments from calls
-      const appointmentsList = await retellService.getAppointments();
+      // Get appointments from calls (also filtered by agent_id)
+      const appointmentsList = await retellService.getAppointments(agentId);
       setAppointments(appointmentsList);
 
       // Calculate stats
@@ -737,11 +790,33 @@ const App = () => {
     { id: 'billing', label: 'Billing', icon: DollarSign }
   ];
 
+  // Show loading while checking auth
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <RefreshCw className="w-8 h-8 animate-spin text-blue-500" />
+      </div>
+    );
+  }
+
+  // Show login if not authenticated
+  if (!user) {
+    return <Login onLogin={handleLogin} />;
+  }
+
   return (
     <div className="min-h-screen bg-gray-900 pb-20">
       {/* Header */}
-      <header className="bg-gray-800 border-b border-gray-700 px-4 sticky top-0 z-50 flex items-center justify-center" style={{ height: '72px' }}>
-        <img src={logo} alt="Reliant Solutions" style={{ height: '40px', width: 'auto' }} />
+      <header className="bg-gray-800 border-b border-gray-700 px-4 sticky top-0 z-50 flex items-center justify-between" style={{ height: '72px' }}>
+        <div style={{ width: '40px' }}></div>
+        <img src={logo} alt="Reliant Support" style={{ height: '40px', width: 'auto' }} />
+        <button
+          onClick={handleLogout}
+          className="p-2 hover:bg-gray-700 rounded-lg"
+          title="Sign out"
+        >
+          <LogOut className="w-5 h-5 text-gray-400" />
+        </button>
       </header>
 
       {/* Main Content */}
