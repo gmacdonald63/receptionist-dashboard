@@ -2,15 +2,29 @@ const RETELL_API_KEY = import.meta.env.VITE_RETELL_API_KEY;
 const RETELL_API_BASE = 'https://api.retellai.com/v2';
 
 export const retellService = {
-  // Fetch all calls
-  async getCalls(limit = 100) {
+  // Fetch calls, optionally filtered by agent_id
+  async getCalls(limit = 100, agentId = null) {
     console.log('Calling Retell API...');
     console.log('API Key (first 10 chars):', RETELL_API_KEY?.substring(0, 10));
     console.log('API Base:', RETELL_API_BASE);
+    console.log('Agent ID filter:', agentId);
     
     try {
       const url = `${RETELL_API_BASE}/list-calls`;
       console.log('Full URL:', url);
+      
+      // Build request body
+      const requestBody = {
+        limit: limit,
+        sort_order: 'descending'
+      };
+      
+      // Add agent_id filter if provided
+      if (agentId) {
+        requestBody.filter_criteria = {
+          agent_id: [agentId]
+        };
+      }
       
       const response = await fetch(url, {
         method: 'POST',
@@ -18,10 +32,7 @@ export const retellService = {
           'Authorization': `Bearer ${RETELL_API_KEY}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          limit: limit,
-          sort_order: 'descending'
-        })
+        body: JSON.stringify(requestBody)
       });
   
       console.log('Response status:', response.status);
@@ -173,8 +184,8 @@ export const retellService = {
   },
 
   // Get appointments from calls
-  async getAppointments() {
-    const calls = await this.getCalls();
+  async getAppointments(agentId = null) {
+    const calls = await this.getCalls(100, agentId);
     const appointments = calls
       .map(call => this.transformCallData(call))
       .filter(call => call.appointment.date && call.appointment.time)
