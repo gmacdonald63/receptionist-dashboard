@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Phone, Calendar, FileText, Clock, DollarSign, Download, Play, Pause, Search, Filter, RefreshCw, ChevronRight, ChevronDown, LogOut } from 'lucide-react';
+import { Phone, Calendar, FileText, Clock, DollarSign, Download, Play, Pause, Search, Filter, RefreshCw, ChevronRight, ChevronDown, LogOut, Settings } from 'lucide-react';
 import { retellService } from './retellService';
 import { supabase } from './supabaseClient';
 import Login from './Login';
+import Admin from './Admin';
 import logo from './assets/RELIANT SUPPORT LOGO.svg';
 
 const App = () => {
@@ -10,6 +11,7 @@ const App = () => {
   const [user, setUser] = useState(null);
   const [clientData, setClientData] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [showAdmin, setShowAdmin] = useState(false);
 
   const [activeTab, setActiveTab] = useState('appointments');
   const [selectedCall, setSelectedCall] = useState(null);
@@ -804,11 +806,26 @@ const App = () => {
     return <Login onLogin={handleLogin} />;
   }
 
+  // Show admin dashboard if admin and showAdmin is true
+  if (showAdmin && clientData?.is_admin) {
+    return <Admin onBack={() => setShowAdmin(false)} />;
+  }
+
   return (
     <div className="min-h-screen bg-gray-900 pb-20">
       {/* Header */}
       <header className="bg-gray-800 border-b border-gray-700 px-4 sticky top-0 z-50 flex items-center justify-between" style={{ height: '72px' }}>
-        <div style={{ width: '40px' }}></div>
+        <div className="flex items-center gap-2">
+          {clientData?.is_admin && (
+            <button
+              onClick={() => setShowAdmin(true)}
+              className="p-2 hover:bg-gray-700 rounded-lg"
+              title="Admin Dashboard"
+            >
+              <Settings className="w-5 h-5 text-gray-400" />
+            </button>
+          )}
+        </div>
         <img src={logo} alt="Reliant Support" style={{ height: '40px', width: 'auto' }} />
         <button
           onClick={handleLogout}
