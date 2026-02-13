@@ -1,6 +1,7 @@
 {
   "name": "ai-receptionist-dashboard",
   "version": "1.0.0",
+  "type": "module",
   "description": "AI Voice Receptionist Dashboard",
   "scripts": {
     "dev": "vite",
