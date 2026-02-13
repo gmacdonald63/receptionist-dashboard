@@ -21,10 +21,10 @@ export const retellService = {
       
       // Add agent_id filter if provided
       if (agentId) {
-        requestBody.filter_criteria = {
-          agent_id: [agentId]
-        };
+        requestBody.agent_id = agentId;
       }
+      
+      console.log('Request body:', JSON.stringify(requestBody));
       
       const response = await fetch(url, {
         method: 'POST',
