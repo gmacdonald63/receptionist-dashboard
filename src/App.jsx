@@ -4,6 +4,7 @@ import { retellService } from './retellService';
 import { supabase } from './supabaseClient';
 import Login from './Login';
 import Admin from './Admin';
+import ResetPassword from './ResetPassword';
 import logo from './assets/RELIANT SUPPORT LOGO.svg';
 
 const App = () => {
@@ -12,6 +13,7 @@ const App = () => {
   const [clientData, setClientData] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [showAdmin, setShowAdmin] = useState(false);
+  const [showResetPassword, setShowResetPassword] = useState(false);
 
   const [activeTab, setActiveTab] = useState('appointments');
   const [selectedCall, setSelectedCall] = useState(null);
@@ -39,6 +41,23 @@ const App = () => {
 
   // Check for existing session on load
   useEffect(() => {
+    // Check if this is a password reset flow
+    const hashParams = new URLSearchParams(window.location.hash.substring(1));
+    const type = hashParams.get('type');
+    
+    if (type === 'recovery') {
+      setShowResetPassword(true);
+      setAuthLoading(false);
+      return;
+    }
+
+    // Check for reset-password in URL path
+    if (window.location.pathname.includes('reset-password')) {
+      setShowResetPassword(true);
+      setAuthLoading(false);
+      return;
+    }
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         setUser(session.user);
@@ -57,7 +76,13 @@ const App = () => {
       }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      // If password recovery event, show reset form
+      if (event === 'PASSWORD_RECOVERY') {
+        setShowResetPassword(true);
+        return;
+      }
+      
       setUser(session?.user || null);
       if (!session) {
         setClientData(null);
@@ -807,6 +832,18 @@ const App = () => {
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <RefreshCw className="w-8 h-8 animate-spin text-blue-500" />
       </div>
+    );
+  }
+
+  // Show password reset form
+  if (showResetPassword) {
+    return (
+      <ResetPassword
+        onComplete={() => {
+          setShowResetPassword(false);
+          window.location.href = window.location.origin; // Redirect to main app
+        }}
+      />
     );
   }
 
