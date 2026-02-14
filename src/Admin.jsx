@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, Edit, Trash2, Save, X, RefreshCw, ArrowLeft } from 'lucide-react';
+import { Users, Plus, Edit, Trash2, Save, X, RefreshCw, ArrowLeft, Mail, Check } from 'lucide-react';
 import { supabase } from './supabaseClient';
 
 const Admin = ({ onBack }) => {
@@ -17,10 +17,20 @@ const Admin = ({ onBack }) => {
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [successMessage, setSuccessMessage] = useState(null);
+  const [sendingInvite, setSendingInvite] = useState(null);
 
   useEffect(() => {
     fetchClients();
   }, []);
+
+  // Clear success message after 5 seconds
+  useEffect(() => {
+    if (successMessage) {
+      const timer = setTimeout(() => setSuccessMessage(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [successMessage]);
 
   const fetchClients = async () => {
     setLoading(true);
@@ -87,6 +97,7 @@ const Admin = ({ onBack }) => {
           .eq('id', editingClient.id);
 
         if (error) throw error;
+        setSuccessMessage('Client updated successfully');
       } else {
         // Create new client
         const { error } = await supabase
@@ -97,10 +108,12 @@ const Admin = ({ onBack }) => {
             retell_agent_id: formData.retell_agent_id,
             retell_api_key: formData.retell_api_key,
             cal_com_link: formData.cal_com_link,
-            is_admin: formData.is_admin
+            is_admin: formData.is_admin,
+            invite_sent: false
           }]);
 
         if (error) throw error;
+        setSuccessMessage('Client added successfully. Don\'t forget to send them an invite!');
       }
 
       resetForm();
@@ -125,6 +138,7 @@ const Admin = ({ onBack }) => {
         .eq('id', client.id);
 
       if (error) throw error;
+      setSuccessMessage('Client deleted successfully');
       fetchClients();
     } catch (error) {
       console.error('Error deleting client:', error);
@@ -132,15 +146,45 @@ const Admin = ({ onBack }) => {
     }
   };
 
-  const createAuthUser = async (email, password) => {
-    // This creates a user in Supabase Auth
-    // Note: In production, you might want to send an invite email instead
-    const { data, error } = await supabase.auth.admin.createUser({
-      email: email,
-      password: password,
-      email_confirm: true
-    });
-    return { data, error };
+  const handleSendInvite = async (client) => {
+    setSendingInvite(client.id);
+    setError(null);
+
+    try {
+      // Send invite email using Supabase Auth
+      const { error } = await supabase.auth.signInWithOtp({
+        email: client.email,
+        options: {
+          emailRedirectTo: window.location.origin,
+          data: {
+            company_name: client.company_name
+          }
+        }
+      });
+
+      if (error) throw error;
+
+      // Update client record to mark invite as sent
+      await supabase
+        .from('clients')
+        .update({ invite_sent: true, invite_sent_at: new Date().toISOString() })
+        .eq('id', client.id);
+
+      setSuccessMessage(`Invite sent to ${client.email}`);
+      fetchClients();
+    } catch (error) {
+      console.error('Error sending invite:', error);
+      setError(error.message || 'Failed to send invite');
+    } finally {
+      setSendingInvite(null);
+    }
+  };
+
+  const handleResendInvite = async (client) => {
+    if (!confirm(`Resend invite to ${client.email}?`)) {
+      return;
+    }
+    await handleSendInvite(client);
   };
 
   return (
@@ -177,6 +221,14 @@ const Admin = ({ onBack }) => {
         </div>
       </div>
 
+      {/* Success Message */}
+      {successMessage && (
+        <div className="mb-4 p-3 bg-green-900/50 border border-green-700 rounded-lg flex items-center gap-2">
+          <Check className="w-4 h-4 text-green-400" />
+          <p className="text-green-300 text-sm">{successMessage}</p>
+        </div>
+      )}
+
       {/* Error Message */}
       {error && (
         <div className="mb-4 p-3 bg-red-900/50 border border-red-700 rounded-lg">
@@ -207,7 +259,11 @@ const Admin = ({ onBack }) => {
                   className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
                   placeholder="client@example.com"
                   required
+                  disabled={editingClient}
                 />
+                {editingClient && (
+                  <p className="text-xs text-gray-500 mt-1">Email cannot be changed after creation</p>
+                )}
               </div>
 
               <div>
@@ -292,9 +348,9 @@ const Admin = ({ onBack }) => {
             </div>
 
             {!editingClient && (
-              <div className="mt-4 p-3 bg-yellow-900/30 border border-yellow-700 rounded-lg">
-                <p className="text-yellow-300 text-xs">
-                  Note: After adding a client here, you'll also need to create their login account in Supabase Authentication → Users → Add user
+              <div className="mt-4 p-3 bg-blue-900/30 border border-blue-700 rounded-lg">
+                <p className="text-blue-300 text-xs">
+                  After adding the client, click "Send Invite" to email them a link to set their password.
                 </p>
               </div>
             )}
@@ -328,10 +384,15 @@ const Admin = ({ onBack }) => {
             >
               <div className="flex items-start justify-between">
                 <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <p className="font-medium text-white">{client.company_name || 'No company name'}</p>
                     {client.is_admin && (
                       <span className="px-2 py-0.5 bg-purple-900 text-purple-300 rounded text-xs">Admin</span>
+                    )}
+                    {client.invite_sent ? (
+                      <span className="px-2 py-0.5 bg-green-900 text-green-300 rounded text-xs">Invited</span>
+                    ) : (
+                      <span className="px-2 py-0.5 bg-yellow-900 text-yellow-300 rounded text-xs">Not Invited</span>
                     )}
                   </div>
                   <p className="text-sm text-gray-400">{client.email}</p>
@@ -340,6 +401,35 @@ const Admin = ({ onBack }) => {
                   )}
                 </div>
                 <div className="flex gap-2">
+                  {!client.invite_sent ? (
+                    <button
+                      onClick={() => handleSendInvite(client)}
+                      disabled={sendingInvite === client.id}
+                      className="flex items-center gap-1 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 text-sm"
+                      title="Send Invite"
+                    >
+                      {sendingInvite === client.id ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Mail className="w-4 h-4" />
+                      )}
+                      <span className="hidden sm:inline">Send Invite</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleResendInvite(client)}
+                      disabled={sendingInvite === client.id}
+                      className="flex items-center gap-1 px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500 disabled:opacity-50 text-sm"
+                      title="Resend Invite"
+                    >
+                      {sendingInvite === client.id ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Mail className="w-4 h-4" />
+                      )}
+                      <span className="hidden sm:inline">Resend</span>
+                    </button>
+                  )}
                   <button
                     onClick={() => handleEdit(client)}
                     className="p-2 hover:bg-gray-700 rounded-lg"
@@ -359,9 +449,16 @@ const Admin = ({ onBack }) => {
               {client.cal_com_link && (
                 <p className="text-xs text-gray-500 mt-2 truncate">Cal.com: {client.cal_com_link}</p>
               )}
-              <p className="text-xs text-gray-600 mt-2">
-                Created: {new Date(client.created_at).toLocaleDateString()}
-              </p>
+              <div className="flex gap-4 mt-2">
+                <p className="text-xs text-gray-600">
+                  Created: {new Date(client.created_at).toLocaleDateString()}
+                </p>
+                {client.invite_sent_at && (
+                  <p className="text-xs text-gray-600">
+                    Invited: {new Date(client.invite_sent_at).toLocaleDateString()}
+                  </p>
+                )}
+              </div>
             </div>
           ))}
         </div>
