@@ -151,18 +151,34 @@ const Admin = ({ onBack }) => {
     setError(null);
 
     try {
-      // Send invite email using Supabase Auth
-      const { error } = await supabase.auth.signInWithOtp({
+      // First, try to create the user with a random temporary password
+      // This creates the auth user if they don't exist
+      const tempPassword = Math.random().toString(36).slice(-12) + 'A1!';
+      
+      const { error: signUpError } = await supabase.auth.signUp({
         email: client.email,
+        password: tempPassword,
         options: {
-          emailRedirectTo: window.location.origin,
           data: {
             company_name: client.company_name
           }
         }
       });
 
-      if (error) throw error;
+      // Ignore "User already registered" error - that's fine
+      if (signUpError && !signUpError.message.includes('already registered')) {
+        throw signUpError;
+      }
+
+      // Now send password reset email so they can set their own password
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(
+        client.email,
+        {
+          redirectTo: `${window.location.origin}/reset-password`,
+        }
+      );
+
+      if (resetError) throw resetError;
 
       // Update client record to mark invite as sent
       await supabase
