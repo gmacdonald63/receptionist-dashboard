@@ -763,62 +763,138 @@ const App = () => {
     </div>
   );
 
-  const renderBilling = () => (
-    <div className="space-y-4">
-      <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-        <h3 className="text-lg font-semibold mb-4 text-white">Current Usage</h3>
-        <div className="grid grid-cols-1 gap-3 mb-4">
-          <div className="p-4 bg-gray-750 rounded-lg">
-            <p className="text-gray-400 text-xs mb-1">This Month</p>
-            <p className="text-3xl font-bold text-white">{stats.totalMinutes}</p>
-            <p className="text-gray-400 text-sm">minutes</p>
-          </div>
-          <div className="p-4 bg-gray-750 rounded-lg">
-            <p className="text-gray-400 text-xs mb-1">Rate</p>
-            <p className="text-3xl font-bold text-white">$0.10</p>
-            <p className="text-gray-400 text-sm">per minute</p>
-          </div>
-          <div className="p-4 bg-gray-750 rounded-lg">
-            <p className="text-gray-400 text-xs mb-1">Current Bill</p>
-            <p className="text-3xl font-bold text-white">${stats.monthlyBill}</p>
-            <p className="text-gray-400 text-sm">this month</p>
-          </div>
-        </div>
-        <div className="p-3 bg-blue-900/20 border border-blue-800 rounded-lg">
-          <p className="text-blue-300 text-sm">Next billing: February 28, 2026</p>
-        </div>
-      </div>
+  const renderBilling = () => {
+    // Billing configuration
+    const MONTHLY_FEE = 499;
+    
+    // Calculate next billing date (1st of next month for now)
+    const today = new Date();
+    const nextBillingDate = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+    const formattedNextBilling = nextBillingDate.toLocaleDateString('en-US', { 
+      month: 'long', 
+      day: 'numeric', 
+      year: 'numeric' 
+    });
 
-      <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-        <h3 className="text-lg font-semibold mb-4 text-white">Billing History</h3>
-        <div className="space-y-3">
-          {[
-            { month: 'Jan 2026', minutes: stats.totalMinutes, amount: `$${stats.monthlyBill}`, status: 'Current' },
-            { month: 'Dec 2025', minutes: '1,642', amount: '$164.20', status: 'Paid' },
-            { month: 'Nov 2025', minutes: '1,523', amount: '$152.30', status: 'Paid' }
-          ].map((bill, idx) => (
-            <div key={idx} className="p-3 bg-gray-750 rounded-lg">
-              <div className="flex items-center justify-between mb-2">
-                <p className="font-medium text-white">{bill.month}</p>
-                <span className={`px-2 py-1 rounded text-xs ${bill.status === 'Current' ? 'bg-blue-900 text-blue-300' : 'bg-green-900 text-green-300'}`}>
-                  {bill.status}
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-400">{bill.minutes} minutes</span>
-                <span className="text-white font-medium">{bill.amount}</span>
-              </div>
-              {bill.status === 'Paid' && (
-                <button className="mt-2 w-full px-3 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 text-sm">
-                  Download Invoice
-                </button>
-              )}
+    // Mock data - in production this would come from Stripe/database
+    const currentBill = {
+      amount: MONTHLY_FEE,
+      status: 'due', // 'paid', 'due', 'overdue'
+      dueDate: formattedNextBilling
+    };
+
+    const billingHistory = [
+      { id: 1, date: 'February 1, 2026', amount: MONTHLY_FEE, status: 'due' },
+      { id: 2, date: 'January 1, 2026', amount: MONTHLY_FEE, status: 'paid' },
+      { id: 3, date: 'December 1, 2025', amount: MONTHLY_FEE, status: 'paid' },
+    ];
+
+    const paymentMethod = null; // null if no card on file, or { last4: '4242', brand: 'Visa' }
+
+    const getStatusBadge = (status) => {
+      switch(status) {
+        case 'paid':
+          return <span className="px-2 py-1 bg-green-900 text-green-300 rounded text-xs">Paid</span>;
+        case 'due':
+          return <span className="px-2 py-1 bg-yellow-900 text-yellow-300 rounded text-xs">Due</span>;
+        case 'overdue':
+          return <span className="px-2 py-1 bg-red-900 text-red-300 rounded text-xs">Overdue</span>;
+        default:
+          return null;
+      }
+    };
+
+    return (
+      <div className="space-y-4">
+        {/* Current Bill */}
+        <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+          <h3 className="text-lg font-semibold mb-4 text-white">Current Bill</h3>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <p className="text-3xl font-bold text-white">${MONTHLY_FEE.toFixed(2)}</p>
+              <p className="text-gray-400 text-sm">Monthly Service Fee</p>
             </div>
-          ))}
+            {getStatusBadge(currentBill.status)}
+          </div>
+          
+          <div className="p-3 bg-gray-750 rounded-lg mb-4">
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-400">Due Date</span>
+              <span className="text-white">{currentBill.dueDate}</span>
+            </div>
+          </div>
+
+          {currentBill.status !== 'paid' && (
+            <button className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
+              Pay Now
+            </button>
+          )}
+        </div>
+
+        {/* Usage This Month */}
+        <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+          <h3 className="text-lg font-semibold mb-4 text-white">Usage This Month</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="p-4 bg-gray-750 rounded-lg text-center">
+              <p className="text-2xl font-bold text-white">{stats.totalCalls}</p>
+              <p className="text-gray-400 text-sm">Calls</p>
+            </div>
+            <div className="p-4 bg-gray-750 rounded-lg text-center">
+              <p className="text-2xl font-bold text-white">{stats.totalMinutes}</p>
+              <p className="text-gray-400 text-sm">Minutes</p>
+            </div>
+          </div>
+          <p className="text-gray-500 text-xs mt-3 text-center">All minutes included in your monthly plan</p>
+        </div>
+
+        {/* Payment Method */}
+        <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+          <h3 className="text-lg font-semibold mb-4 text-white">Payment Method</h3>
+          {paymentMethod ? (
+            <div className="flex items-center justify-between p-3 bg-gray-750 rounded-lg">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-6 bg-gray-600 rounded flex items-center justify-center">
+                  <span className="text-xs text-white">{paymentMethod.brand}</span>
+                </div>
+                <span className="text-white">•••• {paymentMethod.last4}</span>
+              </div>
+              <button className="text-blue-400 text-sm hover:text-blue-300">Update</button>
+            </div>
+          ) : (
+            <div className="text-center py-4">
+              <p className="text-gray-400 text-sm mb-3">No payment method on file</p>
+              <button className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 text-sm">
+                Add Payment Method
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Billing History */}
+        <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+          <h3 className="text-lg font-semibold mb-4 text-white">Billing History</h3>
+          <div className="space-y-3">
+            {billingHistory.map((bill) => (
+              <div key={bill.id} className="p-3 bg-gray-750 rounded-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="font-medium text-white">{bill.date}</p>
+                  {getStatusBadge(bill.status)}
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xl font-semibold text-white">${bill.amount.toFixed(2)}</span>
+                  {bill.status === 'paid' && (
+                    <button className="px-3 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 text-sm">
+                      Download Invoice
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const navItems = [
     { id: 'appointments', label: 'Appointments', icon: Calendar },
