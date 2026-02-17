@@ -99,11 +99,24 @@ const Admin = ({ onBack }) => {
         if (error) throw error;
         setSuccessMessage('Client updated successfully');
       } else {
+        // Check if a client with this email already exists
+        const { data: existingClient } = await supabase
+          .from('clients')
+          .select('id')
+          .eq('email', formData.email.trim().toLowerCase())
+          .maybeSingle();
+
+        if (existingClient) {
+          setError('A client with this email address already exists.');
+          setSaving(false);
+          return;
+        }
+
         // Create new client
         const { error } = await supabase
           .from('clients')
           .insert([{
-            email: formData.email,
+            email: formData.email.trim().toLowerCase(),
             company_name: formData.company_name,
             retell_agent_id: formData.retell_agent_id,
             retell_api_key: formData.retell_api_key,
