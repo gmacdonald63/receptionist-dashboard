@@ -14,6 +14,7 @@ const App = () => {
   const [authLoading, setAuthLoading] = useState(true);
   const [showAdmin, setShowAdmin] = useState(false);
   const [showResetPassword, setShowResetPassword] = useState(false);
+  const showResetPasswordRef = useRef(false);
 
   const [activeTab, setActiveTab] = useState('appointments');
   const [selectedCall, setSelectedCall] = useState(null);
@@ -47,6 +48,7 @@ const App = () => {
     
     if (type === 'recovery') {
       setShowResetPassword(true);
+      showResetPasswordRef.current = true;
       setAuthLoading(false);
       return;
     }
@@ -54,6 +56,7 @@ const App = () => {
     // Check for reset-password in URL path
     if (window.location.pathname.includes('reset-password')) {
       setShowResetPassword(true);
+      showResetPasswordRef.current = true;
       setAuthLoading(false);
       return;
     }
@@ -80,6 +83,13 @@ const App = () => {
       // If password recovery event, show reset form
       if (event === 'PASSWORD_RECOVERY') {
         setShowResetPassword(true);
+        showResetPasswordRef.current = true;
+        return;
+      }
+      
+      // Don't update user state if we're in the password reset flow
+      // This prevents the reset screen from being overridden
+      if (showResetPasswordRef.current) {
         return;
       }
       
@@ -917,6 +927,7 @@ const App = () => {
       <ResetPassword
         onComplete={() => {
           setShowResetPassword(false);
+          showResetPasswordRef.current = false;
           window.location.href = window.location.origin; // Redirect to main app
         }}
       />
