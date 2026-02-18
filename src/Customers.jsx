@@ -65,12 +65,12 @@ const Customers = ({ clientData, callLogs, appointments, manualAppointments, onR
     }
   }, [clientData]);
 
-  // Sync call data to customers
+  // Sync call/appointment data to customers
   useEffect(() => {
-    if (clientData?.id && callLogs.length > 0 && customers.length >= 0) {
+    if (clientData?.id && (callLogs.length > 0 || appointments.length > 0 || manualAppointments.length > 0)) {
       syncCallsToCustomers();
     }
-  }, [callLogs, clientData]);
+  }, [callLogs, appointments, manualAppointments, clientData]);
 
   // Update reminder count for parent badge
   useEffect(() => {
@@ -132,9 +132,8 @@ const Customers = ({ clientData, callLogs, appointments, manualAppointments, onR
           .filter(Boolean)
       );
 
-      // Only create customers from calls that have a booked appointment with an address
-      const newCustomers = [];
-      const seenAddresses = new Set();
+      // Collect unique addresses from calls that have booked appointments
+      const newCustomersByAddress = new Map();
 
       for (const call of callLogs) {
         const address = call.appointment?.address;
@@ -142,10 +141,10 @@ const Customers = ({ clientData, callLogs, appointments, manualAppointments, onR
 
         const normalizedAddr = normalizeAddress(address);
         if (!normalizedAddr) continue;
-        if (existingAddresses.has(normalizedAddr) || seenAddresses.has(normalizedAddr)) continue;
+        if (existingAddresses.has(normalizedAddr)) continue;
+        if (newCustomersByAddress.has(normalizedAddr)) continue;
 
-        seenAddresses.add(normalizedAddr);
-        newCustomers.push({
+        newCustomersByAddress.set(normalizedAddr, {
           client_id: clientData.id,
           name: call.caller && call.caller !== 'Unknown Caller' ? call.caller : `Customer at ${address}`,
           phone: call.number || '',
@@ -153,6 +152,27 @@ const Customers = ({ clientData, callLogs, appointments, manualAppointments, onR
           tags: ['From Call']
         });
       }
+
+      // Also check appointments that have addresses not yet in customers
+      const allApts = [...appointments, ...manualAppointments];
+      for (const apt of allApts) {
+        if (!apt.address) continue;
+
+        const normalizedAddr = normalizeAddress(apt.address);
+        if (!normalizedAddr) continue;
+        if (existingAddresses.has(normalizedAddr)) continue;
+        if (newCustomersByAddress.has(normalizedAddr)) continue;
+
+        newCustomersByAddress.set(normalizedAddr, {
+          client_id: clientData.id,
+          name: apt.name || `Customer at ${apt.address}`,
+          phone: apt.phone || '',
+          address: apt.address,
+          tags: ['From Appointment']
+        });
+      }
+
+      const newCustomers = Array.from(newCustomersByAddress.values());
 
       if (newCustomers.length > 0) {
         const { error } = await supabase
