@@ -271,14 +271,42 @@ const App = () => {
     return dates;
   };
 
+  // Helper to parse any time string into minutes since midnight for sorting
+  const getStartTimeMinutes = (timeStr) => {
+    if (!timeStr) return 9999;
+    // Get just the start time (before " to " if it's a range)
+    const start = timeStr.split(' to ')[0].trim();
+
+    // Handle AM/PM format (e.g. "2:00 PM", "10:30 AM")
+    const ampmMatch = start.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+    if (ampmMatch) {
+      let hours = parseInt(ampmMatch[1]);
+      const minutes = parseInt(ampmMatch[2]);
+      const period = ampmMatch[3].toUpperCase();
+      if (period === 'PM' && hours !== 12) hours += 12;
+      if (period === 'AM' && hours === 12) hours = 0;
+      return hours * 60 + minutes;
+    }
+
+    // Handle 24-hour format (e.g. "14:00", "08:30")
+    const milMatch = start.match(/^(\d{1,2}):(\d{2})$/);
+    if (milMatch) {
+      return parseInt(milMatch[1]) * 60 + parseInt(milMatch[2]);
+    }
+
+    return 9999; // Unknown format goes to the end
+  };
+
   const getAppointmentsForDate = (date) => {
     const allAppointments = [...appointments, ...manualAppointments];
-    return allAppointments.filter(apt => {
-      if (!apt.date) return false;
-      const [year, month, day] = apt.date.split('-');
-      const aptDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-      return aptDate.toDateString() === date.toDateString();
-    });
+    return allAppointments
+      .filter(apt => {
+        if (!apt.date) return false;
+        const [year, month, day] = apt.date.split('-');
+        const aptDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+        return aptDate.toDateString() === date.toDateString();
+      })
+      .sort((a, b) => getStartTimeMinutes(a.time) - getStartTimeMinutes(b.time));
   };
 
   const formatDateForDisplay = (date) => {
