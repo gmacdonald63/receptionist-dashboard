@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Phone, Calendar, FileText, Clock, DollarSign, Download, Play, Pause, Search, Filter, RefreshCw, ChevronRight, ChevronDown, LogOut, Settings } from 'lucide-react';
+import { Phone, Calendar, FileText, Clock, DollarSign, Download, Play, Pause, Search, Filter, RefreshCw, ChevronRight, ChevronDown, LogOut, Settings, Plus, X } from 'lucide-react';
 import { retellService } from './retellService';
 import { supabase } from './supabaseClient';
 import Login from './Login';
@@ -32,6 +32,7 @@ const App = () => {
   // Real data from Retell API
   const [callLogs, setCallLogs] = useState([]);
   const [appointments, setAppointments] = useState([]);
+  const [manualAppointments, setManualAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     totalCalls: 0,
@@ -39,6 +40,14 @@ const App = () => {
     totalMinutes: 0,
     monthlyBill: 0
   });
+
+  // Add appointment modal state
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addForm, setAddForm] = useState({
+    name: '', phone: '', date: '', startTime: '', endTime: '',
+    service: '', address: '', notes: ''
+  });
+  const [savingAppointment, setSavingAppointment] = useState(false);
 
   // Check for existing session on load
   useEffect(() => {
@@ -157,10 +166,99 @@ const App = () => {
         totalMinutes: Math.round(totalMinutes),
         monthlyBill: monthlyBill.toFixed(2)
       });
+
+      await fetchManualAppointments();
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchManualAppointments = async () => {
+    if (!clientData?.id) return;
+    try {
+      const { data, error } = await supabase
+        .from('manual_appointments')
+        .select('*')
+        .eq('client_id', clientData.id)
+        .order('date', { ascending: true });
+
+      if (!error && data) {
+        setManualAppointments(data.map(apt => ({
+          id: apt.id,
+          name: apt.name,
+          date: apt.date,
+          time: apt.end_time
+            ? `${apt.start_time} to ${apt.end_time}`
+            : apt.start_time,
+          service: apt.service || '',
+          address: apt.address || '',
+          phone: apt.phone || '',
+          summary: apt.notes || '',
+          status: 'confirmed',
+          isManual: true
+        })));
+      }
+    } catch (err) {
+      console.error('Could not load manual appointments:', err);
+    }
+  };
+
+  const handleAddAppointment = async (e) => {
+    e.preventDefault();
+    if (!addForm.name || !addForm.date || !addForm.startTime) return;
+
+    setSavingAppointment(true);
+    try {
+      const { data, error } = await supabase
+        .from('manual_appointments')
+        .insert({
+          client_id: clientData.id,
+          name: addForm.name,
+          phone: addForm.phone,
+          date: addForm.date,
+          start_time: addForm.startTime,
+          end_time: addForm.endTime || null,
+          service: addForm.service,
+          address: addForm.address,
+          notes: addForm.notes
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      const newApt = {
+        id: data.id,
+        name: addForm.name,
+        date: addForm.date,
+        time: addForm.endTime
+          ? `${addForm.startTime} to ${addForm.endTime}`
+          : addForm.startTime,
+        service: addForm.service,
+        address: addForm.address,
+        phone: addForm.phone,
+        summary: addForm.notes,
+        status: 'confirmed',
+        isManual: true
+      };
+
+      setManualAppointments(prev => [...prev, newApt]);
+
+      // Navigate to the week of the new appointment
+      const [year, month, day] = addForm.date.split('-');
+      const aptDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+      const first = aptDate.getDate() - aptDate.getDay();
+      setCurrentWeekStart(new Date(aptDate.getFullYear(), aptDate.getMonth(), first));
+
+      setAddForm({ name: '', phone: '', date: '', startTime: '', endTime: '', service: '', address: '', notes: '' });
+      setShowAddModal(false);
+    } catch (err) {
+      console.error('Error saving appointment:', err);
+      alert('Failed to save appointment. Please make sure the manual_appointments table has been created in Supabase.');
+    } finally {
+      setSavingAppointment(false);
     }
   };
 
@@ -176,10 +274,9 @@ const App = () => {
   };
 
   const getAppointmentsForDate = (date) => {
-    return appointments.filter(apt => {
+    const allAppointments = [...appointments, ...manualAppointments];
+    return allAppointments.filter(apt => {
       if (!apt.date) return false;
-      // Parse the date string as local time, not UTC
-      // apt.date is in format "2026-02-17"
       const [year, month, day] = apt.date.split('-');
       const aptDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
       return aptDate.toDateString() === date.toDateString();
@@ -379,13 +476,22 @@ const App = () => {
               Next →
             </button>
           </div>
-          <button 
-            onClick={fetchData}
-            className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
-          >
-            <RefreshCw className="w-4 h-4" />
-            <span className="hidden sm:inline">Refresh</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={fetchData}
+              className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+            >
+              <RefreshCw className="w-4 h-4" />
+              <span className="hidden sm:inline">Refresh</span>
+            </button>
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm"
+            >
+              <Plus className="w-4 h-4" />
+              <span className="hidden sm:inline">Add</span>
+            </button>
+          </div>
         </div>
 
         {/* Week Display */}
@@ -400,10 +506,17 @@ const App = () => {
             <RefreshCw className="w-8 h-8 animate-spin text-blue-500 mx-auto mb-4" />
             <p className="text-gray-400">Loading appointments...</p>
           </div>
-        ) : appointments.length === 0 ? (
+        ) : appointments.length === 0 && manualAppointments.length === 0 ? (
           <div className="bg-gray-800 rounded-lg p-8 border border-gray-700 text-center">
             <Calendar className="w-12 h-12 text-gray-600 mx-auto mb-4" />
-            <p className="text-gray-400">No appointments booked yet</p>
+            <p className="text-gray-400 mb-4">No appointments booked yet</p>
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm mx-auto"
+            >
+              <Plus className="w-4 h-4" />
+              Add Appointment
+            </button>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-7 gap-3">
@@ -446,7 +559,12 @@ const App = () => {
                         >
                           <div className="flex items-start justify-between gap-1">
                             <div className="flex-1 min-w-0">
-                              <p className="text-white text-xs font-medium truncate">{apt.name}</p>
+                              <div className="flex items-center gap-1">
+                                <p className="text-white text-xs font-medium truncate">{apt.name}</p>
+                                {apt.isManual && (
+                                  <span className="flex-shrink-0 px-1 py-0.5 bg-green-700 text-green-200 rounded text-[10px] leading-none">Manual</span>
+                                )}
+                              </div>
                               <p className="text-gray-300 text-xs mt-1">{formatAppointmentTime(apt.time)}</p>
                               {apt.address && (
                                 <p className="text-gray-400 text-xs mt-1 truncate">{apt.address}</p>
@@ -976,6 +1094,141 @@ const App = () => {
         {activeTab === 'calls' && renderCallLogs()}
         {activeTab === 'billing' && renderBilling()}
       </main>
+
+      {/* Add Appointment Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-gray-800 border border-gray-700 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-4 border-b border-gray-700 sticky top-0 bg-gray-800 rounded-t-2xl sm:rounded-t-2xl">
+              <h2 className="text-lg font-semibold text-white">Add Appointment</h2>
+              <button
+                onClick={() => setShowAddModal(false)}
+                className="p-2 hover:bg-gray-700 rounded-lg"
+              >
+                <X className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddAppointment} className="p-4 space-y-4">
+              {/* Name */}
+              <div>
+                <label className="block text-gray-400 text-sm mb-1">Client Name <span className="text-red-400">*</span></label>
+                <input
+                  type="text"
+                  required
+                  value={addForm.name}
+                  onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))}
+                  placeholder="Full name"
+                  className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
+                />
+              </div>
+
+              {/* Phone */}
+              <div>
+                <label className="block text-gray-400 text-sm mb-1">Phone Number</label>
+                <input
+                  type="tel"
+                  value={addForm.phone}
+                  onChange={e => setAddForm(f => ({ ...f, phone: e.target.value }))}
+                  placeholder="(555) 555-5555"
+                  className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
+                />
+              </div>
+
+              {/* Date */}
+              <div>
+                <label className="block text-gray-400 text-sm mb-1">Date <span className="text-red-400">*</span></label>
+                <input
+                  type="date"
+                  required
+                  value={addForm.date}
+                  onChange={e => setAddForm(f => ({ ...f, date: e.target.value }))}
+                  className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 text-sm"
+                  style={{ colorScheme: 'dark' }}
+                />
+              </div>
+
+              {/* Time */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-gray-400 text-sm mb-1">Start Time <span className="text-red-400">*</span></label>
+                  <input
+                    type="time"
+                    required
+                    value={addForm.startTime}
+                    onChange={e => setAddForm(f => ({ ...f, startTime: e.target.value }))}
+                    className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 text-sm"
+                    style={{ colorScheme: 'dark' }}
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-400 text-sm mb-1">End Time</label>
+                  <input
+                    type="time"
+                    value={addForm.endTime}
+                    onChange={e => setAddForm(f => ({ ...f, endTime: e.target.value }))}
+                    className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 text-sm"
+                    style={{ colorScheme: 'dark' }}
+                  />
+                </div>
+              </div>
+
+              {/* Service */}
+              <div>
+                <label className="block text-gray-400 text-sm mb-1">Service Type</label>
+                <input
+                  type="text"
+                  value={addForm.service}
+                  onChange={e => setAddForm(f => ({ ...f, service: e.target.value }))}
+                  placeholder="e.g. HVAC Repair, Plumbing"
+                  className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
+                />
+              </div>
+
+              {/* Address */}
+              <div>
+                <label className="block text-gray-400 text-sm mb-1">Address</label>
+                <input
+                  type="text"
+                  value={addForm.address}
+                  onChange={e => setAddForm(f => ({ ...f, address: e.target.value }))}
+                  placeholder="Service address"
+                  className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
+                />
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="block text-gray-400 text-sm mb-1">Notes</label>
+                <textarea
+                  value={addForm.notes}
+                  onChange={e => setAddForm(f => ({ ...f, notes: e.target.value }))}
+                  placeholder="Any additional notes..."
+                  rows={3}
+                  className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm resize-none"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  className="flex-1 px-4 py-3 bg-gray-700 text-white rounded-lg hover:bg-gray-600 text-sm font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingAppointment}
+                  className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium disabled:opacity-50"
+                >
+                  {savingAppointment ? 'Saving...' : 'Add Appointment'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 z-30">
