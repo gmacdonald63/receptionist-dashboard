@@ -196,7 +196,6 @@ const App = () => {
           address: apt.address || '',
           phone: apt.phone || '',
           summary: apt.notes || '',
-          status: 'confirmed',
           isManual: true
         })));
       }
@@ -240,7 +239,6 @@ const App = () => {
         address: addForm.address,
         phone: addForm.phone,
         summary: addForm.notes,
-        status: 'confirmed',
         isManual: true
       };
 
@@ -401,9 +399,6 @@ const App = () => {
                         <p className="font-medium text-white">{apt.name}</p>
                         <p className="text-sm text-gray-400">{apt.service}</p>
                       </div>
-                      <span className={`px-2 py-1 rounded text-xs whitespace-nowrap ${apt.status === 'confirmed' ? 'bg-green-900 text-green-300' : 'bg-yellow-900 text-yellow-300'}`}>
-                        {apt.status}
-                      </span>
                     </div>
                     <div className="flex items-center justify-between text-sm">
                       <p className="text-gray-400">{apt.date}</p>
@@ -561,8 +556,10 @@ const App = () => {
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-1">
                                 <p className="text-white text-xs font-medium truncate">{apt.name}</p>
-                                {apt.isManual && (
+                                {apt.isManual ? (
                                   <span className="flex-shrink-0 px-1 py-0.5 bg-green-700 text-green-200 rounded text-[10px] leading-none">Manual</span>
+                                ) : (
+                                  <span className="flex-shrink-0 px-1 py-0.5 bg-blue-700 text-blue-200 rounded text-[10px] leading-none">AI</span>
                                 )}
                               </div>
                               <p className="text-gray-300 text-xs mt-1">{formatAppointmentTime(apt.time)}</p>
@@ -594,17 +591,6 @@ const App = () => {
                                 <div>
                                   <p className="text-xs text-gray-300">Service</p>
                                   <p className="text-white text-xs">{apt.service}</p>
-                                </div>
-                              )}
-                              {apt.status && (
-                                <div className="pt-1">
-                                  <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${
-                                    apt.status === 'confirmed' 
-                                      ? 'bg-green-900 text-green-300' 
-                                      : 'bg-yellow-900 text-yellow-300'
-                                  }`}>
-                                    {apt.status}
-                                  </span>
                                 </div>
                               )}
                             </div>
