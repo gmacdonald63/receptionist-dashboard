@@ -116,36 +116,40 @@ const Customers = ({ clientData, callLogs, appointments, manualAppointments, onR
     }
   };
 
+  const normalizeAddress = (addr) => (addr || '').trim().toLowerCase().replace(/[.,#]/g, '');
+
   const syncCallsToCustomers = async () => {
     try {
-      // Get existing customers to check phone numbers
+      // Get existing customers to check addresses
       const { data: existingCustomers } = await supabase
         .from('customers')
-        .select('phone')
+        .select('address')
         .eq('client_id', clientData.id);
 
-      const existingPhones = new Set(
+      const existingAddresses = new Set(
         (existingCustomers || [])
-          .map(c => c.phone)
+          .map(c => normalizeAddress(c.address))
           .filter(Boolean)
-          .map(p => p.replace(/\D/g, ''))
       );
 
-      // Find calls with phone numbers not yet in customers
+      // Only create customers from calls that have a booked appointment with an address
       const newCustomers = [];
-      const seenPhones = new Set();
+      const seenAddresses = new Set();
 
       for (const call of callLogs) {
-        if (!call.number) continue;
-        const cleanPhone = call.number.replace(/\D/g, '');
-        if (!cleanPhone || cleanPhone.length < 7) continue;
-        if (existingPhones.has(cleanPhone) || seenPhones.has(cleanPhone)) continue;
+        const address = call.appointment?.address;
+        if (!address) continue;
 
-        seenPhones.add(cleanPhone);
+        const normalizedAddr = normalizeAddress(address);
+        if (!normalizedAddr) continue;
+        if (existingAddresses.has(normalizedAddr) || seenAddresses.has(normalizedAddr)) continue;
+
+        seenAddresses.add(normalizedAddr);
         newCustomers.push({
           client_id: clientData.id,
-          name: call.caller && call.caller !== 'Unknown Caller' ? call.caller : `Caller ${call.number}`,
-          phone: call.number,
+          name: call.caller && call.caller !== 'Unknown Caller' ? call.caller : `Customer at ${address}`,
+          phone: call.number || '',
+          address: address,
           tags: ['From Call']
         });
       }
@@ -399,24 +403,24 @@ const Customers = ({ clientData, callLogs, appointments, manualAppointments, onR
     setCustomerForm(f => ({ ...f, tags: f.tags.filter(t => t !== tag) }));
   };
 
-  // Get customer's call history
+  // Get customer's call history — match by address
   const getCustomerCalls = (customer) => {
-    if (!customer.phone) return [];
-    const cleanPhone = customer.phone.replace(/\D/g, '');
+    if (!customer.address) return [];
+    const custAddr = normalizeAddress(customer.address);
     return callLogs.filter(call => {
-      const callPhone = call.number?.replace(/\D/g, '') || '';
-      return callPhone === cleanPhone || callPhone.endsWith(cleanPhone) || cleanPhone.endsWith(callPhone);
+      const callAddr = normalizeAddress(call.appointment?.address);
+      return callAddr && callAddr === custAddr;
     });
   };
 
-  // Get customer's appointments
+  // Get customer's appointments — match by address
   const getCustomerAppointments = (customer) => {
-    if (!customer.phone) return [];
-    const cleanPhone = customer.phone.replace(/\D/g, '');
+    if (!customer.address) return [];
+    const custAddr = normalizeAddress(customer.address);
     const allApts = [...appointments, ...manualAppointments];
     return allApts.filter(apt => {
-      const aptPhone = apt.phone?.replace(/\D/g, '') || '';
-      return aptPhone === cleanPhone || aptPhone.endsWith(cleanPhone) || cleanPhone.endsWith(aptPhone);
+      const aptAddr = normalizeAddress(apt.address);
+      return aptAddr && aptAddr === custAddr;
     });
   };
 
@@ -453,7 +457,8 @@ const Customers = ({ clientData, callLogs, appointments, manualAppointments, onR
     const matchesSearch = !searchTerm ||
       c.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       c.phone?.includes(searchTerm) ||
-      c.email?.toLowerCase().includes(searchTerm.toLowerCase());
+      c.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      c.address?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesTag = !filterTag || (c.tags || []).includes(filterTag);
     return matchesSearch && matchesTag;
   });
@@ -1081,7 +1086,7 @@ const Customers = ({ clientData, callLogs, appointments, manualAppointments, onR
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
             type="text"
-            placeholder="Search customers..."
+            placeholder="Search by name, address, or phone..."
             className="w-full pl-9 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 text-sm"
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
@@ -1142,6 +1147,9 @@ const Customers = ({ clientData, callLogs, appointments, manualAppointments, onR
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-white text-sm font-medium truncate">{customer.name}</p>
+                    {customer.address && (
+                      <p className="text-gray-300 text-xs truncate mt-0.5">{customer.address}</p>
+                    )}
                     <div className="flex items-center gap-3 mt-0.5">
                       {customer.phone && (
                         <p className="text-gray-400 text-xs truncate">{customer.phone}</p>
