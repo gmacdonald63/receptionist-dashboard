@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Phone, Calendar, FileText, Clock, DollarSign, Download, Play, Pause, Search, Filter, RefreshCw, ChevronRight, ChevronDown, LogOut, Settings, Plus, X, Users } from 'lucide-react';
+import { Phone, Calendar, FileText, Clock, DollarSign, Download, Play, Pause, Search, Filter, RefreshCw, ChevronRight, ChevronDown, LogOut, Settings, Plus, X } from 'lucide-react';
 import { retellService } from './retellService';
 import { supabase } from './supabaseClient';
 import Login from './Login';
 import Admin from './Admin';
 import ResetPassword from './ResetPassword';
-import Customers from './Customers';
 import logo from './assets/RELIANT SUPPORT LOGO.svg';
 
 const App = () => {
@@ -32,8 +31,8 @@ const App = () => {
   
   // Real data from Retell API
   const [callLogs, setCallLogs] = useState([]);
+  // Single appointments array from Supabase
   const [appointments, setAppointments] = useState([]);
-  const [manualAppointments, setManualAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     totalCalls: 0,
@@ -49,7 +48,6 @@ const App = () => {
     service: '', address: '', notes: ''
   });
   const [savingAppointment, setSavingAppointment] = useState(false);
-  const [dueReminderCount, setDueReminderCount] = useState(0);
 
   // Check for existing session on load
   useEffect(() => {
@@ -91,15 +89,12 @@ const App = () => {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      // If password recovery event, show reset form
       if (event === 'PASSWORD_RECOVERY') {
         setShowResetPassword(true);
         showResetPasswordRef.current = true;
         return;
       }
       
-      // Don't update user state if we're in the password reset flow
-      // This prevents the reset screen from being overridden
       if (showResetPasswordRef.current) {
         return;
       }
@@ -113,7 +108,7 @@ const App = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Fetch data from Retell API
+  // Fetch data from Retell API and Supabase
   useEffect(() => {
     if (user && clientData) {
       fetchData();
@@ -125,7 +120,7 @@ const App = () => {
     if (activeTab === 'appointments' && todayRef.current && !loading) {
       setTimeout(() => {
         const element = todayRef.current;
-        const yOffset = -120; // Offset to leave space for header and navigation
+        const yOffset = -120;
         const y = element.getBoundingClientRect().top + window.pageYOffset + yOffset;
         window.scrollTo({ top: y, behavior: 'smooth' });
       }, 100);
@@ -143,20 +138,55 @@ const App = () => {
     setClientData(null);
   };
 
+  // Fetch all appointments from the unified Supabase table
+  const fetchAppointments = async () => {
+    if (!clientData?.id) return;
+    try {
+      const { data, error } = await supabase
+        .from('appointments')
+        .select('*')
+        .eq('client_id', clientData.id)
+        .eq('status', 'confirmed')
+        .order('date', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching appointments:', error);
+        return;
+      }
+
+      if (data) {
+        setAppointments(data.map(apt => ({
+          id: apt.id,
+          name: apt.caller_name,
+          date: apt.date,
+          time: apt.end_time
+            ? `${apt.start_time} to ${apt.end_time}`
+            : apt.start_time,
+          service: apt.service_type || '',
+          address: apt.address || '',
+          phone: apt.caller_number || '',
+          summary: apt.notes || '',
+          source: apt.source, // 'ai' or 'manual'
+        })));
+      }
+    } catch (err) {
+      console.error('Could not load appointments:', err);
+    }
+  };
+
   const fetchData = async () => {
     setLoading(true);
     try {
       // Get the agent_id from client data (if available)
       const agentId = clientData?.retell_agent_id || null;
       
-      // Fetch calls filtered by agent_id
+      // Fetch calls from Retell API (for call logs display)
       const calls = await retellService.getCalls(100, agentId);
       const transformedCalls = calls.map(call => retellService.transformCallData(call));
       setCallLogs(transformedCalls);
 
-      // Get appointments from calls (also filtered by agent_id)
-      const appointmentsList = await retellService.getAppointments(agentId);
-      setAppointments(appointmentsList);
+      // Fetch all appointments from Supabase (single source of truth)
+      await fetchAppointments();
 
       // Calculate stats
       const totalMinutes = calls.reduce((sum, call) => sum + (call.call_duration || 0), 0) / 60;
@@ -164,45 +194,14 @@ const App = () => {
 
       setStats({
         totalCalls: calls.length,
-        appointments: appointmentsList.length,
+        appointments: appointments.length,
         totalMinutes: Math.round(totalMinutes),
         monthlyBill: monthlyBill.toFixed(2)
       });
-
-      await fetchManualAppointments();
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchManualAppointments = async () => {
-    if (!clientData?.id) return;
-    try {
-      const { data, error } = await supabase
-        .from('manual_appointments')
-        .select('*')
-        .eq('client_id', clientData.id)
-        .order('date', { ascending: true });
-
-      if (!error && data) {
-        setManualAppointments(data.map(apt => ({
-          id: apt.id,
-          name: apt.name,
-          date: apt.date,
-          time: apt.end_time
-            ? `${apt.start_time} to ${apt.end_time}`
-            : apt.start_time,
-          service: apt.service || '',
-          address: apt.address || '',
-          phone: apt.phone || '',
-          summary: apt.notes || '',
-          isManual: true
-        })));
-      }
-    } catch (err) {
-      console.error('Could not load manual appointments:', err);
     }
   };
 
@@ -212,18 +211,31 @@ const App = () => {
 
     setSavingAppointment(true);
     try {
+      // Calculate end_time from start_time + client duration if not provided
+      let endTime = addForm.endTime || null;
+      if (!endTime && clientData?.appointment_duration) {
+        const [hours, minutes] = addForm.startTime.split(':').map(Number);
+        const startMinutes = hours * 60 + minutes;
+        const endMinutes = startMinutes + (clientData.appointment_duration || 120);
+        const endHours = Math.floor(endMinutes / 60);
+        const endMins = endMinutes % 60;
+        endTime = `${String(endHours).padStart(2, '0')}:${String(endMins).padStart(2, '0')}`;
+      }
+
       const { data, error } = await supabase
-        .from('manual_appointments')
+        .from('appointments')
         .insert({
           client_id: clientData.id,
-          name: addForm.name,
-          phone: addForm.phone,
+          caller_name: addForm.name,
+          caller_number: addForm.phone || null,
           date: addForm.date,
           start_time: addForm.startTime,
-          end_time: addForm.endTime || null,
-          service: addForm.service,
-          address: addForm.address,
-          notes: addForm.notes
+          end_time: endTime || addForm.startTime,
+          service_type: addForm.service || null,
+          address: addForm.address || null,
+          notes: addForm.notes || null,
+          source: 'manual',
+          status: 'confirmed'
         })
         .select()
         .single();
@@ -232,19 +244,19 @@ const App = () => {
 
       const newApt = {
         id: data.id,
-        name: addForm.name,
-        date: addForm.date,
-        time: addForm.endTime
-          ? `${addForm.startTime} to ${addForm.endTime}`
-          : addForm.startTime,
-        service: addForm.service,
-        address: addForm.address,
-        phone: addForm.phone,
-        summary: addForm.notes,
-        isManual: true
+        name: data.caller_name,
+        date: data.date,
+        time: data.end_time
+          ? `${data.start_time} to ${data.end_time}`
+          : data.start_time,
+        service: data.service_type || '',
+        address: data.address || '',
+        phone: data.caller_number || '',
+        summary: data.notes || '',
+        source: 'manual',
       };
 
-      setManualAppointments(prev => [...prev, newApt]);
+      setAppointments(prev => [...prev, newApt]);
 
       // Navigate to the week of the new appointment
       const [year, month, day] = addForm.date.split('-');
@@ -256,7 +268,7 @@ const App = () => {
       setShowAddModal(false);
     } catch (err) {
       console.error('Error saving appointment:', err);
-      alert('Failed to save appointment. Please make sure the manual_appointments table has been created in Supabase.');
+      alert('Failed to save appointment. Please try again.');
     } finally {
       setSavingAppointment(false);
     }
@@ -273,42 +285,13 @@ const App = () => {
     return dates;
   };
 
-  // Helper to parse any time string into minutes since midnight for sorting
-  const getStartTimeMinutes = (timeStr) => {
-    if (!timeStr) return 9999;
-    // Get just the start time (before " to " if it's a range)
-    const start = timeStr.split(' to ')[0].trim();
-
-    // Handle AM/PM format (e.g. "2:00 PM", "10:30 AM")
-    const ampmMatch = start.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
-    if (ampmMatch) {
-      let hours = parseInt(ampmMatch[1]);
-      const minutes = parseInt(ampmMatch[2]);
-      const period = ampmMatch[3].toUpperCase();
-      if (period === 'PM' && hours !== 12) hours += 12;
-      if (period === 'AM' && hours === 12) hours = 0;
-      return hours * 60 + minutes;
-    }
-
-    // Handle 24-hour format (e.g. "14:00", "08:30")
-    const milMatch = start.match(/^(\d{1,2}):(\d{2})$/);
-    if (milMatch) {
-      return parseInt(milMatch[1]) * 60 + parseInt(milMatch[2]);
-    }
-
-    return 9999; // Unknown format goes to the end
-  };
-
   const getAppointmentsForDate = (date) => {
-    const allAppointments = [...appointments, ...manualAppointments];
-    return allAppointments
-      .filter(apt => {
-        if (!apt.date) return false;
-        const [year, month, day] = apt.date.split('-');
-        const aptDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-        return aptDate.toDateString() === date.toDateString();
-      })
-      .sort((a, b) => getStartTimeMinutes(a.time) - getStartTimeMinutes(b.time));
+    return appointments.filter(apt => {
+      if (!apt.date) return false;
+      const [year, month, day] = apt.date.split('-');
+      const aptDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+      return aptDate.toDateString() === date.toDateString();
+    });
   };
 
   const formatDateForDisplay = (date) => {
@@ -320,19 +303,16 @@ const App = () => {
   };
 
   const formatCallTime = (timeString) => {
-    // Convert "02/03/2026, 08:01 PM" to "2/3/2026 at 8:01 PM"
     if (!timeString) return '';
     const [datePart, timePart] = timeString.split(', ');
     if (!datePart || !timePart) return timeString;
     const [month, day, year] = datePart.split('/');
-    // Remove leading zeros and format time
     const formattedDate = `${parseInt(month)}/${parseInt(day)}/${year}`;
     const formattedTime = timePart.replace(/^0/, '');
     return `${formattedDate} at ${formattedTime}`;
   };
 
   const formatAppointmentDate = (dateString) => {
-    // Convert "2026-02-06" to "2/6/2026"
     if (!dateString) return '';
     const [year, month, day] = dateString.split('-');
     if (!year || !month || !day) return dateString;
@@ -340,11 +320,8 @@ const App = () => {
   };
 
   const formatAppointmentTime = (timeString) => {
-    // Convert "14:00 to 16:00" to "2:00 PM to 4:00 PM"
-    // Also handles times that already have AM/PM
     if (!timeString) return '';
     
-    // If it already contains AM or PM, return as-is (avoid double AM/PM)
     if (timeString.toUpperCase().includes('AM') || timeString.toUpperCase().includes('PM')) {
       return timeString;
     }
@@ -352,19 +329,17 @@ const App = () => {
     const convert24to12 = (time24) => {
       const [hours, minutes] = time24.split(':');
       const hour = parseInt(hours);
-      if (isNaN(hour)) return time24; // Return original if can't parse
+      if (isNaN(hour)) return time24;
       const ampm = hour >= 12 ? 'PM' : 'AM';
       const hour12 = hour % 12 || 12;
       return `${hour12}:${minutes} ${ampm}`;
     };
     
-    // Handle "HH:MM to HH:MM" format
     if (timeString.includes(' to ')) {
       const [startTime, endTime] = timeString.split(' to ');
       return `${convert24to12(startTime)} to ${convert24to12(endTime)}`;
     }
     
-    // Handle single time
     return convert24to12(timeString);
   };
 
@@ -531,7 +506,7 @@ const App = () => {
             <RefreshCw className="w-8 h-8 animate-spin text-blue-500 mx-auto mb-4" />
             <p className="text-gray-400">Loading appointments...</p>
           </div>
-        ) : appointments.length === 0 && manualAppointments.length === 0 ? (
+        ) : appointments.length === 0 ? (
           <div className="bg-gray-800 rounded-lg p-8 border border-gray-700 text-center">
             <Calendar className="w-12 h-12 text-gray-600 mx-auto mb-4" />
             <p className="text-gray-400 mb-4">No appointments booked yet</p>
@@ -586,7 +561,7 @@ const App = () => {
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-1">
                                 <p className="text-white text-xs font-medium truncate">{apt.name}</p>
-                                {apt.isManual ? (
+                                {apt.source === 'manual' ? (
                                   <span className="flex-shrink-0 px-1 py-0.5 bg-green-700 text-green-200 rounded text-[10px] leading-none">Manual</span>
                                 ) : (
                                   <span className="flex-shrink-0 px-1 py-0.5 bg-blue-700 text-blue-200 rounded text-[10px] leading-none">AI</span>
@@ -881,18 +856,6 @@ const App = () => {
           <div className="p-3 bg-gray-750 rounded-lg">
             <div className="flex items-start justify-between mb-2">
               <div className="flex-1">
-                <p className="font-medium text-white">Cal.com</p>
-                <p className="text-xs text-gray-400 mt-1">Calendar and appointments</p>
-              </div>
-              <span className="px-2 py-1 bg-green-900 text-green-300 rounded text-xs whitespace-nowrap">Connected</span>
-            </div>
-            <button className="w-full mt-2 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 text-sm">
-              Configure
-            </button>
-          </div>
-          <div className="p-3 bg-gray-750 rounded-lg">
-            <div className="flex items-start justify-between mb-2">
-              <div className="flex-1">
                 <p className="font-medium text-white">Retell AI</p>
                 <p className="text-xs text-gray-400 mt-1">Voice AI platform</p>
               </div>
@@ -908,10 +871,8 @@ const App = () => {
   );
 
   const renderBilling = () => {
-    // Billing configuration
     const MONTHLY_FEE = 499;
     
-    // Calculate next billing date (1st of next month for now)
     const today = new Date();
     const nextBillingDate = new Date(today.getFullYear(), today.getMonth() + 1, 1);
     const formattedNextBilling = nextBillingDate.toLocaleDateString('en-US', { 
@@ -920,10 +881,9 @@ const App = () => {
       year: 'numeric' 
     });
 
-    // Mock data - in production this would come from Stripe/database
     const currentBill = {
       amount: MONTHLY_FEE,
-      status: 'due', // 'paid', 'due', 'overdue'
+      status: 'due',
       dueDate: formattedNextBilling
     };
 
@@ -933,7 +893,7 @@ const App = () => {
       { id: 3, date: 'December 1, 2025', amount: MONTHLY_FEE, status: 'paid' },
     ];
 
-    const paymentMethod = null; // null if no card on file, or { last4: '4242', brand: 'Visa' }
+    const paymentMethod = null;
 
     const getStatusBadge = (status) => {
       switch(status) {
@@ -950,7 +910,6 @@ const App = () => {
 
     return (
       <div className="space-y-4">
-        {/* Current Bill */}
         <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
           <h3 className="text-lg font-semibold mb-4 text-white">Current Bill</h3>
           <div className="flex items-center justify-between mb-4">
@@ -975,7 +934,6 @@ const App = () => {
           )}
         </div>
 
-        {/* Usage This Month */}
         <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
           <h3 className="text-lg font-semibold mb-4 text-white">Usage This Month</h3>
           <div className="grid grid-cols-2 gap-3">
@@ -991,7 +949,6 @@ const App = () => {
           <p className="text-gray-500 text-xs mt-3 text-center">All minutes included in your monthly plan</p>
         </div>
 
-        {/* Payment Method */}
         <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
           <h3 className="text-lg font-semibold mb-4 text-white">Payment Method</h3>
           {paymentMethod ? (
@@ -1014,7 +971,6 @@ const App = () => {
           )}
         </div>
 
-        {/* Billing History */}
         <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
           <h3 className="text-lg font-semibold mb-4 text-white">Billing History</h3>
           <div className="space-y-3">
@@ -1042,7 +998,6 @@ const App = () => {
 
   const navItems = [
     { id: 'appointments', label: 'Appointments', icon: Calendar },
-    { id: 'customers', label: 'Customers', icon: Users },
     { id: 'calls', label: 'Calls', icon: Phone },
     { id: 'billing', label: 'Billing', icon: DollarSign }
   ];
@@ -1063,7 +1018,7 @@ const App = () => {
         onComplete={() => {
           setShowResetPassword(false);
           showResetPasswordRef.current = false;
-          window.location.href = window.location.origin; // Redirect to main app
+          window.location.href = window.location.origin;
         }}
       />
     );
@@ -1108,15 +1063,6 @@ const App = () => {
       <main className="p-4 md:p-6">
         {activeTab === 'overview' && renderOverview()}
         {activeTab === 'appointments' && renderAppointments()}
-        {activeTab === 'customers' && (
-          <Customers
-            clientData={clientData}
-            callLogs={callLogs}
-            appointments={appointments}
-            manualAppointments={manualAppointments}
-            onReminderCountChange={setDueReminderCount}
-          />
-        )}
         {activeTab === 'calls' && renderCallLogs()}
         {activeTab === 'billing' && renderBilling()}
       </main>
@@ -1136,7 +1082,6 @@ const App = () => {
             </div>
 
             <form onSubmit={handleAddAppointment} className="p-4 space-y-4">
-              {/* Name */}
               <div>
                 <label className="block text-gray-400 text-sm mb-1">Client Name <span className="text-red-400">*</span></label>
                 <input
@@ -1149,7 +1094,6 @@ const App = () => {
                 />
               </div>
 
-              {/* Phone */}
               <div>
                 <label className="block text-gray-400 text-sm mb-1">Phone Number</label>
                 <input
@@ -1161,7 +1105,6 @@ const App = () => {
                 />
               </div>
 
-              {/* Date */}
               <div>
                 <label className="block text-gray-400 text-sm mb-1">Date <span className="text-red-400">*</span></label>
                 <input
@@ -1174,7 +1117,6 @@ const App = () => {
                 />
               </div>
 
-              {/* Time */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-gray-400 text-sm mb-1">Start Time <span className="text-red-400">*</span></label>
@@ -1199,7 +1141,6 @@ const App = () => {
                 </div>
               </div>
 
-              {/* Service */}
               <div>
                 <label className="block text-gray-400 text-sm mb-1">Service Type</label>
                 <input
@@ -1211,7 +1152,6 @@ const App = () => {
                 />
               </div>
 
-              {/* Address */}
               <div>
                 <label className="block text-gray-400 text-sm mb-1">Address</label>
                 <input
@@ -1223,7 +1163,6 @@ const App = () => {
                 />
               </div>
 
-              {/* Notes */}
               <div>
                 <label className="block text-gray-400 text-sm mb-1">Notes</label>
                 <textarea
@@ -1258,22 +1197,17 @@ const App = () => {
 
       {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 z-30">
-        <div className="grid grid-cols-4 gap-1">
+        <div className="grid grid-cols-3 gap-1">
           {navItems.map(item => (
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
-              className={`relative flex flex-col items-center gap-1 py-3 ${
+              className={`flex flex-col items-center gap-1 py-3 ${
                 activeTab === item.id ? 'text-blue-500' : 'text-gray-400'
               }`}
             >
               <item.icon className="w-5 h-5" />
               <span className="text-xs">{item.label}</span>
-              {item.id === 'customers' && dueReminderCount > 0 && (
-                <span className="absolute top-1.5 right-1/4 w-4.5 h-4.5 min-w-[18px] bg-red-600 text-white rounded-full text-[10px] font-bold flex items-center justify-center px-1">
-                  {dueReminderCount}
-                </span>
-              )}
             </button>
           ))}
         </div>
