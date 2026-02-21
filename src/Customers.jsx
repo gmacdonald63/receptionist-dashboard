@@ -25,7 +25,7 @@ const getTagColor = (tag) => {
   return TAG_COLORS[Math.abs(hash) % TAG_COLORS.length];
 };
 
-const Customers = ({ clientData, callLogs, appointments, manualAppointments, onReminderCountChange }) => {
+const Customers = ({ clientData, callLogs, appointments, onReminderCountChange }) => {
   const [customers, setCustomers] = useState([]);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -67,10 +67,10 @@ const Customers = ({ clientData, callLogs, appointments, manualAppointments, onR
 
   // Sync call/appointment data to customers
   useEffect(() => {
-    if (clientData?.id && (callLogs.length > 0 || appointments.length > 0 || manualAppointments.length > 0)) {
+    if (clientData?.id && (callLogs.length > 0 || appointments.length > 0)) {
       syncCallsToCustomers();
     }
-  }, [callLogs, appointments, manualAppointments, clientData]);
+  }, [callLogs, appointments, clientData]);
 
   // Update reminder count for parent badge
   useEffect(() => {
@@ -154,7 +154,7 @@ const Customers = ({ clientData, callLogs, appointments, manualAppointments, onR
       }
 
       // Also check appointments that have addresses not yet in customers
-      const allApts = [...appointments, ...manualAppointments];
+      const allApts = [...appointments];
       for (const apt of allApts) {
         if (!apt.address) continue;
 
@@ -434,10 +434,11 @@ const Customers = ({ clientData, callLogs, appointments, manualAppointments, onR
   };
 
   // Get customer's appointments — match by address
+  // FIX 1: Use unified appointments prop directly (no more manualAppointments)
   const getCustomerAppointments = (customer) => {
     if (!customer.address) return [];
     const custAddr = normalizeAddress(customer.address);
-    const allApts = [...appointments, ...manualAppointments];
+    const allApts = appointments;
     return allApts.filter(apt => {
       const aptAddr = normalizeAddress(apt.address);
       return aptAddr && aptAddr === custAddr;
@@ -1010,6 +1011,7 @@ const Customers = ({ clientData, callLogs, appointments, manualAppointments, onR
     </div>
   );
 
+  // FIX 2: Use apt.source === 'manual' instead of apt.isManual
   const renderAppointmentsTab = (customerAppointments) => (
     <div className="space-y-2">
       {customerAppointments.length === 0 ? (
@@ -1023,9 +1025,9 @@ const Customers = ({ clientData, callLogs, appointments, manualAppointments, onR
             <div className="flex items-start justify-between mb-1">
               <p className="text-white text-sm font-medium">{apt.service || 'Appointment'}</p>
               <span className={`px-1.5 py-0.5 rounded text-[10px] ${
-                apt.isManual ? 'bg-green-700 text-green-200' : 'bg-blue-700 text-blue-200'
+                apt.source === 'manual' ? 'bg-green-700 text-green-200' : 'bg-blue-700 text-blue-200'
               }`}>
-                {apt.isManual ? 'Manual' : 'AI'}
+                {apt.source === 'manual' ? 'Manual' : 'AI'}
               </span>
             </div>
             <p className="text-gray-300 text-xs">{formatDate(apt.date)} • {apt.time}</p>
