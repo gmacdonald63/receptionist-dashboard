@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Phone, Calendar, FileText, Clock, DollarSign, Download, Play, Pause, Search, Filter, RefreshCw, ChevronRight, ChevronDown, LogOut, Settings, Plus, X } from 'lucide-react';
+import { Phone, Calendar, FileText, Clock, DollarSign, Download, Play, Pause, Search, Filter, RefreshCw, ChevronRight, ChevronDown, LogOut, Settings, Plus, X, Users } from 'lucide-react';
 import { retellService } from './retellService';
 import { supabase } from './supabaseClient';
 import Login from './Login';
 import Admin from './Admin';
 import ResetPassword from './ResetPassword';
+import Customers from './Customers';
 import logo from './assets/RELIANT SUPPORT LOGO.svg';
 
 const App = () => {
@@ -48,6 +49,7 @@ const App = () => {
     service: '', address: '', notes: ''
   });
   const [savingAppointment, setSavingAppointment] = useState(false);
+  const [reminderCount, setReminderCount] = useState(0);
 
   // Check for existing session on load
   useEffect(() => {
@@ -998,6 +1000,7 @@ const App = () => {
 
   const navItems = [
     { id: 'appointments', label: 'Appointments', icon: Calendar },
+    { id: 'customers', label: 'Customers', icon: Users },
     { id: 'calls', label: 'Calls', icon: Phone },
     { id: 'billing', label: 'Billing', icon: DollarSign }
   ];
@@ -1063,6 +1066,14 @@ const App = () => {
       <main className="p-4 md:p-6">
         {activeTab === 'overview' && renderOverview()}
         {activeTab === 'appointments' && renderAppointments()}
+        {activeTab === 'customers' && (
+          <Customers
+            clientData={clientData}
+            callLogs={callLogs}
+            appointments={appointments}
+            onReminderCountChange={setReminderCount}
+          />
+        )}
         {activeTab === 'calls' && renderCallLogs()}
         {activeTab === 'billing' && renderBilling()}
       </main>
@@ -1197,7 +1208,7 @@ const App = () => {
 
       {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 z-30">
-        <div className="grid grid-cols-3 gap-1">
+        <div className="grid grid-cols-4 gap-1">
           {navItems.map(item => (
             <button
               key={item.id}
