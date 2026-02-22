@@ -7,6 +7,31 @@ import Admin from './Admin';
 import ResetPassword from './ResetPassword';
 import logo from './assets/RELIANT SUPPORT LOGO.svg';
 
+// Normalize various date formats to YYYY-MM-DD for Supabase
+function normalizeDate(dateStr) {
+  if (!dateStr) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
+  const date = new Date(dateStr);
+  if (!isNaN(date.getTime())) return date.toISOString().split('T')[0];
+  return null;
+}
+
+// Normalize various time formats to HH:MM (24-hour) for Supabase
+function normalizeTime(timeStr) {
+  if (!timeStr) return null;
+  if (/^\d{2}:\d{2}(:\d{2})?$/.test(timeStr)) return timeStr.substring(0, 5);
+  const match = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (match) {
+    let hours = parseInt(match[1]);
+    const minutes = parseInt(match[2]);
+    const meridian = match[3].toUpperCase();
+    if (meridian === 'PM' && hours !== 12) hours += 12;
+    if (meridian === 'AM' && hours === 12) hours = 0;
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+  }
+  return null;
+}
+
 const App = () => {
   // Authentication state
   const [user, setUser] = useState(null);
@@ -32,7 +57,6 @@ const App = () => {
   // Real data from Retell API
   const [callLogs, setCallLogs] = useState([]);
   const [appointments, setAppointments] = useState([]);
-  const [manualAppointments, setManualAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     totalCalls: 0,
@@ -141,20 +165,110 @@ const App = () => {
     setClientData(null);
   };
 
+  // Fetch all appointments from Supabase (single source of truth)
+  const fetchAppointments = async () => {
+    if (!clientData?.id) return;
+    try {
+      const { data, error } = await supabase
+        .from('appointments')
+        .select('*')
+        .eq('client_id', clientData.id)
+        .eq('status', 'confirmed')
+        .order('date', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching appointments:', error);
+        return;
+      }
+
+      if (data) {
+        setAppointments(data.map(apt => ({
+          id: apt.id,
+          name: apt.caller_name,
+          date: apt.date,
+          time: apt.end_time
+            ? `${apt.start_time} to ${apt.end_time}`
+            : apt.start_time,
+          service: apt.service_type || '',
+          address: apt.address || '',
+          phone: apt.caller_number || '',
+          summary: apt.notes || '',
+          source: apt.source, // 'ai' or 'manual'
+        })));
+      }
+    } catch (err) {
+      console.error('Could not load appointments:', err);
+    }
+  };
+
+  // Sync AI-booked appointments from Retell call data into Supabase
+  const syncRetellAppointments = async (calls) => {
+    if (!clientData?.id) return;
+
+    const callsWithAppointments = calls.filter(call => {
+      const customData = (call.call_analysis || {}).custom_analysis_data || {};
+      return customData.appointment_date && customData.appointment_time;
+    });
+
+    for (const call of callsWithAppointments) {
+      const analysis = call.call_analysis || {};
+      const customData = analysis.custom_analysis_data || {};
+
+      const callerName = customData.caller_name || 'Unknown';
+      const callerNumber = call.from_number || customData.caller_phone_number || null;
+      const aptDate = normalizeDate(customData.appointment_date);
+      const aptTime = normalizeTime(customData.appointment_time);
+
+      if (!aptDate || !aptTime) continue;
+
+      // Deduplicate: skip if we already saved this appointment
+      const { data: existing } = await supabase
+        .from('appointments')
+        .select('id')
+        .eq('client_id', clientData.id)
+        .eq('source', 'ai')
+        .eq('caller_name', callerName)
+        .eq('date', aptDate)
+        .maybeSingle();
+
+      if (existing) continue;
+
+      const { error } = await supabase
+        .from('appointments')
+        .insert({
+          client_id: clientData.id,
+          caller_name: callerName,
+          caller_number: callerNumber,
+          date: aptDate,
+          start_time: aptTime,
+          end_time: aptTime,
+          service_type: retellService.extractIssue(customData, analysis.call_summary) || null,
+          address: customData.appointment_address || null,
+          notes: analysis.call_summary || null,
+          source: 'ai',
+          status: 'confirmed',
+        });
+
+      if (error) console.error('Error syncing Retell appointment:', error);
+    }
+  };
+
   const fetchData = async () => {
     setLoading(true);
     try {
       // Get the agent_id from client data (if available)
       const agentId = clientData?.retell_agent_id || null;
-      
-      // Fetch calls filtered by agent_id
+
+      // Fetch calls from Retell API (for call logs display)
       const calls = await retellService.getCalls(100, agentId);
       const transformedCalls = calls.map(call => retellService.transformCallData(call));
       setCallLogs(transformedCalls);
 
-      // Get appointments from calls (also filtered by agent_id)
-      const appointmentsList = await retellService.getAppointments(agentId);
-      setAppointments(appointmentsList);
+      // Sync any AI-booked appointments from Retell into Supabase
+      await syncRetellAppointments(calls);
+
+      // Fetch all appointments from Supabase (single source of truth)
+      await fetchAppointments();
 
       // Calculate stats
       const totalMinutes = calls.reduce((sum, call) => sum + (call.call_duration || 0), 0) / 60;
@@ -162,46 +276,14 @@ const App = () => {
 
       setStats({
         totalCalls: calls.length,
-        appointments: appointmentsList.length,
+        appointments: appointments.length,
         totalMinutes: Math.round(totalMinutes),
         monthlyBill: monthlyBill.toFixed(2)
       });
-
-      await fetchManualAppointments();
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchManualAppointments = async () => {
-    if (!clientData?.id) return;
-    try {
-      const { data, error } = await supabase
-        .from('manual_appointments')
-        .select('*')
-        .eq('client_id', clientData.id)
-        .order('date', { ascending: true });
-
-      if (!error && data) {
-        setManualAppointments(data.map(apt => ({
-          id: apt.id,
-          name: apt.name,
-          date: apt.date,
-          time: apt.end_time
-            ? `${apt.start_time} to ${apt.end_time}`
-            : apt.start_time,
-          service: apt.service || '',
-          address: apt.address || '',
-          phone: apt.phone || '',
-          summary: apt.notes || '',
-          status: 'confirmed',
-          isManual: true
-        })));
-      }
-    } catch (err) {
-      console.error('Could not load manual appointments:', err);
     }
   };
 
@@ -212,17 +294,19 @@ const App = () => {
     setSavingAppointment(true);
     try {
       const { data, error } = await supabase
-        .from('manual_appointments')
+        .from('appointments')
         .insert({
           client_id: clientData.id,
-          name: addForm.name,
-          phone: addForm.phone,
+          caller_name: addForm.name,
+          caller_number: addForm.phone || null,
           date: addForm.date,
           start_time: addForm.startTime,
-          end_time: addForm.endTime || null,
-          service: addForm.service,
-          address: addForm.address,
-          notes: addForm.notes
+          end_time: addForm.endTime || addForm.startTime,
+          service_type: addForm.service || null,
+          address: addForm.address || null,
+          notes: addForm.notes || null,
+          source: 'manual',
+          status: 'confirmed',
         })
         .select()
         .single();
@@ -231,20 +315,19 @@ const App = () => {
 
       const newApt = {
         id: data.id,
-        name: addForm.name,
-        date: addForm.date,
-        time: addForm.endTime
-          ? `${addForm.startTime} to ${addForm.endTime}`
-          : addForm.startTime,
-        service: addForm.service,
-        address: addForm.address,
-        phone: addForm.phone,
-        summary: addForm.notes,
-        status: 'confirmed',
-        isManual: true
+        name: data.caller_name,
+        date: data.date,
+        time: data.end_time
+          ? `${data.start_time} to ${data.end_time}`
+          : data.start_time,
+        service: data.service_type || '',
+        address: data.address || '',
+        phone: data.caller_number || '',
+        summary: data.notes || '',
+        source: 'manual',
       };
 
-      setManualAppointments(prev => [...prev, newApt]);
+      setAppointments(prev => [...prev, newApt]);
 
       // Navigate to the week of the new appointment
       const [year, month, day] = addForm.date.split('-');
@@ -256,7 +339,7 @@ const App = () => {
       setShowAddModal(false);
     } catch (err) {
       console.error('Error saving appointment:', err);
-      alert('Failed to save appointment. Please make sure the manual_appointments table has been created in Supabase.');
+      alert(`Failed to save appointment: ${err?.message || JSON.stringify(err)}`);
     } finally {
       setSavingAppointment(false);
     }
@@ -274,8 +357,7 @@ const App = () => {
   };
 
   const getAppointmentsForDate = (date) => {
-    const allAppointments = [...appointments, ...manualAppointments];
-    return allAppointments.filter(apt => {
+    return appointments.filter(apt => {
       if (!apt.date) return false;
       const [year, month, day] = apt.date.split('-');
       const aptDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
