@@ -173,7 +173,7 @@ const App = () => {
         .from('appointments')
         .select('*')
         .eq('client_id', clientData.id)
-        .eq('status', 'confirmed')
+        .neq('status', 'cancelled')
         .order('date', { ascending: true });
 
       if (error) {
@@ -293,7 +293,7 @@ const App = () => {
 
     setSavingAppointment(true);
     try {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('appointments')
         .insert({
           client_id: clientData.id,
@@ -307,27 +307,9 @@ const App = () => {
           notes: addForm.notes || null,
           source: 'manual',
           status: 'confirmed',
-        })
-        .select()
-        .single();
+        });
 
       if (error) throw error;
-
-      const newApt = {
-        id: data.id,
-        name: data.caller_name,
-        date: data.date,
-        time: data.end_time
-          ? `${data.start_time} to ${data.end_time}`
-          : data.start_time,
-        service: data.service_type || '',
-        address: data.address || '',
-        phone: data.caller_number || '',
-        summary: data.notes || '',
-        source: 'manual',
-      };
-
-      setAppointments(prev => [...prev, newApt]);
 
       // Navigate to the week of the new appointment
       const [year, month, day] = addForm.date.split('-');
@@ -337,6 +319,9 @@ const App = () => {
 
       setAddForm({ name: '', phone: '', date: '', startTime: '', endTime: '', service: '', address: '', notes: '' });
       setShowAddModal(false);
+
+      // Re-fetch appointments to include the new one
+      await fetchAppointments();
     } catch (err) {
       console.error('Error saving appointment:', err);
       alert(`Failed to save appointment: ${err?.message || JSON.stringify(err)}`);
@@ -588,7 +573,7 @@ const App = () => {
             <RefreshCw className="w-8 h-8 animate-spin text-blue-500 mx-auto mb-4" />
             <p className="text-gray-400">Loading appointments...</p>
           </div>
-        ) : appointments.length === 0 && manualAppointments.length === 0 ? (
+        ) : appointments.length === 0 ? (
           <div className="bg-gray-800 rounded-lg p-8 border border-gray-700 text-center">
             <Calendar className="w-12 h-12 text-gray-600 mx-auto mb-4" />
             <p className="text-gray-400 mb-4">No appointments booked yet</p>
