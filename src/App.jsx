@@ -464,7 +464,18 @@ const App = () => {
     return (
       <div className="space-y-4">
         {/* Week Navigation */}
-        <div className="flex items-center justify-between flex-wrap gap-3 sticky top-[72px] z-40 bg-gray-900 py-3 mb-2">
+        <div className="flex items-center sticky top-[72px] z-40 bg-gray-900 py-3 mb-2">
+          {/* Left: Refresh */}
+          <div className="flex-1 flex items-center">
+            <button
+              onClick={fetchData}
+              className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+            >
+              <RefreshCw className="w-4 h-4" />
+              <span className="hidden sm:inline">Refresh</span>
+            </button>
+          </div>
+          {/* Center: Week navigation */}
           <div className="flex items-center gap-2">
             <button
               onClick={goPreviousWeek}
@@ -489,14 +500,8 @@ const App = () => {
               →
             </button>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={fetchData}
-              className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
-            >
-              <RefreshCw className="w-4 h-4" />
-              <span className="hidden sm:inline">Refresh</span>
-            </button>
+          {/* Right: Add */}
+          <div className="flex-1 flex items-center justify-end">
             <button
               onClick={() => setShowAddModal(true)}
               className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm"
