@@ -464,7 +464,7 @@ const App = () => {
     return (
       <div className="space-y-4">
         {/* Week Navigation */}
-        <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+        <div className="flex items-center justify-between flex-wrap gap-3 sticky top-[72px] z-40 bg-gray-900 py-3 mb-2">
           <div className="flex items-center gap-2">
             <button 
               onClick={goPreviousWeek}
@@ -480,7 +480,7 @@ const App = () => {
                   : 'bg-gray-800 text-white hover:bg-gray-700 border border-gray-700'
               }`}
             >
-              Today
+              Current
             </button>
             <button 
               onClick={goNextWeek}
