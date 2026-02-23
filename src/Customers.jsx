@@ -45,7 +45,7 @@ const Customers = ({ clientData, appointments, onReminderCountChange }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [customerForm, setCustomerForm] = useState({
-    name: '', phone: '', email: '', address: '', tags: []
+    name: '', phone: '', email: '', address: '', city: '', state: '', zip: '', tags: []
   });
   const [tagInput, setTagInput] = useState('');
   const [saving, setSaving] = useState(false);
@@ -211,6 +211,9 @@ const Customers = ({ clientData, appointments, onReminderCountChange }) => {
             phone: customerForm.phone.trim(),
             email: customerForm.email.trim(),
             address: customerForm.address.trim(),
+            city: customerForm.city.trim(),
+            state: customerForm.state.trim().toUpperCase(),
+            zip: customerForm.zip.trim(),
             tags: customerForm.tags
           })
           .eq('id', editingCustomer.id);
@@ -219,7 +222,7 @@ const Customers = ({ clientData, appointments, onReminderCountChange }) => {
 
         setCustomers(prev => prev.map(c =>
           c.id === editingCustomer.id
-            ? { ...c, name: customerForm.name.trim(), phone: customerForm.phone.trim(), email: customerForm.email.trim(), address: customerForm.address.trim(), tags: customerForm.tags }
+            ? { ...c, name: customerForm.name.trim(), phone: customerForm.phone.trim(), email: customerForm.email.trim(), address: customerForm.address.trim(), city: customerForm.city.trim(), state: customerForm.state.trim().toUpperCase(), zip: customerForm.zip.trim(), tags: customerForm.tags }
             : c
         ));
 
@@ -230,6 +233,9 @@ const Customers = ({ clientData, appointments, onReminderCountChange }) => {
             phone: customerForm.phone.trim(),
             email: customerForm.email.trim(),
             address: customerForm.address.trim(),
+            city: customerForm.city.trim(),
+            state: customerForm.state.trim().toUpperCase(),
+            zip: customerForm.zip.trim(),
             tags: customerForm.tags
           }));
         }
@@ -242,6 +248,9 @@ const Customers = ({ clientData, appointments, onReminderCountChange }) => {
             phone: customerForm.phone.trim(),
             email: customerForm.email.trim(),
             address: customerForm.address.trim(),
+            city: customerForm.city.trim(),
+            state: customerForm.state.trim().toUpperCase(),
+            zip: customerForm.zip.trim(),
             tags: customerForm.tags
           })
           .select()
@@ -369,7 +378,7 @@ const Customers = ({ clientData, appointments, onReminderCountChange }) => {
   const closeModal = () => {
     setShowAddModal(false);
     setEditingCustomer(null);
-    setCustomerForm({ name: '', phone: '', email: '', address: '', tags: [] });
+    setCustomerForm({ name: '', phone: '', email: '', address: '', city: '', state: '', zip: '', tags: [] });
     setTagInput('');
   };
 
@@ -380,6 +389,9 @@ const Customers = ({ clientData, appointments, onReminderCountChange }) => {
       phone: customer.phone || '',
       email: customer.email || '',
       address: customer.address || '',
+      city: customer.city || '',
+      state: customer.state || '',
+      zip: customer.zip || '',
       tags: customer.tags || []
     });
     setShowAddModal(true);
@@ -1257,9 +1269,45 @@ const Customers = ({ clientData, appointments, onReminderCountChange }) => {
                 type="text"
                 value={customerForm.address}
                 onChange={e => setCustomerForm(f => ({ ...f, address: e.target.value }))}
-                placeholder="Full address"
+                placeholder="Street address"
                 className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
               />
+            </div>
+
+            <div>
+              <label className="block text-gray-400 text-sm mb-1">City</label>
+              <input
+                type="text"
+                value={customerForm.city}
+                onChange={e => setCustomerForm(f => ({ ...f, city: e.target.value }))}
+                placeholder="City"
+                className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-gray-400 text-sm mb-1">State</label>
+                <input
+                  type="text"
+                  maxLength={2}
+                  value={customerForm.state}
+                  onChange={e => setCustomerForm(f => ({ ...f, state: e.target.value.toUpperCase() }))}
+                  placeholder="TX"
+                  className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm uppercase"
+                />
+              </div>
+              <div>
+                <label className="block text-gray-400 text-sm mb-1">Zip Code</label>
+                <input
+                  type="text"
+                  maxLength={5}
+                  value={customerForm.zip}
+                  onChange={e => setCustomerForm(f => ({ ...f, zip: e.target.value.replace(/\D/g, '').slice(0, 5) }))}
+                  placeholder="12345"
+                  className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
+                />
+              </div>
             </div>
 
             {/* Tags */}

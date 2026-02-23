@@ -46,7 +46,7 @@ const App = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [addForm, setAddForm] = useState({
     name: '', phone: '', date: '', startTime: '', endTime: '',
-    service: '', address: '', notes: ''
+    service: '', address: '', city: '', state: '', zip: '', notes: ''
   });
   const [savingAppointment, setSavingAppointment] = useState(false);
   const [reminderCount, setReminderCount] = useState(0);
@@ -210,7 +210,7 @@ const App = () => {
 
   const handleAddAppointment = async (e) => {
     e.preventDefault();
-    if (!addForm.name || !addForm.date || !addForm.startTime) return;
+    if (!addForm.name || !addForm.phone || !addForm.date || !addForm.startTime || !addForm.address || !addForm.city || !addForm.state || !addForm.zip) return;
 
     setSavingAppointment(true);
     try {
@@ -230,12 +230,15 @@ const App = () => {
         .insert({
           client_id: clientData.id,
           caller_name: addForm.name,
-          caller_number: addForm.phone || null,
+          caller_number: addForm.phone,
           date: addForm.date,
           start_time: addForm.startTime,
           end_time: endTime || addForm.startTime,
           service_type: addForm.service || null,
-          address: addForm.address || null,
+          address: addForm.address,
+          city: addForm.city,
+          state: addForm.state,
+          zip: addForm.zip,
           notes: addForm.notes || null,
           source: 'manual',
           status: 'confirmed'
@@ -268,7 +271,7 @@ const App = () => {
       const first = aptDate.getDate() - aptDate.getDay();
       setCurrentWeekStart(new Date(aptDate.getFullYear(), aptDate.getMonth(), first));
 
-      setAddForm({ name: '', phone: '', date: '', startTime: '', endTime: '', service: '', address: '', notes: '' });
+      setAddForm({ name: '', phone: '', date: '', startTime: '', endTime: '', service: '', address: '', city: '', state: '', zip: '', notes: '' });
       setShowAddModal(false);
 
       // Re-fetch to show the new appointment
@@ -1110,9 +1113,10 @@ const App = () => {
               </div>
 
               <div>
-                <label className="block text-gray-400 text-sm mb-1">Phone Number</label>
+                <label className="block text-gray-400 text-sm mb-1">Phone Number <span className="text-red-400">*</span></label>
                 <input
                   type="tel"
+                  required
                   value={addForm.phone}
                   onChange={e => setAddForm(f => ({ ...f, phone: e.target.value }))}
                   placeholder="(555) 555-5555"
@@ -1168,14 +1172,55 @@ const App = () => {
               </div>
 
               <div>
-                <label className="block text-gray-400 text-sm mb-1">Address</label>
+                <label className="block text-gray-400 text-sm mb-1">Address <span className="text-red-400">*</span></label>
                 <input
                   type="text"
+                  required
                   value={addForm.address}
                   onChange={e => setAddForm(f => ({ ...f, address: e.target.value }))}
-                  placeholder="Service address"
+                  placeholder="Street address"
                   className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
                 />
+              </div>
+
+              <div>
+                <label className="block text-gray-400 text-sm mb-1">City <span className="text-red-400">*</span></label>
+                <input
+                  type="text"
+                  required
+                  value={addForm.city}
+                  onChange={e => setAddForm(f => ({ ...f, city: e.target.value }))}
+                  placeholder="City"
+                  className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-gray-400 text-sm mb-1">State <span className="text-red-400">*</span></label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={2}
+                    value={addForm.state}
+                    onChange={e => setAddForm(f => ({ ...f, state: e.target.value.toUpperCase() }))}
+                    placeholder="TX"
+                    className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm uppercase"
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-400 text-sm mb-1">Zip Code <span className="text-red-400">*</span></label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={5}
+                    pattern="\d{5}"
+                    value={addForm.zip}
+                    onChange={e => setAddForm(f => ({ ...f, zip: e.target.value.replace(/\D/g, '').slice(0, 5) }))}
+                    placeholder="12345"
+                    className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
+                  />
+                </div>
               </div>
 
               <div>
