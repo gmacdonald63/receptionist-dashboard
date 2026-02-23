@@ -203,20 +203,23 @@ export async function syncCustomersFromAppointments(
 
     const normPhone = normalizePhone(rawPhone);
     const normAddr  = normalizeAddress(rawAddress);
-    const syncKey   = normPhone || normAddr;
+    const syncKey   = normPhone || normAddr || rawName.toLowerCase();
     if (syncKey && seenThisSync.has(syncKey)) continue;
     if (syncKey) seenThisSync.set(syncKey, true);
 
-    // Find most recent appointment date for last_appointment_date field
-    const matchingDates = appointments
-      .filter(a => normPhone
-        ? normalizePhone(a.phone || a.caller_number) === normPhone
-        : normalizeAddress(a.address) === normAddr)
-      .map(a => a.date)
-      .filter(Boolean)
-      .sort()
-      .reverse();
-    const latestDate = matchingDates[0] ?? null;
+    // Find most recent appointment date for last_appointment_date field.
+    // For name-only records (no phone, no address), use only this appointment's
+    // own date — filtering by empty normAddr would match every unaddressed record.
+    let latestDate = appt.date ?? null;
+    if (normPhone) {
+      latestDate = appointments
+        .filter(a => normalizePhone(a.phone || a.caller_number) === normPhone)
+        .map(a => a.date).filter(Boolean).sort().reverse()[0] ?? null;
+    } else if (normAddr) {
+      latestDate = appointments
+        .filter(a => normalizeAddress(a.address) === normAddr)
+        .map(a => a.date).filter(Boolean).sort().reverse()[0] ?? null;
+    }
 
     let existing = null;
     if (normPhone) existing = phoneIndex.get(normPhone) ?? null;

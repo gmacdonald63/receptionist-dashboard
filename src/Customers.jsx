@@ -147,14 +147,17 @@ const Customers = ({ clientData, appointments, onReminderCountChange }) => {
         .select('id, phone, address')
         .eq('client_id', clientData.id);
 
-      const didSync = await syncCustomersFromAppointments(
+      const syncResult = await syncCustomersFromAppointments(
         appointments,
         existingCustomers || [],
         clientData.id,
         supabase
       );
 
-      if (didSync) {
+      if (syncResult.errors.length > 0) {
+        console.error('Customer sync errors:', syncResult.errors);
+      }
+      if (syncResult.created > 0 || syncResult.updated > 0) {
         fetchCustomers();
       }
     } catch (err) {
@@ -409,11 +412,12 @@ const Customers = ({ clientData, appointments, onReminderCountChange }) => {
     setCustomerForm(f => ({ ...f, tags: f.tags.filter(t => t !== tag) }));
   };
 
-  // Get customer's appointments — phone-first match, address as fallback
+  // Get customer's appointments — phone-first, address-second, name as last resort
   const getCustomerAppointments = (customer) => {
     const custPhone = normalizePhone(customer.phone);
-    const custAddr = normalizeAddress(customer.address);
-    if (!custPhone && !custAddr) return [];
+    const custAddr  = normalizeAddress(customer.address);
+    const custName  = (customer.name || '').trim().toLowerCase();
+    if (!custPhone && !custAddr && !custName) return [];
     return appointments.filter(apt => {
       if (custPhone) {
         const aptPhone = normalizePhone(apt.phone);
@@ -422,6 +426,11 @@ const Customers = ({ clientData, appointments, onReminderCountChange }) => {
       if (custAddr) {
         const aptAddr = normalizeAddress(apt.address);
         if (aptAddr && aptAddr === custAddr) return true;
+      }
+      // Name fallback: only used when customer has no phone and no address
+      if (!custPhone && !custAddr && custName) {
+        const aptName = (apt.name || apt.caller_name || '').trim().toLowerCase();
+        if (aptName && aptName === custName) return true;
       }
       return false;
     });
@@ -438,7 +447,9 @@ const Customers = ({ clientData, appointments, onReminderCountChange }) => {
 
   const formatDate = (dateStr) => {
     if (!dateStr) return '';
-    const date = new Date(dateStr);
+    const [year, month, day] = dateStr.split('-');
+    if (!year || !month || !day) return dateStr;
+    const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
@@ -458,9 +469,10 @@ const Customers = ({ clientData, appointments, onReminderCountChange }) => {
   };
 
   // Build last-appointment-date lookup for client-side sort
-  // Phone-primary, address-secondary — mirrors the dedup logic
+  // Phone-primary, address-secondary, name as last resort — mirrors the dedup logic
   const lastAptByPhone = new Map();
-  const lastAptByAddr = new Map();
+  const lastAptByAddr  = new Map();
+  const lastAptByName  = new Map();
   for (const apt of appointments) {
     if (apt.date) {
       const phone = normalizePhone(apt.phone);
@@ -473,13 +485,21 @@ const Customers = ({ clientData, appointments, onReminderCountChange }) => {
         const cur = lastAptByAddr.get(addr);
         if (!cur || apt.date > cur) lastAptByAddr.set(addr, apt.date);
       }
+      const name = (apt.name || apt.caller_name || '').trim().toLowerCase();
+      if (name) {
+        const cur = lastAptByName.get(name);
+        if (!cur || apt.date > cur) lastAptByName.set(name, apt.date);
+      }
     }
   }
 
   const getLastAptDate = (customer) => {
     const phone = normalizePhone(customer.phone);
+    if (phone) return lastAptByPhone.get(phone) || null;
     const addr = normalizeAddress(customer.address);
-    return (phone && lastAptByPhone.get(phone)) || (addr && lastAptByAddr.get(addr)) || null;
+    if (addr) return lastAptByAddr.get(addr) || null;
+    const name = (customer.name || '').trim().toLowerCase();
+    return (name && lastAptByName.get(name)) || null;
   };
 
   // Filter customers by name/phone, apply tag filter, sort by most recent appointment
