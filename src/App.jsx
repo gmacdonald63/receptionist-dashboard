@@ -169,6 +169,20 @@ const App = () => {
   const fetchAppointments = async () => {
     if (!clientData?.id) return;
     try {
+      // --- DIAGNOSTIC: log clientData so we can see what client_id we're querying with ---
+      console.log('[DIAG] clientData:', clientData);
+      console.log('[DIAG] Querying appointments with client_id =', clientData.id);
+
+      // --- DIAGNOSTIC: fetch ALL rows (no filter) to see what's actually in the table ---
+      const { data: allRows, error: allErr } = await supabase
+        .from('appointments')
+        .select('id, client_id, caller_name, date, status, source')
+        .order('date', { ascending: false })
+        .limit(20);
+      console.log('[DIAG] All appointments in table (no filter):', allRows);
+      if (allErr) console.error('[DIAG] Error fetching all rows:', allErr);
+
+      // Normal filtered query
       const { data, error } = await supabase
         .from('appointments')
         .select('*')
@@ -176,8 +190,9 @@ const App = () => {
         .neq('status', 'cancelled')
         .order('date', { ascending: true });
 
+      console.log('[DIAG] Filtered appointments (client_id match):', data);
       if (error) {
-        console.error('Error fetching appointments:', error);
+        console.error('[DIAG] Error on filtered fetch:', error);
         return;
       }
 
@@ -193,7 +208,7 @@ const App = () => {
           address: apt.address || '',
           phone: apt.caller_number || '',
           summary: apt.notes || '',
-          source: apt.source, // 'ai' or 'manual'
+          source: apt.source,
         })));
       }
     } catch (err) {
