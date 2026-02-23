@@ -466,27 +466,27 @@ const App = () => {
         {/* Week Navigation */}
         <div className="flex items-center justify-between flex-wrap gap-3 sticky top-[72px] z-40 bg-gray-900 py-3 mb-2">
           <div className="flex items-center gap-2">
-            <button 
+            <button
               onClick={goPreviousWeek}
-              className="px-3 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 border border-gray-700 text-sm"
+              className="px-2.5 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 border border-gray-700 text-sm font-medium"
             >
-              ← Previous
+              ←
             </button>
-            <button 
+            <button
               onClick={goToToday}
               className={`px-3 py-2 rounded-lg text-sm font-medium ${
-                isCurrentWeek 
-                  ? 'bg-blue-600 text-white' 
+                isCurrentWeek
+                  ? 'bg-blue-600 text-white'
                   : 'bg-gray-800 text-white hover:bg-gray-700 border border-gray-700'
               }`}
             >
               Current
             </button>
-            <button 
+            <button
               onClick={goNextWeek}
-              className="px-3 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 border border-gray-700 text-sm"
+              className="px-2.5 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 border border-gray-700 text-sm font-medium"
             >
-              Next →
+              →
             </button>
           </div>
           <div className="flex items-center gap-2">
