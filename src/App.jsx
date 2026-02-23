@@ -1,36 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Phone, Calendar, FileText, Clock, DollarSign, Download, Play, Pause, Search, Filter, RefreshCw, ChevronRight, ChevronDown, LogOut, Settings, Plus, X } from 'lucide-react';
+import { Phone, Calendar, FileText, Clock, DollarSign, Download, Play, Pause, Search, Filter, RefreshCw, ChevronRight, ChevronDown, LogOut, Settings, Plus, X, Users } from 'lucide-react';
 import { retellService } from './retellService';
 import { supabase } from './supabaseClient';
 import Login from './Login';
 import Admin from './Admin';
 import ResetPassword from './ResetPassword';
+import Customers from './Customers';
 import logo from './assets/RELIANT SUPPORT LOGO.svg';
-
-// Normalize various date formats to YYYY-MM-DD for Supabase
-function normalizeDate(dateStr) {
-  if (!dateStr) return null;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
-  const date = new Date(dateStr);
-  if (!isNaN(date.getTime())) return date.toISOString().split('T')[0];
-  return null;
-}
-
-// Normalize various time formats to HH:MM (24-hour) for Supabase
-function normalizeTime(timeStr) {
-  if (!timeStr) return null;
-  if (/^\d{2}:\d{2}(:\d{2})?$/.test(timeStr)) return timeStr.substring(0, 5);
-  const match = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
-  if (match) {
-    let hours = parseInt(match[1]);
-    const minutes = parseInt(match[2]);
-    const meridian = match[3].toUpperCase();
-    if (meridian === 'PM' && hours !== 12) hours += 12;
-    if (meridian === 'AM' && hours === 12) hours = 0;
-    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
-  }
-  return null;
-}
 
 const App = () => {
   // Authentication state
@@ -56,6 +32,7 @@ const App = () => {
   
   // Real data from Retell API
   const [callLogs, setCallLogs] = useState([]);
+  // Single appointments array from Supabase
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
@@ -72,6 +49,7 @@ const App = () => {
     service: '', address: '', notes: ''
   });
   const [savingAppointment, setSavingAppointment] = useState(false);
+  const [reminderCount, setReminderCount] = useState(0);
 
   // Check for existing session on load
   useEffect(() => {
@@ -113,15 +91,12 @@ const App = () => {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      // If password recovery event, show reset form
       if (event === 'PASSWORD_RECOVERY') {
         setShowResetPassword(true);
         showResetPasswordRef.current = true;
         return;
       }
       
-      // Don't update user state if we're in the password reset flow
-      // This prevents the reset screen from being overridden
       if (showResetPasswordRef.current) {
         return;
       }
@@ -135,7 +110,7 @@ const App = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Fetch data from Retell API
+  // Fetch data from Retell API and Supabase
   useEffect(() => {
     if (user && clientData) {
       fetchData();
@@ -147,7 +122,7 @@ const App = () => {
     if (activeTab === 'appointments' && todayRef.current && !loading) {
       setTimeout(() => {
         const element = todayRef.current;
-        const yOffset = -120; // Offset to leave space for header and navigation
+        const yOffset = -120;
         const y = element.getBoundingClientRect().top + window.pageYOffset + yOffset;
         window.scrollTo({ top: y, behavior: 'smooth' });
       }, 100);
@@ -165,24 +140,23 @@ const App = () => {
     setClientData(null);
   };
 
-  // Fetch all appointments from Supabase (single source of truth)
+  // Fetch all appointments from the unified Supabase table
   const fetchAppointments = async () => {
     if (!clientData?.id) return;
     try {
-      // --- DIAGNOSTIC: log clientData so we can see what client_id we're querying with ---
-      console.log('[DIAG] clientData:', clientData);
-      console.log('[DIAG] Querying appointments with client_id =', clientData.id);
+      // DIAGNOSTIC: log what client_id we're querying with
+      console.log('[DIAG] clientData.id =', clientData.id);
 
-      // --- DIAGNOSTIC: fetch ALL rows (no filter) to see what's actually in the table ---
+      // DIAGNOSTIC: fetch all rows (no filter) to see what's in the table
       const { data: allRows, error: allErr } = await supabase
         .from('appointments')
         .select('id, client_id, caller_name, date, status, source')
         .order('date', { ascending: false })
         .limit(20);
-      console.log('[DIAG] All appointments in table (no filter):', allRows);
-      if (allErr) console.error('[DIAG] Error fetching all rows:', allErr);
+      console.log('[DIAG] All appointments (no filter):', allRows);
+      if (allErr) console.error('[DIAG] Error on unfiltered fetch:', allErr);
 
-      // Normal filtered query
+      // Show everything except cancelled — catches null/pending/confirmed from AI webhook
       const { data, error } = await supabase
         .from('appointments')
         .select('*')
@@ -190,9 +164,10 @@ const App = () => {
         .neq('status', 'cancelled')
         .order('date', { ascending: true });
 
-      console.log('[DIAG] Filtered appointments (client_id match):', data);
+      console.log('[DIAG] Filtered appointments:', data, 'error:', error);
+
       if (error) {
-        console.error('[DIAG] Error on filtered fetch:', error);
+        console.error('Error fetching appointments:', error);
         return;
       }
 
@@ -216,71 +191,16 @@ const App = () => {
     }
   };
 
-  // Sync AI-booked appointments from Retell call data into Supabase
-  const syncRetellAppointments = async (calls) => {
-    if (!clientData?.id) return;
-
-    const callsWithAppointments = calls.filter(call => {
-      const customData = (call.call_analysis || {}).custom_analysis_data || {};
-      return customData.appointment_date && customData.appointment_time;
-    });
-
-    for (const call of callsWithAppointments) {
-      const analysis = call.call_analysis || {};
-      const customData = analysis.custom_analysis_data || {};
-
-      const callerName = customData.caller_name || 'Unknown';
-      const callerNumber = call.from_number || customData.caller_phone_number || null;
-      const aptDate = normalizeDate(customData.appointment_date);
-      const aptTime = normalizeTime(customData.appointment_time);
-
-      if (!aptDate || !aptTime) continue;
-
-      // Deduplicate: skip if we already saved this appointment
-      const { data: existing } = await supabase
-        .from('appointments')
-        .select('id')
-        .eq('client_id', clientData.id)
-        .eq('source', 'ai')
-        .eq('caller_name', callerName)
-        .eq('date', aptDate)
-        .maybeSingle();
-
-      if (existing) continue;
-
-      const { error } = await supabase
-        .from('appointments')
-        .insert({
-          client_id: clientData.id,
-          caller_name: callerName,
-          caller_number: callerNumber,
-          date: aptDate,
-          start_time: aptTime,
-          end_time: aptTime,
-          service_type: retellService.extractIssue(customData, analysis.call_summary) || null,
-          address: customData.appointment_address || null,
-          notes: analysis.call_summary || null,
-          source: 'ai',
-          status: 'confirmed',
-        });
-
-      if (error) console.error('Error syncing Retell appointment:', error);
-    }
-  };
-
   const fetchData = async () => {
     setLoading(true);
     try {
       // Get the agent_id from client data (if available)
       const agentId = clientData?.retell_agent_id || null;
-
+      
       // Fetch calls from Retell API (for call logs display)
       const calls = await retellService.getCalls(100, agentId);
       const transformedCalls = calls.map(call => retellService.transformCallData(call));
       setCallLogs(transformedCalls);
-
-      // Sync any AI-booked appointments from Retell into Supabase
-      await syncRetellAppointments(calls);
 
       // Fetch all appointments from Supabase (single source of truth)
       await fetchAppointments();
@@ -308,6 +228,17 @@ const App = () => {
 
     setSavingAppointment(true);
     try {
+      // Calculate end_time from start_time + client duration if not provided
+      let endTime = addForm.endTime || null;
+      if (!endTime && clientData?.appointment_duration) {
+        const [hours, minutes] = addForm.startTime.split(':').map(Number);
+        const startMinutes = hours * 60 + minutes;
+        const endMinutes = startMinutes + (clientData.appointment_duration || 120);
+        const endHours = Math.floor(endMinutes / 60);
+        const endMins = endMinutes % 60;
+        endTime = `${String(endHours).padStart(2, '0')}:${String(endMins).padStart(2, '0')}`;
+      }
+
       const { error } = await supabase
         .from('appointments')
         .insert({
@@ -316,12 +247,12 @@ const App = () => {
           caller_number: addForm.phone || null,
           date: addForm.date,
           start_time: addForm.startTime,
-          end_time: addForm.endTime || addForm.startTime,
+          end_time: endTime || addForm.startTime,
           service_type: addForm.service || null,
           address: addForm.address || null,
           notes: addForm.notes || null,
           source: 'manual',
-          status: 'confirmed',
+          status: 'confirmed'
         });
 
       if (error) throw error;
@@ -335,11 +266,11 @@ const App = () => {
       setAddForm({ name: '', phone: '', date: '', startTime: '', endTime: '', service: '', address: '', notes: '' });
       setShowAddModal(false);
 
-      // Re-fetch appointments to include the new one
+      // Re-fetch to show the new appointment
       await fetchAppointments();
     } catch (err) {
       console.error('Error saving appointment:', err);
-      alert(`Failed to save appointment: ${err?.message || JSON.stringify(err)}`);
+      alert(`Failed to save: ${err?.message || JSON.stringify(err)}`);
     } finally {
       setSavingAppointment(false);
     }
@@ -374,19 +305,16 @@ const App = () => {
   };
 
   const formatCallTime = (timeString) => {
-    // Convert "02/03/2026, 08:01 PM" to "2/3/2026 at 8:01 PM"
     if (!timeString) return '';
     const [datePart, timePart] = timeString.split(', ');
     if (!datePart || !timePart) return timeString;
     const [month, day, year] = datePart.split('/');
-    // Remove leading zeros and format time
     const formattedDate = `${parseInt(month)}/${parseInt(day)}/${year}`;
     const formattedTime = timePart.replace(/^0/, '');
     return `${formattedDate} at ${formattedTime}`;
   };
 
   const formatAppointmentDate = (dateString) => {
-    // Convert "2026-02-06" to "2/6/2026"
     if (!dateString) return '';
     const [year, month, day] = dateString.split('-');
     if (!year || !month || !day) return dateString;
@@ -394,11 +322,8 @@ const App = () => {
   };
 
   const formatAppointmentTime = (timeString) => {
-    // Convert "14:00 to 16:00" to "2:00 PM to 4:00 PM"
-    // Also handles times that already have AM/PM
     if (!timeString) return '';
     
-    // If it already contains AM or PM, return as-is (avoid double AM/PM)
     if (timeString.toUpperCase().includes('AM') || timeString.toUpperCase().includes('PM')) {
       return timeString;
     }
@@ -406,19 +331,17 @@ const App = () => {
     const convert24to12 = (time24) => {
       const [hours, minutes] = time24.split(':');
       const hour = parseInt(hours);
-      if (isNaN(hour)) return time24; // Return original if can't parse
+      if (isNaN(hour)) return time24;
       const ampm = hour >= 12 ? 'PM' : 'AM';
       const hour12 = hour % 12 || 12;
       return `${hour12}:${minutes} ${ampm}`;
     };
     
-    // Handle "HH:MM to HH:MM" format
     if (timeString.includes(' to ')) {
       const [startTime, endTime] = timeString.split(' to ');
       return `${convert24to12(startTime)} to ${convert24to12(endTime)}`;
     }
     
-    // Handle single time
     return convert24to12(timeString);
   };
 
@@ -483,9 +406,6 @@ const App = () => {
                         <p className="font-medium text-white">{apt.name}</p>
                         <p className="text-sm text-gray-400">{apt.service}</p>
                       </div>
-                      <span className={`px-2 py-1 rounded text-xs whitespace-nowrap ${apt.status === 'confirmed' ? 'bg-green-900 text-green-300' : 'bg-yellow-900 text-yellow-300'}`}>
-                        {apt.status}
-                      </span>
                     </div>
                     <div className="flex items-center justify-between text-sm">
                       <p className="text-gray-400">{apt.date}</p>
@@ -643,8 +563,10 @@ const App = () => {
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-1">
                                 <p className="text-white text-xs font-medium truncate">{apt.name}</p>
-                                {apt.isManual && (
+                                {apt.source === 'manual' ? (
                                   <span className="flex-shrink-0 px-1 py-0.5 bg-green-700 text-green-200 rounded text-[10px] leading-none">Manual</span>
+                                ) : (
+                                  <span className="flex-shrink-0 px-1 py-0.5 bg-blue-700 text-blue-200 rounded text-[10px] leading-none">AI</span>
                                 )}
                               </div>
                               <p className="text-gray-300 text-xs mt-1">{formatAppointmentTime(apt.time)}</p>
@@ -676,17 +598,6 @@ const App = () => {
                                 <div>
                                   <p className="text-xs text-gray-300">Service</p>
                                   <p className="text-white text-xs">{apt.service}</p>
-                                </div>
-                              )}
-                              {apt.status && (
-                                <div className="pt-1">
-                                  <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${
-                                    apt.status === 'confirmed' 
-                                      ? 'bg-green-900 text-green-300' 
-                                      : 'bg-yellow-900 text-yellow-300'
-                                  }`}>
-                                    {apt.status}
-                                  </span>
                                 </div>
                               )}
                             </div>
@@ -947,18 +858,6 @@ const App = () => {
           <div className="p-3 bg-gray-750 rounded-lg">
             <div className="flex items-start justify-between mb-2">
               <div className="flex-1">
-                <p className="font-medium text-white">Cal.com</p>
-                <p className="text-xs text-gray-400 mt-1">Calendar and appointments</p>
-              </div>
-              <span className="px-2 py-1 bg-green-900 text-green-300 rounded text-xs whitespace-nowrap">Connected</span>
-            </div>
-            <button className="w-full mt-2 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 text-sm">
-              Configure
-            </button>
-          </div>
-          <div className="p-3 bg-gray-750 rounded-lg">
-            <div className="flex items-start justify-between mb-2">
-              <div className="flex-1">
                 <p className="font-medium text-white">Retell AI</p>
                 <p className="text-xs text-gray-400 mt-1">Voice AI platform</p>
               </div>
@@ -974,10 +873,8 @@ const App = () => {
   );
 
   const renderBilling = () => {
-    // Billing configuration
     const MONTHLY_FEE = 499;
     
-    // Calculate next billing date (1st of next month for now)
     const today = new Date();
     const nextBillingDate = new Date(today.getFullYear(), today.getMonth() + 1, 1);
     const formattedNextBilling = nextBillingDate.toLocaleDateString('en-US', { 
@@ -986,10 +883,9 @@ const App = () => {
       year: 'numeric' 
     });
 
-    // Mock data - in production this would come from Stripe/database
     const currentBill = {
       amount: MONTHLY_FEE,
-      status: 'due', // 'paid', 'due', 'overdue'
+      status: 'due',
       dueDate: formattedNextBilling
     };
 
@@ -999,7 +895,7 @@ const App = () => {
       { id: 3, date: 'December 1, 2025', amount: MONTHLY_FEE, status: 'paid' },
     ];
 
-    const paymentMethod = null; // null if no card on file, or { last4: '4242', brand: 'Visa' }
+    const paymentMethod = null;
 
     const getStatusBadge = (status) => {
       switch(status) {
@@ -1016,7 +912,6 @@ const App = () => {
 
     return (
       <div className="space-y-4">
-        {/* Current Bill */}
         <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
           <h3 className="text-lg font-semibold mb-4 text-white">Current Bill</h3>
           <div className="flex items-center justify-between mb-4">
@@ -1041,7 +936,6 @@ const App = () => {
           )}
         </div>
 
-        {/* Usage This Month */}
         <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
           <h3 className="text-lg font-semibold mb-4 text-white">Usage This Month</h3>
           <div className="grid grid-cols-2 gap-3">
@@ -1057,7 +951,6 @@ const App = () => {
           <p className="text-gray-500 text-xs mt-3 text-center">All minutes included in your monthly plan</p>
         </div>
 
-        {/* Payment Method */}
         <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
           <h3 className="text-lg font-semibold mb-4 text-white">Payment Method</h3>
           {paymentMethod ? (
@@ -1080,7 +973,6 @@ const App = () => {
           )}
         </div>
 
-        {/* Billing History */}
         <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
           <h3 className="text-lg font-semibold mb-4 text-white">Billing History</h3>
           <div className="space-y-3">
@@ -1108,6 +1000,7 @@ const App = () => {
 
   const navItems = [
     { id: 'appointments', label: 'Appointments', icon: Calendar },
+    { id: 'customers', label: 'Customers', icon: Users },
     { id: 'calls', label: 'Calls', icon: Phone },
     { id: 'billing', label: 'Billing', icon: DollarSign }
   ];
@@ -1128,7 +1021,7 @@ const App = () => {
         onComplete={() => {
           setShowResetPassword(false);
           showResetPasswordRef.current = false;
-          window.location.href = window.location.origin; // Redirect to main app
+          window.location.href = window.location.origin;
         }}
       />
     );
@@ -1173,6 +1066,14 @@ const App = () => {
       <main className="p-4 md:p-6">
         {activeTab === 'overview' && renderOverview()}
         {activeTab === 'appointments' && renderAppointments()}
+        {activeTab === 'customers' && (
+          <Customers
+            clientData={clientData}
+            callLogs={callLogs}
+            appointments={appointments}
+            onReminderCountChange={setReminderCount}
+          />
+        )}
         {activeTab === 'calls' && renderCallLogs()}
         {activeTab === 'billing' && renderBilling()}
       </main>
@@ -1192,7 +1093,6 @@ const App = () => {
             </div>
 
             <form onSubmit={handleAddAppointment} className="p-4 space-y-4">
-              {/* Name */}
               <div>
                 <label className="block text-gray-400 text-sm mb-1">Client Name <span className="text-red-400">*</span></label>
                 <input
@@ -1205,7 +1105,6 @@ const App = () => {
                 />
               </div>
 
-              {/* Phone */}
               <div>
                 <label className="block text-gray-400 text-sm mb-1">Phone Number</label>
                 <input
@@ -1217,7 +1116,6 @@ const App = () => {
                 />
               </div>
 
-              {/* Date */}
               <div>
                 <label className="block text-gray-400 text-sm mb-1">Date <span className="text-red-400">*</span></label>
                 <input
@@ -1230,7 +1128,6 @@ const App = () => {
                 />
               </div>
 
-              {/* Time */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-gray-400 text-sm mb-1">Start Time <span className="text-red-400">*</span></label>
@@ -1255,7 +1152,6 @@ const App = () => {
                 </div>
               </div>
 
-              {/* Service */}
               <div>
                 <label className="block text-gray-400 text-sm mb-1">Service Type</label>
                 <input
@@ -1267,7 +1163,6 @@ const App = () => {
                 />
               </div>
 
-              {/* Address */}
               <div>
                 <label className="block text-gray-400 text-sm mb-1">Address</label>
                 <input
@@ -1279,7 +1174,6 @@ const App = () => {
                 />
               </div>
 
-              {/* Notes */}
               <div>
                 <label className="block text-gray-400 text-sm mb-1">Notes</label>
                 <textarea
@@ -1314,7 +1208,7 @@ const App = () => {
 
       {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 z-30">
-        <div className="grid grid-cols-3 gap-1">
+        <div className="grid grid-cols-4 gap-1">
           {navItems.map(item => (
             <button
               key={item.id}
