@@ -97,6 +97,9 @@ export const retellService = {
         date: customData.appointment_date || null,
         time: customData.appointment_time || null,
         address: customData.appointment_address || null,
+        city: customData.appointment_city || null,
+        state: customData.appointment_state || null,
+        zip: customData.appointment_zip || null,
         service: this.extractIssue(customData, analysis.call_summary)
       }
     };
@@ -196,6 +199,9 @@ export const retellService = {
         time: call.appointment.time,
         service: call.appointment.service,
         address: call.appointment.address,
+        city: call.appointment.city,
+        state: call.appointment.state,
+        zip: call.appointment.zip,
         status: this.getAppointmentStatus(call.appointment.date),
         phone: call.number,
         summary: call.call_summary

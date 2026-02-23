@@ -167,6 +167,9 @@ const App = () => {
             : apt.start_time,
           service: apt.service_type || '',
           address: apt.address || '',
+          city: apt.city || '',
+          state: apt.state || '',
+          zip: apt.zip || '',
           phone: apt.caller_number || '',
           summary: apt.notes || '',
           source: apt.source, // 'ai' or 'manual'
