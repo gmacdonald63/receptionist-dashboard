@@ -144,19 +144,6 @@ const App = () => {
   const fetchAppointments = async () => {
     if (!clientData?.id) return;
     try {
-      // DIAGNOSTIC: log what client_id we're querying with
-      console.log('[DIAG] clientData.id =', clientData.id);
-
-      // DIAGNOSTIC: fetch all rows (no filter) to see what's in the table
-      const { data: allRows, error: allErr } = await supabase
-        .from('appointments')
-        .select('id, client_id, caller_name, date, status, source')
-        .order('date', { ascending: false })
-        .limit(20);
-      console.log('[DIAG] All appointments (no filter):', allRows);
-      if (allErr) console.error('[DIAG] Error on unfiltered fetch:', allErr);
-
-      // Show everything except cancelled — catches null/pending/confirmed from AI webhook
       const { data, error } = await supabase
         .from('appointments')
         .select('*')
@@ -164,7 +151,6 @@ const App = () => {
         .neq('status', 'cancelled')
         .order('date', { ascending: true });
 
-      console.log('[DIAG] Filtered appointments:', data, 'error:', error);
 
       if (error) {
         console.error('Error fetching appointments:', error);
@@ -183,7 +169,7 @@ const App = () => {
           address: apt.address || '',
           phone: apt.caller_number || '',
           summary: apt.notes || '',
-          source: apt.source,
+          source: apt.source, // 'ai' or 'manual'
         })));
       }
     } catch (err) {
@@ -239,7 +225,7 @@ const App = () => {
         endTime = `${String(endHours).padStart(2, '0')}:${String(endMins).padStart(2, '0')}`;
       }
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('appointments')
         .insert({
           client_id: clientData.id,
@@ -253,9 +239,28 @@ const App = () => {
           notes: addForm.notes || null,
           source: 'manual',
           status: 'confirmed'
-        });
+        })
+        .select()
+        .single();
 
       if (error) throw error;
+
+      const newApt = {
+        id: data.id,
+        name: data.caller_name,
+        date: data.date,
+        time: data.end_time
+          ? `${data.start_time} to ${data.end_time}`
+          : data.start_time,
+        service: data.service_type || '',
+        address: data.address || '',
+        phone: data.caller_number || '',
+        summary: data.notes || '',
+        source: 'manual',
+      };
+
+      setAppointments(prev => [...prev, newApt]);
+
 
       // Navigate to the week of the new appointment
       const [year, month, day] = addForm.date.split('-');
