@@ -1074,7 +1074,6 @@ const App = () => {
         {activeTab === 'customers' && (
           <Customers
             clientData={clientData}
-            callLogs={callLogs}
             appointments={appointments}
             onReminderCountChange={setReminderCount}
           />

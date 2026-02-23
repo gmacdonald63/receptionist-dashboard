@@ -5,6 +5,13 @@ import {
   ChevronDown, ChevronRight, AlertCircle
 } from 'lucide-react';
 import { supabase } from './supabaseClient';
+import {
+  normalizeAddress,
+  normalizeForDisplay,
+  normalizePhone,
+  filterCustomers,
+  syncCustomersFromAppointments,
+} from './utils/addressNormalization';
 
 const TAG_COLORS = [
   { bg: 'bg-blue-900/60', text: 'text-blue-300', border: 'border-blue-700' },
@@ -17,6 +24,8 @@ const TAG_COLORS = [
   { bg: 'bg-red-900/60', text: 'text-red-300', border: 'border-red-700' },
 ];
 
+const SYSTEM_TAGS = new Set(['From Call', 'From Appointment']);
+
 const getTagColor = (tag) => {
   let hash = 0;
   for (let i = 0; i < tag.length; i++) {
@@ -25,7 +34,7 @@ const getTagColor = (tag) => {
   return TAG_COLORS[Math.abs(hash) % TAG_COLORS.length];
 };
 
-const Customers = ({ clientData, callLogs, appointments, onReminderCountChange }) => {
+const Customers = ({ clientData, appointments, onReminderCountChange }) => {
   const [customers, setCustomers] = useState([]);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -57,7 +66,7 @@ const Customers = ({ clientData, callLogs, appointments, onReminderCountChange }
   const [showRemindersPanel, setShowRemindersPanel] = useState(false);
   const [filterTag, setFilterTag] = useState('');
 
-  // Load customers
+  // Load customers on mount
   useEffect(() => {
     if (clientData?.id) {
       fetchCustomers();
@@ -65,14 +74,14 @@ const Customers = ({ clientData, callLogs, appointments, onReminderCountChange }
     }
   }, [clientData]);
 
-  // Sync call/appointment data to customers
+  // Sync customers from appointments (not call logs)
   useEffect(() => {
-    if (clientData?.id && (callLogs.length > 0 || appointments.length > 0)) {
-      syncCallsToCustomers();
+    if (clientData?.id && appointments.length > 0) {
+      handleSyncCustomers();
     }
-  }, [callLogs, appointments, clientData]);
+  }, [appointments, clientData]);
 
-  // Update reminder count for parent badge
+  // Update reminder count badge for parent
   useEffect(() => {
     if (onReminderCountChange) {
       const today = new Date().toISOString().split('T')[0];
@@ -81,6 +90,21 @@ const Customers = ({ clientData, callLogs, appointments, onReminderCountChange }
     }
   }, [allReminders, onReminderCountChange]);
 
+  // Restore draft note from sessionStorage on mount
+  useEffect(() => {
+    const draft = sessionStorage.getItem('customer-note-draft');
+    if (draft) setNewNote(draft);
+  }, []);
+
+  // Persist draft note to sessionStorage on every keystroke
+  useEffect(() => {
+    if (newNote) {
+      sessionStorage.setItem('customer-note-draft', newNote);
+    } else {
+      sessionStorage.removeItem('customer-note-draft');
+    }
+  }, [newNote]);
+
   const fetchCustomers = async () => {
     setLoading(true);
     try {
@@ -88,7 +112,7 @@ const Customers = ({ clientData, callLogs, appointments, onReminderCountChange }
         .from('customers')
         .select('*')
         .eq('client_id', clientData.id)
-        .order('name', { ascending: true });
+        .order('created_at', { ascending: false });
 
       if (!error && data) {
         setCustomers(data);
@@ -116,75 +140,25 @@ const Customers = ({ clientData, callLogs, appointments, onReminderCountChange }
     }
   };
 
-  const normalizeAddress = (addr) => (addr || '').trim().toLowerCase().replace(/[.,#]/g, '');
-
-  const syncCallsToCustomers = async () => {
+  const handleSyncCustomers = async () => {
     try {
-      // Get existing customers to check addresses
       const { data: existingCustomers } = await supabase
         .from('customers')
-        .select('address')
+        .select('id, phone, address')
         .eq('client_id', clientData.id);
 
-      const existingAddresses = new Set(
-        (existingCustomers || [])
-          .map(c => normalizeAddress(c.address))
-          .filter(Boolean)
+      const didSync = await syncCustomersFromAppointments(
+        appointments,
+        existingCustomers || [],
+        clientData.id,
+        supabase
       );
 
-      // Collect unique addresses from calls that have booked appointments
-      const newCustomersByAddress = new Map();
-
-      for (const call of callLogs) {
-        const address = call.appointment?.address;
-        if (!address) continue;
-
-        const normalizedAddr = normalizeAddress(address);
-        if (!normalizedAddr) continue;
-        if (existingAddresses.has(normalizedAddr)) continue;
-        if (newCustomersByAddress.has(normalizedAddr)) continue;
-
-        newCustomersByAddress.set(normalizedAddr, {
-          client_id: clientData.id,
-          name: call.caller && call.caller !== 'Unknown Caller' ? call.caller : `Customer at ${address}`,
-          phone: call.number || '',
-          address: address,
-          tags: ['From Call']
-        });
-      }
-
-      // Also check appointments that have addresses not yet in customers
-      const allApts = [...appointments];
-      for (const apt of allApts) {
-        if (!apt.address) continue;
-
-        const normalizedAddr = normalizeAddress(apt.address);
-        if (!normalizedAddr) continue;
-        if (existingAddresses.has(normalizedAddr)) continue;
-        if (newCustomersByAddress.has(normalizedAddr)) continue;
-
-        newCustomersByAddress.set(normalizedAddr, {
-          client_id: clientData.id,
-          name: apt.name || `Customer at ${apt.address}`,
-          phone: apt.phone || '',
-          address: apt.address,
-          tags: ['From Appointment']
-        });
-      }
-
-      const newCustomers = Array.from(newCustomersByAddress.values());
-
-      if (newCustomers.length > 0) {
-        const { error } = await supabase
-          .from('customers')
-          .insert(newCustomers);
-
-        if (!error) {
-          fetchCustomers();
-        }
+      if (didSync) {
+        fetchCustomers();
       }
     } catch (err) {
-      console.error('Error syncing calls to customers:', err);
+      console.error('Error syncing customers:', err);
     }
   };
 
@@ -243,7 +217,6 @@ const Customers = ({ clientData, callLogs, appointments, onReminderCountChange }
 
         if (error) throw error;
 
-        // Update local state
         setCustomers(prev => prev.map(c =>
           c.id === editingCustomer.id
             ? { ...c, name: customerForm.name.trim(), phone: customerForm.phone.trim(), email: customerForm.email.trim(), address: customerForm.address.trim(), tags: customerForm.tags }
@@ -275,7 +248,7 @@ const Customers = ({ clientData, callLogs, appointments, onReminderCountChange }
           .single();
 
         if (error) throw error;
-        setCustomers(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
+        setCustomers(prev => [data, ...prev]);
       }
 
       closeModal();
@@ -317,6 +290,7 @@ const Customers = ({ clientData, callLogs, appointments, onReminderCountChange }
       if (error) throw error;
       setNotes(prev => [data, ...prev]);
       setNewNote('');
+      sessionStorage.removeItem('customer-note-draft');
     } catch (err) {
       console.error('Error adding note:', err);
     } finally {
@@ -423,32 +397,30 @@ const Customers = ({ clientData, callLogs, appointments, onReminderCountChange }
     setCustomerForm(f => ({ ...f, tags: f.tags.filter(t => t !== tag) }));
   };
 
-  // Get customer's call history — match by address
-  const getCustomerCalls = (customer) => {
-    if (!customer.address) return [];
-    const custAddr = normalizeAddress(customer.address);
-    return callLogs.filter(call => {
-      const callAddr = normalizeAddress(call.appointment?.address);
-      return callAddr && callAddr === custAddr;
-    });
-  };
-
-  // Get customer's appointments — match by address
-  // FIX 1: Use unified appointments prop directly (no more manualAppointments)
+  // Get customer's appointments — phone-first match, address as fallback
   const getCustomerAppointments = (customer) => {
-    if (!customer.address) return [];
+    const custPhone = normalizePhone(customer.phone);
     const custAddr = normalizeAddress(customer.address);
-    const allApts = appointments;
-    return allApts.filter(apt => {
-      const aptAddr = normalizeAddress(apt.address);
-      return aptAddr && aptAddr === custAddr;
+    if (!custPhone && !custAddr) return [];
+    return appointments.filter(apt => {
+      if (custPhone) {
+        const aptPhone = normalizePhone(apt.phone);
+        if (aptPhone && aptPhone === custPhone) return true;
+      }
+      if (custAddr) {
+        const aptAddr = normalizeAddress(apt.address);
+        if (aptAddr && aptAddr === custAddr) return true;
+      }
+      return false;
     });
   };
 
-  // Get all unique tags across all customers
+  // Get all user-defined tags (excludes auto-generated system tags)
   const getAllTags = () => {
     const tags = new Set();
-    customers.forEach(c => (c.tags || []).forEach(t => tags.add(t)));
+    customers.forEach(c => (c.tags || []).forEach(t => {
+      if (!SYSTEM_TAGS.has(t)) tags.add(t);
+    }));
     return Array.from(tags).sort();
   };
 
@@ -473,16 +445,42 @@ const Customers = ({ clientData, callLogs, appointments, onReminderCountChange }
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
   };
 
-  // Filter customers
-  const filteredCustomers = customers.filter(c => {
-    const matchesSearch = !searchTerm ||
-      c.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.phone?.includes(searchTerm) ||
-      c.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.address?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesTag = !filterTag || (c.tags || []).includes(filterTag);
-    return matchesSearch && matchesTag;
-  });
+  // Build last-appointment-date lookup for client-side sort
+  // Phone-primary, address-secondary — mirrors the dedup logic
+  const lastAptByPhone = new Map();
+  const lastAptByAddr = new Map();
+  for (const apt of appointments) {
+    if (apt.date) {
+      const phone = normalizePhone(apt.phone);
+      if (phone) {
+        const cur = lastAptByPhone.get(phone);
+        if (!cur || apt.date > cur) lastAptByPhone.set(phone, apt.date);
+      }
+      const addr = normalizeAddress(apt.address);
+      if (addr) {
+        const cur = lastAptByAddr.get(addr);
+        if (!cur || apt.date > cur) lastAptByAddr.set(addr, apt.date);
+      }
+    }
+  }
+
+  const getLastAptDate = (customer) => {
+    const phone = normalizePhone(customer.phone);
+    const addr = normalizeAddress(customer.address);
+    return (phone && lastAptByPhone.get(phone)) || (addr && lastAptByAddr.get(addr)) || null;
+  };
+
+  // Filter customers by name/phone, apply tag filter, sort by most recent appointment
+  const filteredCustomers = filterCustomers(customers, searchTerm)
+    .filter(c => !filterTag || (c.tags || []).includes(filterTag))
+    .sort((a, b) => {
+      const dateA = getLastAptDate(a);
+      const dateB = getLastAptDate(b);
+      if (dateA && dateB) return dateB.localeCompare(dateA); // most recent first
+      if (dateA) return -1; // a has appointments, b doesn't → a first
+      if (dateB) return 1;  // b has appointments, a doesn't → b first
+      return (a.name || '').localeCompare(b.name || ''); // both no appointments → alphabetical
+    });
 
   // Reminders panel
   const today = new Date().toISOString().split('T')[0];
@@ -513,7 +511,6 @@ const Customers = ({ clientData, callLogs, appointments, onReminderCountChange }
         )}
       </h2>
 
-      {/* Due Now */}
       {dueReminders.length > 0 && (
         <div className="space-y-2">
           <h3 className="text-sm font-medium text-red-400 flex items-center gap-1">
@@ -524,7 +521,6 @@ const Customers = ({ clientData, callLogs, appointments, onReminderCountChange }
         </div>
       )}
 
-      {/* Upcoming */}
       {upcomingReminders.length > 0 && (
         <div className="space-y-2">
           <h3 className="text-sm font-medium text-blue-400">Upcoming</h3>
@@ -532,7 +528,6 @@ const Customers = ({ clientData, callLogs, appointments, onReminderCountChange }
         </div>
       )}
 
-      {/* Completed */}
       {completedReminders.length > 0 && (
         <div className="space-y-2">
           <h3 className="text-sm font-medium text-gray-500">Completed</h3>
@@ -601,14 +596,14 @@ const Customers = ({ clientData, callLogs, appointments, onReminderCountChange }
 
   // ============ RENDER: Customer Profile ============
   const renderCustomerProfile = () => {
-    const customerCalls = getCustomerCalls(selectedCustomer);
     const customerAppointments = getCustomerAppointments(selectedCustomer);
+    // Filter system tags from profile display
+    const displayTags = (selectedCustomer.tags || []).filter(t => !SYSTEM_TAGS.has(t));
 
     const profileTabs = [
       { id: 'overview', label: 'Overview' },
       { id: 'notes', label: 'Notes', count: notes.length },
       { id: 'reminders', label: 'Reminders', count: reminders.filter(r => !r.completed).length },
-      { id: 'calls', label: 'Calls', count: customerCalls.length },
       { id: 'appointments', label: 'Appts', count: customerAppointments.length },
     ];
 
@@ -674,15 +669,15 @@ const Customers = ({ clientData, callLogs, appointments, onReminderCountChange }
             {selectedCustomer.address && (
               <div className="flex items-center gap-2 text-sm">
                 <MapPin className="w-4 h-4 text-gray-500" />
-                <span className="text-white">{selectedCustomer.address}</span>
+                <span className="text-white">{normalizeForDisplay(selectedCustomer.address)}</span>
               </div>
             )}
           </div>
 
-          {/* Tags */}
-          {selectedCustomer.tags?.length > 0 && (
+          {/* User-defined tags only (system tags hidden) */}
+          {displayTags.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
-              {selectedCustomer.tags.map(tag => {
+              {displayTags.map(tag => {
                 const color = getTagColor(tag);
                 return (
                   <span
@@ -722,94 +717,112 @@ const Customers = ({ clientData, callLogs, appointments, onReminderCountChange }
         </div>
 
         {/* Tab Content */}
-        {activeProfileTab === 'overview' && renderOverviewTab(customerCalls, customerAppointments)}
+        {activeProfileTab === 'overview' && renderOverviewTab(customerAppointments)}
         {activeProfileTab === 'notes' && renderNotesTab()}
         {activeProfileTab === 'reminders' && renderRemindersTab()}
-        {activeProfileTab === 'calls' && renderCallsTab(customerCalls)}
         {activeProfileTab === 'appointments' && renderAppointmentsTab(customerAppointments)}
       </div>
     );
   };
 
-  const renderOverviewTab = (customerCalls, customerAppointments) => (
-    <div className="space-y-3">
-      <div className="grid grid-cols-3 gap-3">
-        <div className="bg-gray-800 rounded-lg p-3 border border-gray-700 text-center">
-          <p className="text-xl font-bold text-white">{customerCalls.length}</p>
-          <p className="text-gray-400 text-xs">Calls</p>
-        </div>
-        <div className="bg-gray-800 rounded-lg p-3 border border-gray-700 text-center">
-          <p className="text-xl font-bold text-white">{customerAppointments.length}</p>
-          <p className="text-gray-400 text-xs">Appts</p>
-        </div>
-        <div className="bg-gray-800 rounded-lg p-3 border border-gray-700 text-center">
-          <p className="text-xl font-bold text-white">{notes.length}</p>
-          <p className="text-gray-400 text-xs">Notes</p>
-        </div>
-      </div>
+  const renderOverviewTab = (customerAppointments) => {
+    // Most recent appointment — find the one with the latest date
+    const sortedApts = [...customerAppointments].sort((a, b) =>
+      (b.date || '').localeCompare(a.date || '')
+    );
+    const mostRecentApt = sortedApts[0] || null;
 
-      {/* Quick Add Note */}
-      <div className="bg-gray-800 rounded-lg p-3 border border-gray-700">
-        <p className="text-sm font-medium text-white mb-2">Quick Note</p>
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={newNote}
-            onChange={e => setNewNote(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleAddNote()}
-            placeholder="Add a note..."
-            className="flex-1 px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
-          />
-          <button
-            onClick={handleAddNote}
-            disabled={!newNote.trim() || savingNote}
-            className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm"
-          >
-            Add
-          </button>
-        </div>
-      </div>
+    return (
+      <div className="space-y-3">
+        {/* Most Recent Appointment — visible without scrolling */}
+        {mostRecentApt && (
+          <div className="bg-gray-800 rounded-lg p-3 border border-blue-800/50">
+            <p className="text-xs text-blue-400 font-medium mb-1">Most Recent Appointment</p>
+            <p className="text-white text-sm font-medium">{mostRecentApt.service || 'Appointment'}</p>
+            <p className="text-gray-300 text-xs mt-0.5">
+              {formatDate(mostRecentApt.date)}
+              {mostRecentApt.time ? ` · ${mostRecentApt.time}` : ''}
+            </p>
+            {mostRecentApt.address && (
+              <p className="text-gray-400 text-xs mt-0.5">{normalizeForDisplay(mostRecentApt.address)}</p>
+            )}
+          </div>
+        )}
 
-      {/* Pending Reminders */}
-      {reminders.filter(r => !r.completed).length > 0 && (
-        <div className="bg-gray-800 rounded-lg p-3 border border-gray-700">
-          <p className="text-sm font-medium text-white mb-2 flex items-center gap-2">
-            <Bell className="w-4 h-4 text-yellow-400" />
-            Pending Reminders
-          </p>
-          <div className="space-y-2">
-            {reminders.filter(r => !r.completed).slice(0, 3).map(r => (
-              <div key={r.id} className="flex items-center gap-2 text-sm">
-                <button
-                  onClick={() => handleToggleReminder(r)}
-                  className="w-4 h-4 rounded border-2 border-gray-500 flex-shrink-0 hover:bg-gray-700"
-                />
-                <span className="text-white text-xs flex-1">{r.title}</span>
-                <span className={`text-xs ${r.due_date <= today ? 'text-red-400' : 'text-gray-500'}`}>
-                  {formatDate(r.due_date)}
-                </span>
-              </div>
-            ))}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-gray-800 rounded-lg p-3 border border-gray-700 text-center">
+            <p className="text-xl font-bold text-white">{customerAppointments.length}</p>
+            <p className="text-gray-400 text-xs">Appts</p>
+          </div>
+          <div className="bg-gray-800 rounded-lg p-3 border border-gray-700 text-center">
+            <p className="text-xl font-bold text-white">{notes.length}</p>
+            <p className="text-gray-400 text-xs">Notes</p>
           </div>
         </div>
-      )}
 
-      {/* Recent Notes */}
-      {notes.length > 0 && (
+        {/* Quick Add Note */}
         <div className="bg-gray-800 rounded-lg p-3 border border-gray-700">
-          <p className="text-sm font-medium text-white mb-2">Recent Notes</p>
-          <div className="space-y-2">
-            {notes.slice(0, 3).map(note => (
-              <div key={note.id} className="p-2 bg-gray-750 rounded text-xs">
-                <p className="text-white">{note.note}</p>
-                <p className="text-gray-500 mt-1">{formatTimestamp(note.created_at)}</p>
-              </div>
-            ))}
+          <p className="text-sm font-medium text-white mb-2">Quick Note</p>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={newNote}
+              onChange={e => setNewNote(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleAddNote()}
+              placeholder="Add a note..."
+              className="flex-1 px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
+            />
+            <button
+              onClick={handleAddNote}
+              disabled={!newNote.trim() || savingNote}
+              className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm"
+            >
+              Add
+            </button>
           </div>
         </div>
-      )}
-    </div>
-  );
+
+        {/* Pending Reminders */}
+        {reminders.filter(r => !r.completed).length > 0 && (
+          <div className="bg-gray-800 rounded-lg p-3 border border-gray-700">
+            <p className="text-sm font-medium text-white mb-2 flex items-center gap-2">
+              <Bell className="w-4 h-4 text-yellow-400" />
+              Pending Reminders
+            </p>
+            <div className="space-y-2">
+              {reminders.filter(r => !r.completed).slice(0, 3).map(r => (
+                <div key={r.id} className="flex items-center gap-2 text-sm">
+                  <button
+                    onClick={() => handleToggleReminder(r)}
+                    className="w-4 h-4 rounded border-2 border-gray-500 flex-shrink-0 hover:bg-gray-700"
+                  />
+                  <span className="text-white text-xs flex-1">{r.title}</span>
+                  <span className={`text-xs ${r.due_date <= today ? 'text-red-400' : 'text-gray-500'}`}>
+                    {formatDate(r.due_date)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Recent Notes */}
+        {notes.length > 0 && (
+          <div className="bg-gray-800 rounded-lg p-3 border border-gray-700">
+            <p className="text-sm font-medium text-white mb-2">Recent Notes</p>
+            <div className="space-y-2">
+              {notes.slice(0, 3).map(note => (
+                <div key={note.id} className="p-2 bg-gray-750 rounded text-xs">
+                  <p className="text-white">{note.note}</p>
+                  <p className="text-gray-500 mt-1">{formatTimestamp(note.created_at)}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const renderNotesTab = () => (
     <div className="space-y-3">
@@ -987,31 +1000,6 @@ const Customers = ({ clientData, callLogs, appointments, onReminderCountChange }
     </div>
   );
 
-  const renderCallsTab = (customerCalls) => (
-    <div className="space-y-2">
-      {customerCalls.length === 0 ? (
-        <div className="text-center py-8">
-          <Phone className="w-8 h-8 text-gray-600 mx-auto mb-2" />
-          <p className="text-gray-400 text-sm">No call history</p>
-        </div>
-      ) : (
-        customerCalls.map(call => (
-          <div key={call.id} className="bg-gray-800 rounded-lg p-3 border border-gray-700">
-            <div className="flex items-start justify-between mb-1">
-              <p className="text-white text-sm font-medium">{call.caller}</p>
-              <p className="text-gray-400 text-xs">{call.duration}</p>
-            </div>
-            <p className="text-gray-500 text-xs">{call.time}</p>
-            {call.call_summary && (
-              <p className="text-gray-300 text-xs mt-2">{call.call_summary}</p>
-            )}
-          </div>
-        ))
-      )}
-    </div>
-  );
-
-  // FIX 2: Use apt.source === 'manual' instead of apt.isManual
   const renderAppointmentsTab = (customerAppointments) => (
     <div className="space-y-2">
       {customerAppointments.length === 0 ? (
@@ -1031,7 +1019,7 @@ const Customers = ({ clientData, callLogs, appointments, onReminderCountChange }
               </span>
             </div>
             <p className="text-gray-300 text-xs">{formatDate(apt.date)} • {apt.time}</p>
-            {apt.address && <p className="text-gray-500 text-xs mt-1">{apt.address}</p>}
+            {apt.address && <p className="text-gray-500 text-xs mt-1">{normalizeForDisplay(apt.address)}</p>}
           </div>
         ))
       )}
@@ -1102,13 +1090,13 @@ const Customers = ({ clientData, callLogs, appointments, onReminderCountChange }
         </div>
       )}
 
-      {/* Search and Filter */}
+      {/* Search and Tag Filter */}
       <div className="flex gap-2">
         <div className="flex-1 relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
             type="text"
-            placeholder="Search by name, address, or phone..."
+            placeholder="Search by name or phone…"
             className="w-full pl-9 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 text-sm"
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
@@ -1146,15 +1134,19 @@ const Customers = ({ clientData, callLogs, appointments, onReminderCountChange }
           </p>
           {!searchTerm && !filterTag && (
             <p className="text-gray-500 text-xs mt-1">
-              Customers are automatically created from incoming calls
+              Customers are automatically created from appointments
             </p>
           )}
         </div>
       ) : (
         <div className="space-y-2">
           {filteredCustomers.map(customer => {
-            const customerCallCount = getCustomerCalls(customer).length;
-            const customerAptCount = getCustomerAppointments(customer).length;
+            const customerApts = getCustomerAppointments(customer);
+            const aptCount = customerApts.length;
+            const lastAptDate = getLastAptDate(customer);
+            // Filter system tags from card display
+            const displayTags = (customer.tags || []).filter(t => !SYSTEM_TAGS.has(t));
+
             return (
               <div
                 key={customer.id}
@@ -1162,28 +1154,31 @@ const Customers = ({ clientData, callLogs, appointments, onReminderCountChange }
                 className="bg-gray-800 rounded-lg p-3 border border-gray-700 cursor-pointer hover:bg-gray-750 transition-colors"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-blue-600/80 flex items-center justify-center flex-shrink-0">
-                    <span className="text-white font-medium text-sm">
-                      {customer.name?.charAt(0)?.toUpperCase() || '?'}
-                    </span>
-                  </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-white text-sm font-medium truncate">{customer.name}</p>
                     {customer.address && (
-                      <p className="text-gray-300 text-xs truncate mt-0.5">{customer.address}</p>
+                      <p className="text-gray-300 text-xs truncate mt-0.5">
+                        {normalizeForDisplay(customer.address)}
+                      </p>
                     )}
-                    <div className="flex items-center gap-3 mt-0.5">
-                      {customer.phone && (
-                        <p className="text-gray-400 text-xs truncate">{customer.phone}</p>
+                    {customer.phone && (
+                      <p className="text-gray-400 text-xs mt-0.5">{customer.phone}</p>
+                    )}
+                    <div className="flex items-center gap-1.5 mt-1">
+                      {lastAptDate && (
+                        <p className="text-blue-400 text-xs">
+                          Last appt: {formatDate(lastAptDate)}
+                        </p>
                       )}
-                      <div className="flex items-center gap-2 text-xs text-gray-500">
-                        {customerCallCount > 0 && <span>{customerCallCount} call{customerCallCount !== 1 ? 's' : ''}</span>}
-                        {customerAptCount > 0 && <span>{customerAptCount} appt{customerAptCount !== 1 ? 's' : ''}</span>}
-                      </div>
+                      {aptCount > 0 && (
+                        <p className="text-gray-500 text-xs">
+                          · {aptCount} appt{aptCount !== 1 ? 's' : ''}
+                        </p>
+                      )}
                     </div>
-                    {customer.tags?.length > 0 && (
+                    {displayTags.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-1.5">
-                        {customer.tags.slice(0, 3).map(tag => {
+                        {displayTags.slice(0, 3).map(tag => {
                           const color = getTagColor(tag);
                           return (
                             <span
@@ -1194,8 +1189,8 @@ const Customers = ({ clientData, callLogs, appointments, onReminderCountChange }
                             </span>
                           );
                         })}
-                        {customer.tags.length > 3 && (
-                          <span className="text-gray-500 text-[10px]">+{customer.tags.length - 3}</span>
+                        {displayTags.length > 3 && (
+                          <span className="text-gray-500 text-[10px]">+{displayTags.length - 3}</span>
                         )}
                       </div>
                     )}
