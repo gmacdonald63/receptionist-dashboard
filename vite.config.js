@@ -9,8 +9,8 @@ export default defineConfig({
       registerType: 'prompt',
       includeAssets: ['favicon.ico', 'apple-touch-icon-180x180.png'],
       manifest: {
-        name: 'AI Receptionist Dashboard',
-        short_name: 'Receptionist',
+        name: 'Reliant Support',
+        short_name: 'Reliant',
         description: 'Manage AI voice receptionist calls, appointments, and customers',
         start_url: '/',
         display: 'standalone',
