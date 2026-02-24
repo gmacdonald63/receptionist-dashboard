@@ -6,6 +6,8 @@ import Login from './Login';
 import Admin from './Admin';
 import ResetPassword from './ResetPassword';
 import Customers from './Customers';
+import InstallPrompt from './InstallPrompt';
+import UpdatePrompt from './UpdatePrompt';
 import logo from './assets/RELIANT SUPPORT LOGO.svg';
 
 const App = () => {
@@ -1055,6 +1057,9 @@ const App = () => {
 
   return (
     <div className="min-h-screen bg-gray-900 pb-20">
+      <InstallPrompt />
+      <UpdatePrompt />
+
       {/* Header */}
       <header className="bg-gray-800 border-b border-gray-700 px-4 sticky top-0 z-50 flex items-center justify-between" style={{ height: '72px' }}>
         <div className="flex items-center gap-2">
