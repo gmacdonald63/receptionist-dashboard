@@ -1,8 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const BUFFER_MINS = 120; // 2-hour padding between appointments
-const END_OF_DAY  = 22 * 60; // Don't suggest slots past 10:00 PM
+const BUFFER_MINS  = 120; // 2-hour padding between appointments
+const START_OF_DAY = 8  * 60; // Don't suggest slots before 8:00 AM
+const END_OF_DAY   = 22 * 60; // Don't suggest slots past 10:00 PM
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -11,6 +12,7 @@ const CORS_HEADERS = {
 };
 
 // "HH:MM" or "HH:MM:SS" → minutes since midnight
+// parts[2] (seconds) is intentionally ignored — Postgres TIME columns return HH:MM:SS
 function toMinutes(timeStr: string): number {
   const parts = timeStr.split(":");
   return parseInt(parts[0]) * 60 + parseInt(parts[1]);
@@ -23,9 +25,27 @@ function fromMinutes(mins: number): string {
   return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
 }
 
-// Accept "10:00 AM", "2:00 PM", "14:00", "14:00:00" → "HH:MM"
+// Normalize a variety of time formats → "HH:MM" (24-hour)
+// Accepts: "10:00 AM", "2 PM", "2:00 PM", "14:00", "14:00:00", "noon", "midnight"
 function normalize(timeStr: string): string | null {
-  const match12 = timeStr.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  const cleaned = timeStr.trim();
+
+  // "noon" / "midnight"
+  if (/^noon$/i.test(cleaned)) return "12:00";
+  if (/^midnight$/i.test(cleaned)) return "00:00";
+
+  // "2 PM", "10 AM" (no colon, no minutes — common in voice agent output)
+  const matchNoMinutes = cleaned.match(/^(\d{1,2})\s*(AM|PM)$/i);
+  if (matchNoMinutes) {
+    let h = parseInt(matchNoMinutes[1]);
+    const period = matchNoMinutes[2].toUpperCase();
+    if (period === "AM" && h === 12) h = 0;
+    if (period === "PM" && h !== 12) h += 12;
+    return `${h.toString().padStart(2, "0")}:00`;
+  }
+
+  // "2:00 PM", "10:30 AM"
+  const match12 = cleaned.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
   if (match12) {
     let h = parseInt(match12[1]);
     const m = match12[2];
@@ -34,8 +54,11 @@ function normalize(timeStr: string): string | null {
     if (period === "PM" && h !== 12) h += 12;
     return `${h.toString().padStart(2, "0")}:${m}`;
   }
-  const match24 = timeStr.trim().match(/^(\d{1,2}):(\d{2})/);
+
+  // "14:00", "14:00:00"
+  const match24 = cleaned.match(/^(\d{1,2}):(\d{2})/);
   if (match24) return `${match24[1].padStart(2, "0")}:${match24[2]}`;
+
   return null;
 }
 
@@ -53,7 +76,15 @@ function toDisplayTime(hhmm: string): string {
 serve(async (req) => {
   // CORS preflight
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: CORS_HEADERS });
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
+  }
+
+  // Only accept POST
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
+      status: 405,
+      headers: { "Content-Type": "application/json", "Allow": "POST", ...CORS_HEADERS },
+    });
   }
 
   try {
@@ -126,15 +157,17 @@ serve(async (req) => {
     const isConflict = (t: number) => bookedMins.some((b) => Math.abs(t - b) < BUFFER_MINS);
     const isAvailable = !isConflict(proposedMins);
 
-    // Find the next open slot: start from the end of the last conflicting window
+    // Find the next open slot after the last conflict
     let nextOpen: string | null = null;
     let nextOpenDisplay: string | null = null;
     if (!isAvailable) {
       const conflicting    = bookedMins.filter((b) => Math.abs(proposedMins - b) < BUFFER_MINS);
-      const latestConflict = Math.max(...conflicting);
+      // Use reduce instead of spread to avoid call stack overflow on large arrays
+      const latestConflict = conflicting.reduce((max, b) => Math.max(max, b), -Infinity);
       const firstCandidate = latestConflict + BUFFER_MINS;
+      const searchStart    = Math.max(firstCandidate, START_OF_DAY);
 
-      for (let t = firstCandidate; t <= END_OF_DAY; t += 30) {
+      for (let t = searchStart; t <= END_OF_DAY; t += 30) {
         if (!isConflict(t)) {
           nextOpen        = fromMinutes(t);
           nextOpenDisplay = toDisplayTime(nextOpen);
