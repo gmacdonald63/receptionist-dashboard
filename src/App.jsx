@@ -8,6 +8,14 @@ import ResetPassword from './ResetPassword';
 import Customers from './Customers';
 import InstallPrompt from './InstallPrompt';
 import UpdatePrompt from './UpdatePrompt';
+import ClockPicker from './ClockPicker';
+
+const formatPhone = (raw) => {
+  const digits = raw.replace(/\D/g, '').slice(0, 10);
+  if (digits.length < 4) return digits;
+  if (digits.length < 7) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+};
 import logo from './assets/RELIANT SUPPORT LOGO.svg';
 
 const App = () => {
@@ -1131,55 +1139,8 @@ const App = () => {
                   type="tel"
                   required
                   value={addForm.phone}
-                  onChange={e => setAddForm(f => ({ ...f, phone: e.target.value }))}
+                  onChange={e => setAddForm(f => ({ ...f, phone: formatPhone(e.target.value) }))}
                   placeholder="(555) 555-5555"
-                  className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="block text-gray-400 text-sm mb-1">Date <span className="text-red-400">*</span></label>
-                <input
-                  type="date"
-                  required
-                  value={addForm.date}
-                  onChange={e => setAddForm(f => ({ ...f, date: e.target.value }))}
-                  className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 text-sm"
-                  style={{ colorScheme: 'dark' }}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-gray-400 text-sm mb-1">Start Time <span className="text-red-400">*</span></label>
-                  <input
-                    type="time"
-                    required
-                    value={addForm.startTime}
-                    onChange={e => setAddForm(f => ({ ...f, startTime: e.target.value }))}
-                    className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 text-sm"
-                    style={{ colorScheme: 'dark' }}
-                  />
-                </div>
-                <div>
-                  <label className="block text-gray-400 text-sm mb-1">End Time</label>
-                  <input
-                    type="time"
-                    value={addForm.endTime}
-                    onChange={e => setAddForm(f => ({ ...f, endTime: e.target.value }))}
-                    className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 text-sm"
-                    style={{ colorScheme: 'dark' }}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-gray-400 text-sm mb-1">Service Type</label>
-                <input
-                  type="text"
-                  value={addForm.service}
-                  onChange={e => setAddForm(f => ({ ...f, service: e.target.value }))}
-                  placeholder="e.g. HVAC Repair, Plumbing"
                   className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
                 />
               </div>
@@ -1234,6 +1195,44 @@ const App = () => {
                     className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-gray-400 text-sm mb-1">Date <span className="text-red-400">*</span></label>
+                <input
+                  type="date"
+                  required
+                  value={addForm.date}
+                  onChange={e => setAddForm(f => ({ ...f, date: e.target.value }))}
+                  className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 text-sm"
+                  style={{ colorScheme: 'dark' }}
+                />
+              </div>
+
+              <ClockPicker
+                label="Start Time"
+                required
+                value={addForm.startTime}
+                onChange={val => setAddForm(f => ({ ...f, startTime: val }))}
+                placeholder="Select start time"
+              />
+
+              <ClockPicker
+                label="End Time"
+                value={addForm.endTime}
+                onChange={val => setAddForm(f => ({ ...f, endTime: val }))}
+                placeholder="Select end time"
+              />
+
+              <div>
+                <label className="block text-gray-400 text-sm mb-1">Service Type</label>
+                <input
+                  type="text"
+                  value={addForm.service}
+                  onChange={e => setAddForm(f => ({ ...f, service: e.target.value }))}
+                  placeholder="e.g. HVAC Repair, Plumbing"
+                  className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
+                />
               </div>
 
               <div>
