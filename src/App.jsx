@@ -55,7 +55,7 @@ const App = () => {
   // Add appointment modal state
   const [showAddModal, setShowAddModal] = useState(false);
   const [addForm, setAddForm] = useState({
-    name: '', phone: '', date: '', startTime: '', endTime: '',
+    name: '', phone: '', date: '', time: '',
     service: '', address: '', city: '', state: '', zip: '', notes: ''
   });
   const [savingAppointment, setSavingAppointment] = useState(false);
@@ -223,21 +223,10 @@ const App = () => {
 
   const handleAddAppointment = async (e) => {
     e.preventDefault();
-    if (!addForm.name || !addForm.phone || !addForm.date || !addForm.startTime || !addForm.address || !addForm.city || !addForm.state || !addForm.zip) return;
+    if (!addForm.name || !addForm.phone || !addForm.date || !addForm.time || !addForm.address || !addForm.city || !addForm.state || !addForm.zip) return;
 
     setSavingAppointment(true);
     try {
-      // Calculate end_time from start_time + client duration if not provided
-      let endTime = addForm.endTime || null;
-      if (!endTime && clientData?.appointment_duration) {
-        const [hours, minutes] = addForm.startTime.split(':').map(Number);
-        const startMinutes = hours * 60 + minutes;
-        const endMinutes = startMinutes + (clientData.appointment_duration || 120);
-        const endHours = Math.floor(endMinutes / 60);
-        const endMins = endMinutes % 60;
-        endTime = `${String(endHours).padStart(2, '0')}:${String(endMins).padStart(2, '0')}`;
-      }
-
       const { data, error } = await supabase
         .from('appointments')
         .insert({
@@ -245,8 +234,8 @@ const App = () => {
           caller_name: addForm.name,
           caller_number: addForm.phone,
           date: addForm.date,
-          start_time: addForm.startTime,
-          end_time: endTime || addForm.startTime,
+          start_time: addForm.time,
+          end_time: addForm.time,
           service_type: addForm.service || null,
           address: addForm.address,
           city: addForm.city,
@@ -284,7 +273,7 @@ const App = () => {
       const first = aptDate.getDate() - aptDate.getDay();
       setCurrentWeekStart(new Date(aptDate.getFullYear(), aptDate.getMonth(), first));
 
-      setAddForm({ name: '', phone: '', date: '', startTime: '', endTime: '', service: '', address: '', city: '', state: '', zip: '', notes: '' });
+      setAddForm({ name: '', phone: '', date: '', time: '', service: '', address: '', city: '', state: '', zip: '', notes: '' });
       setShowAddModal(false);
 
       // Re-fetch to show the new appointment
@@ -1210,18 +1199,11 @@ const App = () => {
               </div>
 
               <ClockPicker
-                label="Start Time"
+                label="Appointment Time"
                 required
-                value={addForm.startTime}
-                onChange={val => setAddForm(f => ({ ...f, startTime: val }))}
-                placeholder="Select start time"
-              />
-
-              <ClockPicker
-                label="End Time"
-                value={addForm.endTime}
-                onChange={val => setAddForm(f => ({ ...f, endTime: val }))}
-                placeholder="Select end time"
+                value={addForm.time}
+                onChange={val => setAddForm(f => ({ ...f, time: val }))}
+                placeholder="Select appointment time"
               />
 
               <div>
