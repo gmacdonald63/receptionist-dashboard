@@ -1,8 +1,14 @@
-import { serve } from "https://deno.land/std/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const BUFFER_MINS = 120; // 2-hour padding between appointments
 const END_OF_DAY  = 22 * 60; // Don't suggest slots past 10:00 PM
+
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
 
 // "HH:MM" or "HH:MM:SS" → minutes since midnight
 function toMinutes(timeStr: string): number {
@@ -47,21 +53,23 @@ function toDisplayTime(hhmm: string): string {
 serve(async (req) => {
   // CORS preflight
   if (req.method === "OPTIONS") {
-    return new Response(null, {
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-      },
-    });
+    return new Response(null, { headers: CORS_HEADERS });
   }
 
   try {
-    const { date, time } = await req.json();
+    const { date, time, agent_id } = await req.json();
 
     if (!date || !time) {
       return new Response(JSON.stringify({ error: "date and time are required" }), {
         status: 400,
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+      });
+    }
+
+    if (!agent_id) {
+      return new Response(JSON.stringify({ error: "agent_id is required" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json", ...CORS_HEADERS },
       });
     }
 
@@ -69,7 +77,7 @@ serve(async (req) => {
     if (!normalizedTime) {
       return new Response(JSON.stringify({ error: `Cannot parse time: "${time}"` }), {
         status: 400,
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...CORS_HEADERS },
       });
     }
 
@@ -78,10 +86,28 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Fetch all non-cancelled appointments for the given date
+    // Resolve agent_id → client_id so we only check this client's calendar
+    const { data: clientRow, error: clientError } = await supabase
+      .from("clients")
+      .select("id")
+      .eq("retell_agent_id", agent_id)
+      .single();
+
+    if (clientError || !clientRow) {
+      console.error("🚨 Client lookup failed for agent_id:", agent_id, clientError);
+      return new Response(JSON.stringify({ error: "unknown agent_id" }), {
+        status: 404,
+        headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+      });
+    }
+
+    const clientId = clientRow.id;
+
+    // Fetch non-cancelled appointments for this client on the given date only
     const { data: appointments, error } = await supabase
       .from("appointments")
       .select("start_time")
+      .eq("client_id", clientId)
       .eq("date", date)
       .neq("status", "cancelled");
 
@@ -89,7 +115,7 @@ serve(async (req) => {
       console.error("🚨 DB error:", JSON.stringify(error));
       return new Response(JSON.stringify({ error: "database error" }), {
         status: 500,
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...CORS_HEADERS },
       });
     }
 
@@ -104,7 +130,7 @@ serve(async (req) => {
     let nextOpen: string | null = null;
     let nextOpenDisplay: string | null = null;
     if (!isAvailable) {
-      const conflicting   = bookedMins.filter((b) => Math.abs(proposedMins - b) < BUFFER_MINS);
+      const conflicting    = bookedMins.filter((b) => Math.abs(proposedMins - b) < BUFFER_MINS);
       const latestConflict = Math.max(...conflicting);
       const firstCandidate = latestConflict + BUFFER_MINS;
 
@@ -119,28 +145,25 @@ serve(async (req) => {
 
     const bookedDisplay = bookedMins.map((m) => toDisplayTime(fromMinutes(m)));
 
-    console.log(`📅 ${date} ${normalizedTime} → available: ${isAvailable}, next_open: ${nextOpen}`);
+    console.log(`📅 [${agent_id}] ${date} ${normalizedTime} → available: ${isAvailable}, next_open: ${nextOpen}`);
 
     return new Response(
       JSON.stringify({
-        available:         isAvailable,
-        proposed_time:     toDisplayTime(normalizedTime),
+        available:      isAvailable,
+        proposed_time:  toDisplayTime(normalizedTime),
         date,
-        next_open:         nextOpenDisplay,
-        booked_times:      bookedDisplay,
+        next_open:      nextOpenDisplay,
+        booked_times:   bookedDisplay,
       }),
       {
-        headers: {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
-        },
+        headers: { "Content-Type": "application/json", ...CORS_HEADERS },
       }
     );
   } catch (err) {
     console.error("🚨 Unexpected error:", err);
     return new Response(JSON.stringify({ error: "unexpected error" }), {
       status: 500,
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...CORS_HEADERS },
     });
   }
 });
