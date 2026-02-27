@@ -1199,7 +1199,7 @@ const App = () => {
               </div>
 
               <ClockPicker
-                label="Appointment Time"
+                label="Time"
                 required
                 value={addForm.time}
                 onChange={val => setAddForm(f => ({ ...f, time: val }))}
