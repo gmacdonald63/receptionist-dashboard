@@ -127,7 +127,40 @@ export function normalizePhone(phone) {
 }
 
 /**
- * Filters customers by name (substring) or phone (digits-only match).
+ * Splits a full name string into { first_name, last_name }.
+ * "John Smith" → { first_name: "John", last_name: "Smith" }
+ * "John David Smith" → { first_name: "John", last_name: "David Smith" }
+ * "John" → { first_name: "John", last_name: "" }
+ * @param {string|null|undefined} fullName
+ * @returns {{ first_name: string, last_name: string }}
+ */
+export function splitName(fullName) {
+  if (!fullName || typeof fullName !== 'string') return { first_name: '', last_name: '' };
+  const trimmed = fullName.trim();
+  const spaceIdx = trimmed.indexOf(' ');
+  if (spaceIdx === -1) return { first_name: trimmed, last_name: '' };
+  return {
+    first_name: trimmed.slice(0, spaceIdx),
+    last_name: trimmed.slice(spaceIdx + 1).trim(),
+  };
+}
+
+/**
+ * Returns a display-friendly full name from first_name/last_name fields.
+ * Falls back to the legacy name field if first/last aren't populated.
+ * @param {Object} customer
+ * @returns {string}
+ */
+export function getDisplayName(customer) {
+  if (!customer) return '';
+  const first = customer.first_name?.trim() || '';
+  const last = customer.last_name?.trim() || '';
+  if (first || last) return `${first} ${last}`.trim();
+  return customer.name?.trim() || '';
+}
+
+/**
+ * Filters customers by first name, last name, or phone (digits-only match).
  * @param {Array} customers
  * @param {string} query
  * @returns {Array}
@@ -137,7 +170,10 @@ export function filterCustomers(customers, query) {
   const q = query.trim().toLowerCase();
   const qDigits = q.replace(/\D/g, '');
   return customers.filter(customer => {
-    if (customer.name?.toLowerCase().includes(q)) return true;
+    const fullName = getDisplayName(customer).toLowerCase();
+    if (fullName.includes(q)) return true;
+    if (customer.first_name?.toLowerCase().includes(q)) return true;
+    if (customer.last_name?.toLowerCase().includes(q)) return true;
     if (qDigits.length >= 3) {
       const custDigits = normalizePhone(customer.phone);
       if (custDigits && custDigits.includes(qDigits)) return true;
@@ -152,6 +188,8 @@ export function filterCustomers(customers, query) {
  */
 export function buildMergePatch(existing, incoming) {
   const patch = {};
+  if (!existing.first_name && incoming.first_name) patch.first_name = incoming.first_name;
+  if (!existing.last_name && incoming.last_name) patch.last_name = incoming.last_name;
   if (!existing.name && incoming.name) patch.name = incoming.name;
   if (!existing.phone && incoming.phone) patch.phone = incoming.phone;
   if (!existing.address && incoming.address) {
@@ -201,6 +239,9 @@ export async function syncCustomersFromAppointments(
 
     if (!rawName && !rawPhone && !rawAddress) continue;
 
+    // Split name into first/last for customer record
+    const { first_name, last_name } = splitName(rawName);
+
     const normPhone = normalizePhone(rawPhone);
     const normAddr  = normalizeAddress(rawAddress);
     const syncKey   = normPhone || normAddr || rawName.toLowerCase();
@@ -226,7 +267,10 @@ export async function syncCustomersFromAppointments(
     if (!existing && normAddr) existing = addressIndex.get(normAddr) ?? null;
 
     if (existing) {
-      const patch = buildMergePatch(existing, { name: rawName, phone: rawPhone, address: rawAddress });
+      const patch = buildMergePatch(existing, {
+        name: rawName, first_name, last_name,
+        phone: rawPhone, address: rawAddress
+      });
       if (latestDate && (!existing.last_appointment_date || latestDate > existing.last_appointment_date)) {
         patch.last_appointment_date = latestDate;
       }
@@ -243,6 +287,8 @@ export async function syncCustomersFromAppointments(
     } else {
       const { data: inserted, error } = await supabase.from('customers').insert({
         client_id: clientId,
+        first_name: first_name || null,
+        last_name: last_name || null,
         name: rawName || null,
         phone: rawPhone || null,
         email: null,

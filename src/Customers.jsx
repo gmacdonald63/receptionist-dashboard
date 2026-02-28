@@ -11,6 +11,7 @@ import {
   normalizePhone,
   filterCustomers,
   syncCustomersFromAppointments,
+  getDisplayName,
 } from './utils/addressNormalization';
 
 const TAG_COLORS = [
@@ -45,7 +46,7 @@ const Customers = ({ clientData, appointments, onReminderCountChange }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [customerForm, setCustomerForm] = useState({
-    name: '', phone: '', email: '', address: '', city: '', state: '', zip: '', tags: []
+    first_name: '', last_name: '', phone: '', email: '', address: '', city: '', state: '', zip: '', tags: []
   });
   const [tagInput, setTagInput] = useState('');
   const [saving, setSaving] = useState(false);
@@ -128,7 +129,7 @@ const Customers = ({ clientData, appointments, onReminderCountChange }) => {
     try {
       const { data, error } = await supabase
         .from('follow_up_reminders')
-        .select('*, customers(name)')
+        .select('*, customers(name, first_name, last_name)')
         .eq('client_id', clientData.id)
         .order('due_date', { ascending: true });
 
@@ -144,7 +145,7 @@ const Customers = ({ clientData, appointments, onReminderCountChange }) => {
     try {
       const { data: existingCustomers } = await supabase
         .from('customers')
-        .select('id, phone, address')
+        .select('id, phone, address, name, first_name, last_name')
         .eq('client_id', clientData.id);
 
       const syncResult = await syncCustomersFromAppointments(
@@ -202,15 +203,19 @@ const Customers = ({ clientData, appointments, onReminderCountChange }) => {
 
   const handleSaveCustomer = async (e) => {
     e.preventDefault();
-    if (!customerForm.name.trim()) return;
+    if (!customerForm.last_name.trim()) return;
     setSaving(true);
+
+    const fullName = `${customerForm.first_name.trim()} ${customerForm.last_name.trim()}`.trim();
 
     try {
       if (editingCustomer) {
         const { error } = await supabase
           .from('customers')
           .update({
-            name: customerForm.name.trim(),
+            first_name: customerForm.first_name.trim(),
+            last_name: customerForm.last_name.trim(),
+            name: fullName,
             phone: customerForm.phone.trim(),
             email: customerForm.email.trim(),
             address: customerForm.address.trim(),
@@ -223,31 +228,34 @@ const Customers = ({ clientData, appointments, onReminderCountChange }) => {
 
         if (error) throw error;
 
+        const updated = {
+          first_name: customerForm.first_name.trim(),
+          last_name: customerForm.last_name.trim(),
+          name: fullName,
+          phone: customerForm.phone.trim(),
+          email: customerForm.email.trim(),
+          address: customerForm.address.trim(),
+          city: customerForm.city.trim(),
+          state: customerForm.state.trim().toUpperCase(),
+          zip: customerForm.zip.trim(),
+          tags: customerForm.tags,
+        };
+
         setCustomers(prev => prev.map(c =>
-          c.id === editingCustomer.id
-            ? { ...c, name: customerForm.name.trim(), phone: customerForm.phone.trim(), email: customerForm.email.trim(), address: customerForm.address.trim(), city: customerForm.city.trim(), state: customerForm.state.trim().toUpperCase(), zip: customerForm.zip.trim(), tags: customerForm.tags }
-            : c
+          c.id === editingCustomer.id ? { ...c, ...updated } : c
         ));
 
         if (selectedCustomer?.id === editingCustomer.id) {
-          setSelectedCustomer(prev => ({
-            ...prev,
-            name: customerForm.name.trim(),
-            phone: customerForm.phone.trim(),
-            email: customerForm.email.trim(),
-            address: customerForm.address.trim(),
-            city: customerForm.city.trim(),
-            state: customerForm.state.trim().toUpperCase(),
-            zip: customerForm.zip.trim(),
-            tags: customerForm.tags
-          }));
+          setSelectedCustomer(prev => ({ ...prev, ...updated }));
         }
       } else {
         const { data, error } = await supabase
           .from('customers')
           .insert({
             client_id: clientData.id,
-            name: customerForm.name.trim(),
+            first_name: customerForm.first_name.trim(),
+            last_name: customerForm.last_name.trim(),
+            name: fullName,
             phone: customerForm.phone.trim(),
             email: customerForm.email.trim(),
             address: customerForm.address.trim(),
@@ -339,7 +347,7 @@ const Customers = ({ clientData, appointments, onReminderCountChange }) => {
 
       if (error) throw error;
       setReminders(prev => [...prev, data].sort((a, b) => a.due_date.localeCompare(b.due_date)));
-      setAllReminders(prev => [...prev, { ...data, customers: { name: selectedCustomer.name } }]);
+      setAllReminders(prev => [...prev, { ...data, customers: { first_name: selectedCustomer.first_name, last_name: selectedCustomer.last_name, name: selectedCustomer.name } }]);
       setReminderForm({ title: '', note: '', due_date: '', due_time: '' });
       setShowAddReminder(false);
     } catch (err) {
@@ -381,14 +389,23 @@ const Customers = ({ clientData, appointments, onReminderCountChange }) => {
   const closeModal = () => {
     setShowAddModal(false);
     setEditingCustomer(null);
-    setCustomerForm({ name: '', phone: '', email: '', address: '', city: '', state: '', zip: '', tags: [] });
+    setCustomerForm({ first_name: '', last_name: '', phone: '', email: '', address: '', city: '', state: '', zip: '', tags: [] });
     setTagInput('');
   };
 
   const openEditModal = (customer) => {
     setEditingCustomer(customer);
+    // Populate first/last from dedicated fields; fall back to splitting legacy name
+    let firstName = customer.first_name || '';
+    let lastName = customer.last_name || '';
+    if (!firstName && !lastName && customer.name) {
+      const parts = customer.name.trim().split(' ');
+      firstName = parts[0] || '';
+      lastName = parts.slice(1).join(' ') || '';
+    }
     setCustomerForm({
-      name: customer.name || '',
+      first_name: firstName,
+      last_name: lastName,
       phone: customer.phone || '',
       email: customer.email || '',
       address: customer.address || '',
@@ -416,7 +433,7 @@ const Customers = ({ clientData, appointments, onReminderCountChange }) => {
   const getCustomerAppointments = (customer) => {
     const custPhone = normalizePhone(customer.phone);
     const custAddr  = normalizeAddress(customer.address);
-    const custName  = (customer.name || '').trim().toLowerCase();
+    const custName  = getDisplayName(customer).trim().toLowerCase();
     if (!custPhone && !custAddr && !custName) return [];
     return appointments.filter(apt => {
       if (custPhone) {
@@ -498,7 +515,7 @@ const Customers = ({ clientData, appointments, onReminderCountChange }) => {
     if (phone) return lastAptByPhone.get(phone) || null;
     const addr = normalizeAddress(customer.address);
     if (addr) return lastAptByAddr.get(addr) || null;
-    const name = (customer.name || '').trim().toLowerCase();
+    const name = getDisplayName(customer).trim().toLowerCase();
     return (name && lastAptByName.get(name)) || null;
   };
 
@@ -511,7 +528,11 @@ const Customers = ({ clientData, appointments, onReminderCountChange }) => {
       if (dateA && dateB) return dateB.localeCompare(dateA); // most recent first
       if (dateA) return -1; // a has appointments, b doesn't → a first
       if (dateB) return 1;  // b has appointments, a doesn't → b first
-      return (a.name || '').localeCompare(b.name || ''); // both no appointments → alphabetical
+      // both no appointments → alphabetical by last name, then first name
+      const aLast = (a.last_name || a.name || '').toLowerCase();
+      const bLast = (b.last_name || b.name || '').toLowerCase();
+      if (aLast !== bLast) return aLast.localeCompare(bLast);
+      return (a.first_name || '').toLowerCase().localeCompare((b.first_name || '').toLowerCase());
     });
 
   // Reminders panel
@@ -605,8 +626,8 @@ const Customers = ({ clientData, appointments, onReminderCountChange }) => {
           <p className={`text-sm font-medium ${reminder.completed ? 'text-gray-500 line-through' : 'text-white'}`}>
             {reminder.title}
           </p>
-          {reminder.customers?.name && (
-            <p className="text-xs text-blue-400 mt-0.5">{reminder.customers.name}</p>
+          {(reminder.customers?.first_name || reminder.customers?.name) && (
+            <p className="text-xs text-blue-400 mt-0.5">{getDisplayName(reminder.customers)}</p>
           )}
           {reminder.note && (
             <p className="text-xs text-gray-400 mt-1">{reminder.note}</p>
@@ -656,11 +677,11 @@ const Customers = ({ clientData, appointments, onReminderCountChange }) => {
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
                 <span className="text-white font-semibold text-lg">
-                  {selectedCustomer.name?.charAt(0)?.toUpperCase() || '?'}
+                  {(selectedCustomer.first_name || selectedCustomer.name || '?').charAt(0).toUpperCase()}
                 </span>
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-white">{selectedCustomer.name}</h2>
+                <h2 className="text-lg font-semibold text-white">{getDisplayName(selectedCustomer)}</h2>
                 <p className="text-gray-400 text-xs">
                   Customer since {formatDate(selectedCustomer.created_at)}
                 </p>
@@ -1110,7 +1131,7 @@ const Customers = ({ clientData, appointments, onReminderCountChange }) => {
           <div className="mt-1.5 space-y-1">
             {dueReminders.slice(0, 2).map(r => (
               <p key={r.id} className="text-red-200/70 text-xs ml-6">
-                • {r.title} {r.customers?.name && `— ${r.customers.name}`}
+                • {r.title} {(r.customers?.first_name || r.customers?.name) && `— ${getDisplayName(r.customers)}`}
               </p>
             ))}
             {dueReminders.length > 2 && (
@@ -1128,7 +1149,7 @@ const Customers = ({ clientData, appointments, onReminderCountChange }) => {
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
             type="text"
-            placeholder="Search by name or phone…"
+            placeholder="Search by last name, first name, or phone…"
             className="w-full pl-9 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 text-sm"
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
@@ -1187,7 +1208,7 @@ const Customers = ({ clientData, appointments, onReminderCountChange }) => {
               >
                 <div className="flex items-center gap-3">
                   <div className="flex-1 min-w-0">
-                    <p className="text-white text-sm font-medium truncate">{customer.name}</p>
+                    <p className="text-white text-sm font-medium truncate">{getDisplayName(customer)}</p>
                     {customer.address && (
                       <p className="text-gray-300 text-xs truncate mt-0.5">
                         {normalizeForDisplay(customer.address)}
@@ -1252,16 +1273,28 @@ const Customers = ({ clientData, appointments, onReminderCountChange }) => {
           </div>
 
           <form onSubmit={handleSaveCustomer} className="p-4 space-y-4">
-            <div>
-              <label className="block text-gray-400 text-sm mb-1">Name <span className="text-red-400">*</span></label>
-              <input
-                type="text"
-                required
-                value={customerForm.name}
-                onChange={e => setCustomerForm(f => ({ ...f, name: e.target.value }))}
-                placeholder="Full name"
-                className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-gray-400 text-sm mb-1">First Name</label>
+                <input
+                  type="text"
+                  value={customerForm.first_name}
+                  onChange={e => setCustomerForm(f => ({ ...f, first_name: e.target.value }))}
+                  placeholder="First name"
+                  className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-gray-400 text-sm mb-1">Last Name <span className="text-red-400">*</span></label>
+                <input
+                  type="text"
+                  required
+                  value={customerForm.last_name}
+                  onChange={e => setCustomerForm(f => ({ ...f, last_name: e.target.value }))}
+                  placeholder="Last name"
+                  className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
+                />
+              </div>
             </div>
             <div>
               <label className="block text-gray-400 text-sm mb-1">Phone</label>

@@ -55,7 +55,7 @@ const App = () => {
   // Add appointment modal state
   const [showAddModal, setShowAddModal] = useState(false);
   const [addForm, setAddForm] = useState({
-    name: '', phone: '', date: '', time: '',
+    firstName: '', lastName: '', phone: '', date: '', time: '',
     service: '', address: '', city: '', state: '', zip: '', notes: ''
   });
   const [savingAppointment, setSavingAppointment] = useState(false);
@@ -223,15 +223,16 @@ const App = () => {
 
   const handleAddAppointment = async (e) => {
     e.preventDefault();
-    if (!addForm.name || !addForm.phone || !addForm.date || !addForm.time || !addForm.address || !addForm.city || !addForm.state || !addForm.zip) return;
+    if (!addForm.lastName || !addForm.phone || !addForm.date || !addForm.time || !addForm.address || !addForm.city || !addForm.state || !addForm.zip) return;
 
     setSavingAppointment(true);
+    const fullName = `${addForm.firstName.trim()} ${addForm.lastName.trim()}`.trim();
     try {
       const { data, error } = await supabase
         .from('appointments')
         .insert({
           client_id: clientData.id,
-          caller_name: addForm.name,
+          caller_name: fullName,
           caller_number: addForm.phone,
           date: addForm.date,
           start_time: addForm.time,
@@ -273,7 +274,7 @@ const App = () => {
       const first = aptDate.getDate() - aptDate.getDay();
       setCurrentWeekStart(new Date(aptDate.getFullYear(), aptDate.getMonth(), first));
 
-      setAddForm({ name: '', phone: '', date: '', time: '', service: '', address: '', city: '', state: '', zip: '', notes: '' });
+      setAddForm({ firstName: '', lastName: '', phone: '', date: '', time: '', service: '', address: '', city: '', state: '', zip: '', notes: '' });
       setShowAddModal(false);
 
       // Re-fetch to show the new appointment
@@ -1110,16 +1111,28 @@ const App = () => {
             </div>
 
             <form onSubmit={handleAddAppointment} className="p-4 space-y-4">
-              <div>
-                <label className="block text-gray-400 text-sm mb-1">Client Name <span className="text-red-400">*</span></label>
-                <input
-                  type="text"
-                  required
-                  value={addForm.name}
-                  onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))}
-                  placeholder="Full name"
-                  className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-gray-400 text-sm mb-1">First Name</label>
+                  <input
+                    type="text"
+                    value={addForm.firstName}
+                    onChange={e => setAddForm(f => ({ ...f, firstName: e.target.value }))}
+                    placeholder="First name"
+                    className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-400 text-sm mb-1">Last Name <span className="text-red-400">*</span></label>
+                  <input
+                    type="text"
+                    required
+                    value={addForm.lastName}
+                    onChange={e => setAddForm(f => ({ ...f, lastName: e.target.value }))}
+                    placeholder="Last name"
+                    className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
+                  />
+                </div>
               </div>
 
               <div>
