@@ -94,8 +94,10 @@ serve(async (req) => {
     const queryAgentId = url.searchParams.get("agent_id");
 
     const body = await req.json();
-    const { date, time } = body;
-    const agent_id = body.agent_id ?? queryAgentId;
+    // Retell sends tool parameters under body.args when args_at_root is false
+    const args = body.args ?? body;
+    const { date, time } = args;
+    const agent_id = args.agent_id ?? body.call?.agent_id ?? queryAgentId;
 
     if (!date || !time) {
       return new Response(JSON.stringify({ error: "date and time are required" }), {
