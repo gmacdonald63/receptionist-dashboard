@@ -88,7 +88,14 @@ serve(async (req) => {
   }
 
   try {
-    const { date, time, agent_id } = await req.json();
+    // agent_id can come from the URL query string (?agent_id=xxx) so it can be
+    // hardcoded in the Retell tool URL without needing a tool parameter for it.
+    const url = new URL(req.url);
+    const queryAgentId = url.searchParams.get("agent_id");
+
+    const body = await req.json();
+    const { date, time } = body;
+    const agent_id = body.agent_id ?? queryAgentId;
 
     if (!date || !time) {
       return new Response(JSON.stringify({ error: "date and time are required" }), {
@@ -98,7 +105,7 @@ serve(async (req) => {
     }
 
     if (!agent_id) {
-      return new Response(JSON.stringify({ error: "agent_id is required" }), {
+      return new Response(JSON.stringify({ error: "agent_id is required (pass in body or as ?agent_id= query param)" }), {
         status: 400,
         headers: { "Content-Type": "application/json", ...CORS_HEADERS },
       });
