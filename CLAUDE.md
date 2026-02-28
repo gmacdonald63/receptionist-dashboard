@@ -980,3 +980,59 @@ Tailwind CSS 3 with a dark theme. Custom color `gray-750` (`#2d3748`) is defined
 ### Deployment
 
 Deployed on Vercel. `vercel.json` configures SPA rewrites so all routes resolve to `index.html`.
+
+---
+
+## Infrastructure Reference
+
+Everything needed to pick up work in a new session without rediscovering anything.
+
+### Git
+- **Working branch:** `claude/dashboard-repo-setup-UvgMs`
+- Always develop and push to this branch. Never push to main without explicit instruction.
+
+### Supabase
+- **Project ref:** `zmppdmfdhknnwzwdfhwf`
+- **Project URL:** `https://zmppdmfdhknnwzwdfhwf.supabase.co`
+- **Anon key:** `sb_publishable_7zUX2xo79fHeCdQUVCSkRA_-YBdVfIj`
+- **Anon JWT** (for Authorization header): `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InptcHBkbWZkaGtubnd6d2RmaHdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk4MzQyMDYsImV4cCI6MjA4NTQxMDIwNn0.mXfuz8mEZhizFen78gUaakBDbrzANn4ZM1a7KuDiKJs`
+- **Personal access token:** _(not stored here for security — user provides at session start)_
+
+To deploy an Edge Function:
+```bash
+SUPABASE_ACCESS_TOKEN=<token> npx supabase functions deploy <function-name> --project-ref zmppdmfdhknnwzwdfhwf --no-verify-jwt
+```
+
+### Supabase Edge Functions (`supabase/functions/`)
+All functions are deployed with `--no-verify-jwt`. All require `apikey` + `Authorization: Bearer <anon-jwt>` headers from Retell.
+
+| Function | Purpose |
+|---|---|
+| `check-availability` | Called by Retell agent during a call to check if a date/time is open. Checks `business_hours` table first (blocks weekends/after-hours), then checks `appointments` for conflicts. |
+| `book-appointment` | Called by Retell agent to confirm a booking. Validates business hours, checks conflicts, inserts into `appointments` table. |
+| `get-current-date` | Called by Retell agent at the start of every call to get today's date. Returns ISO date + human-readable string. |
+| `retell-webhook` | Post-call webhook called by Retell after every call ends. Saves call data and appointments to Supabase. |
+| `dynamic-api` | Unused scaffold — ignore. |
+
+### Retell AI
+- **API key:** `key_5b24ef502d4c3cd538001a59694e` (also in `.env` as `VITE_RETELL_API_KEY`)
+- **Agent:** HVAC Receptionist — `agent_3bec4ff7311350d9b19b93db05` → client_id `1` (gmacdonald63@gmail.com)
+- **LLM:** `llm_90e1cf752bfb2434d8fbb5279d76` (GPT-4.1, `tool_call_strict_mode: true`)
+- **Post-call webhook:** `https://zmppdmfdhknnwzwdfhwf.supabase.co/functions/v1/retell-webhook`
+- **Second agent** (test account): `agent_be6189dedb9fa036a84c3dda19` → client_id `9` (gmac63s@gmail.com)
+
+Retell tool calls send parameters under `body.args` (not at root) because `args_at_root: false`.
+The `agent_id` is passed as a `const` parameter in each tool's JSON schema so Retell always includes it.
+
+### Supabase Schema (key tables)
+- `clients` — One row per company. Key columns: `id`, `email`, `retell_agent_id`, `appointment_duration`, `buffer_time`, `timezone`
+- `appointments` — All bookings. Key columns: `client_id`, `date`, `start_time`, `end_time`, `status`, `source` (`ai` or `manual`), `call_id`
+- `business_hours` — Open/close times per day. Columns: `client_id`, `day_of_week` (0=Sun…6=Sat), `is_open`, `open_time`, `close_time`
+- `customers` — Customer profiles linked to clients
+- `customer_notes` — Notes per customer
+- `follow_up_reminders` — Reminders with due dates
+
+### Session Start Checklist
+1. Confirm branch: `git status` — should be on `claude/dashboard-repo-setup-UvgMs`
+2. User provides Supabase personal access token (needed for any function deployment)
+3. Read recent git log to catch up: `git log --oneline -10`
