@@ -1,9 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const BUFFER_MINS  = 120; // 2-hour padding between appointments
-const START_OF_DAY = 8  * 60; // Don't suggest slots before 8:00 AM
-const END_OF_DAY   = 22 * 60; // Don't suggest slots past 10:00 PM
+const BUFFER_MINS = 120; // 2-hour padding between appointments
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -143,6 +141,48 @@ serve(async (req) => {
 
     const clientId = clientRow.id;
 
+    // Check business hours for the requested date's day of week
+    // day_of_week: 0=Sunday … 6=Saturday (matches JS getDay() convention)
+    const dateObj = new Date(date + "T00:00:00Z");
+    const dayOfWeek = dateObj.getUTCDay();
+    const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+    const { data: hours, error: hoursError } = await supabase
+      .from("business_hours")
+      .select("is_open, open_time, close_time")
+      .eq("client_id", clientId)
+      .eq("day_of_week", dayOfWeek)
+      .single();
+
+    if (hoursError || !hours || !hours.is_open) {
+      return new Response(
+        JSON.stringify({
+          available: false,
+          date,
+          reason: "closed",
+          message: `We're not available on ${DAY_NAMES[dayOfWeek]}s. Please ask for a weekday.`,
+        }),
+        { headers: { "Content-Type": "application/json", ...CORS_HEADERS } }
+      );
+    }
+
+    const START_OF_DAY = toMinutes(hours.open_time);
+    const END_OF_DAY   = toMinutes(hours.close_time);
+
+    // Reject proposed time that falls outside business hours
+    const normalizedTimeMins = toMinutes(normalizedTime);
+    if (normalizedTimeMins < START_OF_DAY || normalizedTimeMins >= END_OF_DAY) {
+      return new Response(
+        JSON.stringify({
+          available: false,
+          date,
+          reason: "outside_hours",
+          message: `That time is outside our business hours. We're available ${toDisplayTime(hours.open_time.slice(0,5))} to ${toDisplayTime(hours.close_time.slice(0,5))} on ${DAY_NAMES[dayOfWeek]}s.`,
+        }),
+        { headers: { "Content-Type": "application/json", ...CORS_HEADERS } }
+      );
+    }
+
     // Fetch non-cancelled appointments for this client on the given date only
     const { data: appointments, error } = await supabase
       .from("appointments")
@@ -159,7 +199,7 @@ serve(async (req) => {
       });
     }
 
-    const proposedMins = toMinutes(normalizedTime);
+    const proposedMins = normalizedTimeMins;
     const bookedMins   = (appointments || []).map((a) => toMinutes(a.start_time)).sort((a, b) => a - b);
 
     // A slot is available if no existing appointment falls within 2 hours of it
