@@ -27,6 +27,9 @@ Deno.serve(async (req) => {
     const startTime = args.start_time; // "HH:MM" (24h format)
     const serviceType = args.service_type || null;
     const address = args.address || null;
+    const city = args.city || null;
+    const state = args.state || null;
+    const zip = args.zip || null;
     const notes = args.notes || null;
 
     // Get the agent_id from the call object to identify which client
@@ -198,6 +201,9 @@ Deno.serve(async (req) => {
         end_time: endTime,
         service_type: serviceType,
         address: address,
+        city: city,
+        state: state,
+        zip: zip,
         notes: notes,
         source: "ai",
         call_id: callId,
