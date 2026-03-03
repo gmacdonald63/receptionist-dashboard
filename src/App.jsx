@@ -64,6 +64,7 @@ const App = () => {
   // Billing / Stripe state
   const [billingLoading, setBillingLoading] = useState(false);
   const [billingAction, setBillingAction] = useState(null); // 'checkout' | 'portal'
+  const [awaitingSubscription, setAwaitingSubscription] = useState(false);
   const SUPABASE_FUNCTIONS_URL = 'https://zmppdmfdhknnwzwdfhwf.supabase.co/functions/v1';
 
   // Check for existing session on load
@@ -125,29 +126,44 @@ const App = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // After Stripe checkout redirect, re-fetch client data to pick up subscription status
+  // After Stripe checkout redirect, poll for subscription activation (webhook may be slightly delayed)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('billing') === 'success' && user) {
-      // Clear the URL param
       window.history.replaceState({}, '', window.location.pathname);
-      // Re-fetch client data to get updated subscription_status
-      supabase
-        .from('clients')
-        .select('*')
-        .eq('email', user.email)
-        .single()
-        .then(({ data }) => {
-          if (data) setClientData(data);
-        });
+      setAwaitingSubscription(true);
       setActiveTab('billing');
+
+      const pollSubscription = async (attempt = 0) => {
+        const { data } = await supabase
+          .from('clients')
+          .select('*')
+          .eq('email', user.email)
+          .single();
+
+        if (data) {
+          setClientData(data);
+          if (['active', 'trialing'].includes(data.subscription_status)) {
+            setAwaitingSubscription(false);
+          } else if (attempt < 5) {
+            setTimeout(() => pollSubscription(attempt + 1), 2000);
+          } else {
+            setAwaitingSubscription(false);
+          }
+        }
+      };
+
+      pollSubscription();
     }
   }, [user]);
 
-  // Fetch data from Retell API and Supabase
+  // Fetch data from Retell API and Supabase (only for active subscribers)
   useEffect(() => {
     if (user && clientData) {
-      fetchData();
+      const isActive = clientData?.is_admin || ['active', 'trialing'].includes(clientData?.subscription_status);
+      if (isActive) {
+        fetchData();
+      }
     }
   }, [user, clientData]);
 
@@ -1039,26 +1055,28 @@ const App = () => {
           )}
         </div>
 
-        {/* Usage */}
-        <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-          <h3 className="text-lg font-semibold mb-4 text-white">Usage This Month</h3>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="p-4 bg-gray-750 rounded-lg text-center">
-              <p className="text-2xl font-bold text-white">{stats.totalCalls}</p>
-              <p className="text-gray-400 text-sm">Calls</p>
+        {/* Usage - only show for active/past_due subscribers */}
+        {(isActive || isPastDue) && (
+          <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+            <h3 className="text-lg font-semibold mb-4 text-white">Usage This Month</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-4 bg-gray-750 rounded-lg text-center">
+                <p className="text-2xl font-bold text-white">{stats.totalCalls}</p>
+                <p className="text-gray-400 text-sm">Calls</p>
+              </div>
+              <div className="p-4 bg-gray-750 rounded-lg text-center">
+                <p className="text-2xl font-bold text-white">{stats.totalMinutes}</p>
+                <p className="text-gray-400 text-sm">Minutes</p>
+              </div>
             </div>
-            <div className="p-4 bg-gray-750 rounded-lg text-center">
-              <p className="text-2xl font-bold text-white">{stats.totalMinutes}</p>
-              <p className="text-gray-400 text-sm">Minutes</p>
-            </div>
+            <p className="text-gray-500 text-xs mt-3 text-center">All minutes included in your monthly plan</p>
           </div>
-          <p className="text-gray-500 text-xs mt-3 text-center">All minutes included in your monthly plan</p>
-        </div>
+        )}
 
-        {/* Payment Method / Billing Portal */}
-        <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-          <h3 className="text-lg font-semibold mb-4 text-white">Payment & Invoices</h3>
-          {isActive || isPastDue ? (
+        {/* Payment Method / Billing Portal - only show for active/past_due subscribers */}
+        {(isActive || isPastDue) && (
+          <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+            <h3 className="text-lg font-semibold mb-4 text-white">Payment & Invoices</h3>
             <div className="space-y-3">
               <p className="text-gray-400 text-sm">
                 Update your payment method, view invoices, or cancel your subscription through the Stripe billing portal.
@@ -1071,12 +1089,8 @@ const App = () => {
                 {billingAction === 'portal' ? 'Opening...' : 'Open Billing Portal'}
               </button>
             </div>
-          ) : (
-            <div className="text-center py-4">
-              <p className="text-gray-400 text-sm">Subscribe to access billing management and invoices.</p>
-            </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -1118,6 +1132,60 @@ const App = () => {
   // Show admin dashboard if admin and showAdmin is true
   if (showAdmin && clientData?.is_admin) {
     return <Admin onBack={() => setShowAdmin(false)} />;
+  }
+
+  // Subscription gate — admins bypass, everyone else needs active subscription
+  const isSubscriptionActive = clientData?.is_admin ||
+    ['active', 'trialing'].includes(clientData?.subscription_status);
+
+  if (!isSubscriptionActive) {
+    const isPastDue = clientData?.subscription_status === 'past_due';
+
+    return (
+      <div className="min-h-screen bg-gray-900">
+        <InstallPrompt />
+        <UpdatePrompt />
+
+        {/* Header */}
+        <header className="bg-gray-800 border-b border-gray-700 px-4 sticky top-0 z-50 flex items-center justify-between" style={{ height: '72px' }}>
+          <div />
+          <img src={logo} alt="Reliant Support" style={{ height: '40px', width: 'auto' }} />
+          <button
+            onClick={handleLogout}
+            className="p-2 hover:bg-gray-700 rounded-lg"
+            title="Sign out"
+          >
+            <LogOut className="w-5 h-5 text-gray-400" />
+          </button>
+        </header>
+
+        {/* Gated Content */}
+        <main className="p-4 md:p-6 max-w-lg mx-auto">
+          {awaitingSubscription ? (
+            <div className="text-center py-12">
+              <RefreshCw className="w-8 h-8 animate-spin text-blue-500 mx-auto mb-4" />
+              <h1 className="text-xl font-bold text-white mb-2">Setting up your subscription...</h1>
+              <p className="text-gray-400">This may take a moment. Please wait.</p>
+            </div>
+          ) : (
+            <>
+              <div className="text-center mb-6 pt-4">
+                <h1 className="text-2xl font-bold text-white mb-2">
+                  {isPastDue ? 'Payment Required' : `Welcome${clientData?.company_name ? ', ' + clientData.company_name : ''}!`}
+                </h1>
+                <p className="text-gray-400">
+                  {isPastDue
+                    ? 'Your payment has failed. Please update your payment method to restore access to your dashboard.'
+                    : 'Complete your subscription to activate your AI receptionist dashboard.'}
+                </p>
+              </div>
+
+              {renderBilling()}
+            </>
+          )}
+        </main>
+      </div>
+    );
   }
 
   return (

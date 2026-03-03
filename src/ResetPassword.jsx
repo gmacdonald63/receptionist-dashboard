@@ -57,7 +57,7 @@ const ResetPassword = ({ onComplete }) => {
             <div className="mb-4 p-3 bg-green-900/50 border border-green-700 rounded-lg">
               <p className="text-green-300">Password set successfully!</p>
             </div>
-            <p className="text-gray-400">Redirecting to dashboard...</p>
+            <p className="text-gray-400">Redirecting to complete your setup...</p>
           </div>
         ) : (
           <>
