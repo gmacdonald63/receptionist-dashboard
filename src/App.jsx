@@ -157,11 +157,11 @@ const App = () => {
     }
   }, [user]);
 
-  // Fetch data from Retell API and Supabase (only for active subscribers)
+  // Fetch data from Retell API and Supabase (only for users with dashboard access)
   useEffect(() => {
     if (user && clientData) {
-      const isActive = ['active', 'trialing'].includes(clientData?.subscription_status);
-      if (isActive) {
+      const hasAccess = clientData.is_admin || ['active', 'trialing'].includes(clientData.subscription_status);
+      if (hasAccess) {
         fetchData();
       }
     }
@@ -1134,12 +1134,11 @@ const App = () => {
     return <Admin onBack={() => setShowAdmin(false)} />;
   }
 
-  // Subscription gate — everyone needs active subscription to access main dashboard
-  // (Admins can still access the Admin panel via the gear icon above this check)
-  const isSubscriptionActive =
+  // Subscription gate — admins bypass, non-subscribers see only billing
+  const isSubscriptionActive = clientData?.is_admin ||
     ['active', 'trialing'].includes(clientData?.subscription_status);
 
-  if (!isSubscriptionActive) {
+  if (!isSubscriptionActive && clientData) {
     const isPastDue = clientData?.subscription_status === 'past_due';
 
     return (
@@ -1149,17 +1148,7 @@ const App = () => {
 
         {/* Header */}
         <header className="bg-gray-800 border-b border-gray-700 px-4 sticky top-0 z-50 flex items-center justify-between" style={{ height: '72px' }}>
-          <div className="flex items-center gap-2">
-            {clientData?.is_admin && (
-              <button
-                onClick={() => setShowAdmin(true)}
-                className="p-2 hover:bg-gray-700 rounded-lg"
-                title="Admin Dashboard"
-              >
-                <Settings className="w-5 h-5 text-gray-400" />
-              </button>
-            )}
-          </div>
+          <div />
           <img src={logo} alt="Reliant Support" style={{ height: '40px', width: 'auto' }} />
           <button
             onClick={handleLogout}
