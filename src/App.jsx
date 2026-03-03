@@ -61,6 +61,11 @@ const App = () => {
   const [savingAppointment, setSavingAppointment] = useState(false);
   const [reminderCount, setReminderCount] = useState(0);
 
+  // Billing / Stripe state
+  const [billingLoading, setBillingLoading] = useState(false);
+  const [billingAction, setBillingAction] = useState(null); // 'checkout' | 'portal'
+  const SUPABASE_FUNCTIONS_URL = 'https://zmppdmfdhknnwzwdfhwf.supabase.co/functions/v1';
+
   // Check for existing session on load
   useEffect(() => {
     // Check if this is a password reset flow
@@ -119,6 +124,25 @@ const App = () => {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // After Stripe checkout redirect, re-fetch client data to pick up subscription status
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('billing') === 'success' && user) {
+      // Clear the URL param
+      window.history.replaceState({}, '', window.location.pathname);
+      // Re-fetch client data to get updated subscription_status
+      supabase
+        .from('clients')
+        .select('*')
+        .eq('email', user.email)
+        .single()
+        .then(({ data }) => {
+          if (data) setClientData(data);
+        });
+      setActiveTab('billing');
+    }
+  }, [user]);
 
   // Fetch data from Retell API and Supabase
   useEffect(() => {
@@ -888,70 +912,134 @@ const App = () => {
     </div>
   );
 
+  const handleStripeCheckout = async () => {
+    setBillingAction('checkout');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${SUPABASE_FUNCTIONS_URL}/create-checkout-session`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InptcHBkbWZkaGtubnd6d2RmaHdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk4MzQyMDYsImV4cCI6MjA4NTQxMDIwNn0.mXfuz8mEZhizFen78gUaakBDbrzANn4ZM1a7KuDiKJs',
+        },
+        body: JSON.stringify({ return_url: window.location.origin }),
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        alert(data.error || 'Failed to create checkout session');
+      }
+    } catch (err) {
+      console.error('Checkout error:', err);
+      alert('Failed to start checkout. Please try again.');
+    } finally {
+      setBillingAction(null);
+    }
+  };
+
+  const handleBillingPortal = async () => {
+    setBillingAction('portal');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${SUPABASE_FUNCTIONS_URL}/create-billing-portal`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InptcHBkbWZkaGtubnd6d2RmaHdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk4MzQyMDYsImV4cCI6MjA4NTQxMDIwNn0.mXfuz8mEZhizFen78gUaakBDbrzANn4ZM1a7KuDiKJs',
+        },
+        body: JSON.stringify({ return_url: window.location.origin }),
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        alert(data.error || 'Failed to open billing portal');
+      }
+    } catch (err) {
+      console.error('Billing portal error:', err);
+      alert('Failed to open billing portal. Please try again.');
+    } finally {
+      setBillingAction(null);
+    }
+  };
+
   const renderBilling = () => {
     const MONTHLY_FEE = 499;
-    
-    const today = new Date();
-    const nextBillingDate = new Date(today.getFullYear(), today.getMonth() + 1, 1);
-    const formattedNextBilling = nextBillingDate.toLocaleDateString('en-US', { 
-      month: 'long', 
-      day: 'numeric', 
-      year: 'numeric' 
-    });
-
-    const currentBill = {
-      amount: MONTHLY_FEE,
-      status: 'due',
-      dueDate: formattedNextBilling
-    };
-
-    const billingHistory = [
-      { id: 1, date: 'February 1, 2026', amount: MONTHLY_FEE, status: 'due' },
-      { id: 2, date: 'January 1, 2026', amount: MONTHLY_FEE, status: 'paid' },
-      { id: 3, date: 'December 1, 2025', amount: MONTHLY_FEE, status: 'paid' },
-    ];
-
-    const paymentMethod = null;
+    const subStatus = clientData?.subscription_status || 'inactive';
+    const isActive = subStatus === 'active' || subStatus === 'trialing';
+    const isPastDue = subStatus === 'past_due';
+    const periodEnd = clientData?.current_period_end
+      ? new Date(clientData.current_period_end).toLocaleDateString('en-US', {
+          month: 'long', day: 'numeric', year: 'numeric'
+        })
+      : null;
 
     const getStatusBadge = (status) => {
       switch(status) {
-        case 'paid':
-          return <span className="px-2 py-1 bg-green-900 text-green-300 rounded text-xs">Paid</span>;
-        case 'due':
-          return <span className="px-2 py-1 bg-yellow-900 text-yellow-300 rounded text-xs">Due</span>;
-        case 'overdue':
-          return <span className="px-2 py-1 bg-red-900 text-red-300 rounded text-xs">Overdue</span>;
+        case 'active':
+        case 'trialing':
+          return <span className="px-2 py-1 bg-green-900 text-green-300 rounded text-xs">Active</span>;
+        case 'past_due':
+          return <span className="px-2 py-1 bg-red-900 text-red-300 rounded text-xs">Past Due</span>;
+        case 'canceled':
+        case 'cancelled':
+          return <span className="px-2 py-1 bg-gray-700 text-gray-300 rounded text-xs">Cancelled</span>;
         default:
-          return null;
+          return <span className="px-2 py-1 bg-yellow-900 text-yellow-300 rounded text-xs">No Subscription</span>;
       }
     };
 
     return (
       <div className="space-y-4">
+        {/* Subscription Status */}
         <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-          <h3 className="text-lg font-semibold mb-4 text-white">Current Bill</h3>
+          <h3 className="text-lg font-semibold mb-4 text-white">Subscription</h3>
           <div className="flex items-center justify-between mb-4">
             <div>
-              <p className="text-3xl font-bold text-white">${MONTHLY_FEE.toFixed(2)}</p>
-              <p className="text-gray-400 text-sm">Monthly Service Fee</p>
+              <p className="text-3xl font-bold text-white">${MONTHLY_FEE.toFixed(2)}<span className="text-base font-normal text-gray-400">/mo</span></p>
+              <p className="text-gray-400 text-sm">AI Receptionist Service</p>
             </div>
-            {getStatusBadge(currentBill.status)}
-          </div>
-          
-          <div className="p-3 bg-gray-750 rounded-lg mb-4">
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-400">Due Date</span>
-              <span className="text-white">{currentBill.dueDate}</span>
-            </div>
+            {getStatusBadge(subStatus)}
           </div>
 
-          {currentBill.status !== 'paid' && (
-            <button className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
-              Pay Now
+          {isActive && periodEnd && (
+            <div className="p-3 bg-gray-750 rounded-lg mb-4">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-400">Next billing date</span>
+                <span className="text-white">{periodEnd}</span>
+              </div>
+            </div>
+          )}
+
+          {isPastDue && (
+            <div className="p-3 bg-red-900/30 border border-red-800/50 rounded-lg mb-4">
+              <p className="text-red-300 text-sm">Your payment failed. Please update your payment method to avoid service interruption.</p>
+            </div>
+          )}
+
+          {!isActive && !isPastDue ? (
+            <button
+              onClick={handleStripeCheckout}
+              disabled={billingAction === 'checkout'}
+              className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50"
+            >
+              {billingAction === 'checkout' ? 'Redirecting to Stripe...' : 'Subscribe Now'}
+            </button>
+          ) : (
+            <button
+              onClick={handleBillingPortal}
+              disabled={billingAction === 'portal'}
+              className="w-full py-3 bg-gray-700 text-white rounded-lg hover:bg-gray-600 font-medium disabled:opacity-50"
+            >
+              {billingAction === 'portal' ? 'Opening...' : 'Manage Subscription'}
             </button>
           )}
         </div>
 
+        {/* Usage */}
         <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
           <h3 className="text-lg font-semibold mb-4 text-white">Usage This Month</h3>
           <div className="grid grid-cols-2 gap-3">
@@ -967,48 +1055,27 @@ const App = () => {
           <p className="text-gray-500 text-xs mt-3 text-center">All minutes included in your monthly plan</p>
         </div>
 
+        {/* Payment Method / Billing Portal */}
         <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-          <h3 className="text-lg font-semibold mb-4 text-white">Payment Method</h3>
-          {paymentMethod ? (
-            <div className="flex items-center justify-between p-3 bg-gray-750 rounded-lg">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-6 bg-gray-600 rounded flex items-center justify-center">
-                  <span className="text-xs text-white">{paymentMethod.brand}</span>
-                </div>
-                <span className="text-white">•••• {paymentMethod.last4}</span>
-              </div>
-              <button className="text-blue-400 text-sm hover:text-blue-300">Update</button>
+          <h3 className="text-lg font-semibold mb-4 text-white">Payment & Invoices</h3>
+          {isActive || isPastDue ? (
+            <div className="space-y-3">
+              <p className="text-gray-400 text-sm">
+                Update your payment method, view invoices, or cancel your subscription through the Stripe billing portal.
+              </p>
+              <button
+                onClick={handleBillingPortal}
+                disabled={billingAction === 'portal'}
+                className="w-full py-3 bg-gray-700 text-white rounded-lg hover:bg-gray-600 font-medium disabled:opacity-50 text-sm"
+              >
+                {billingAction === 'portal' ? 'Opening...' : 'Open Billing Portal'}
+              </button>
             </div>
           ) : (
             <div className="text-center py-4">
-              <p className="text-gray-400 text-sm mb-3">No payment method on file</p>
-              <button className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 text-sm">
-                Add Payment Method
-              </button>
+              <p className="text-gray-400 text-sm">Subscribe to access billing management and invoices.</p>
             </div>
           )}
-        </div>
-
-        <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-          <h3 className="text-lg font-semibold mb-4 text-white">Billing History</h3>
-          <div className="space-y-3">
-            {billingHistory.map((bill) => (
-              <div key={bill.id} className="p-3 bg-gray-750 rounded-lg">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="font-medium text-white">{bill.date}</p>
-                  {getStatusBadge(bill.status)}
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xl font-semibold text-white">${bill.amount.toFixed(2)}</span>
-                  {bill.status === 'paid' && (
-                    <button className="px-3 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 text-sm">
-                      Download Invoice
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
       </div>
     );
