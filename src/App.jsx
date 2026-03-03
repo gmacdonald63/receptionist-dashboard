@@ -91,14 +91,20 @@ const App = () => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         setUser(session.user);
-        // Fetch client data
+        // Fetch client data — sign out if no clients record exists
         supabase
           .from('clients')
           .select('*')
           .eq('email', session.user.email)
           .single()
-          .then(({ data }) => {
-            setClientData(data);
+          .then(async ({ data }) => {
+            if (data) {
+              setClientData(data);
+            } else {
+              // No client record — force sign out
+              await supabase.auth.signOut();
+              setUser(null);
+            }
             setAuthLoading(false);
           });
       } else {
@@ -1127,6 +1133,28 @@ const App = () => {
   // Show login if not authenticated
   if (!user) {
     return <Login onLogin={handleLogin} />;
+  }
+
+  // User is authenticated but no client record — show message and sign out option
+  if (user && !clientData) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
+        <div className="bg-gray-800 rounded-lg border border-gray-700 p-8 w-full max-w-md text-center">
+          <img src={logo} alt="Reliant Support" style={{ height: '40px', width: 'auto' }} className="mx-auto mb-6" />
+          <h2 className="text-xl font-bold text-white mb-3">No Account Found</h2>
+          <p className="text-gray-400 mb-6">
+            Your login credentials are valid, but no client account is set up yet.
+            Please contact your administrator for an invitation.
+          </p>
+          <button
+            onClick={handleLogout}
+            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+          >
+            Sign Out
+          </button>
+        </div>
+      </div>
+    );
   }
 
   // Show admin dashboard if admin and showAdmin is true
