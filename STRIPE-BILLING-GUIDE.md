@@ -31,9 +31,20 @@ This system handles the full billing lifecycle for the AI Receptionist service. 
 | **Standard Plan** | $495/month | `standard` |
 | **Pro Plan** | $695/month | `pro` |
 
+There is also a one-time **Setup Fee** of **$395** that is collected before any dashboard access:
+
+| Fee / Plan | Price | Type |
+|------------|-------|------|
+| **Setup Fee** | $395 (one-time) | Stripe Payment Link |
+| **Standard Plan** | $495/month | Recurring subscription |
+| **Pro Plan** | $695/month | Recurring subscription |
+
 The high-level flow:
 
-- **Admin creates a new client** in the Admin panel (company name, email, Retell agent ID)
+- **Sales person sends a Stripe Payment Link** for the $395 setup fee to the new client
+- **Client pays the setup fee** — Stripe notifies the sales person and the admin
+- **Admin completes the setup** — configures the Retell AI agent, business hours, etc.
+- **Admin creates the client record** in the Admin panel (company name, email, Retell agent ID)
 - **Admin sends an email invitation** — client receives a password reset link
 - **Client sets their password** and logs in for the first time
 - **Client is blocked from the dashboard** — they can only see the Billing tab with plan options
@@ -56,18 +67,42 @@ The high-level flow:
 
 ## 2. The Complete Client Lifecycle
 
-Here is the step-by-step journey from "new client" to "paying subscriber":
+Here is the step-by-step journey from "new prospect" to "paying subscriber":
 
-### Step 1: Admin Creates the Client Record
+### Step 1: Sales Person Sends the Setup Fee Payment Link
 
-In the **Admin panel** (`src/Admin.jsx`), the admin fills out a form with:
+A sales person sends the new client a **Stripe Payment Link** for the one-time **$395 setup fee**. This Payment Link is created in the Stripe Dashboard (Products > Payment Links) — it is not part of the dashboard codebase.
+
+### Step 2: Client Pays the Setup Fee
+
+The client clicks the payment link and pays $395 via Stripe's hosted checkout. On successful payment:
+- **Stripe notifies the sales person** who sent the link (via Stripe's built-in payment confirmation email or a configured notification)
+- **Stripe notifies the admin** (you) so you know to begin the setup process
+
+This notification can be configured via:
+- Stripe Dashboard email receipts and notifications
+- A Stripe webhook (e.g., `checkout.session.completed` for the setup fee product) that triggers an email/Slack/SMS notification
+- Or simply by monitoring the Stripe Dashboard for incoming payments
+
+### Step 3: Admin Completes the Setup
+
+After receiving the setup fee notification, the admin:
+- Configures the client's Retell AI voice agent
+- Sets up business hours, appointment durations, and other settings
+- Prepares everything the client needs before they can access the dashboard
+
+This step happens entirely outside the dashboard — it's manual admin work.
+
+### Step 4: Admin Creates the Client Record
+
+Once setup is complete, the admin goes to the **Admin panel** (`src/Admin.jsx`) and fills out a form with:
 - Company name
 - Email address
 - Retell Agent ID (the AI voice agent assigned to this client)
 
 This creates a row in the `clients` table with `subscription_status = 'inactive'`.
 
-### Step 2: Admin Sends the Invitation
+### Step 5: Admin Sends the Invitation
 
 The admin clicks "Send Invite" on the client row. This does two things:
 
@@ -86,11 +121,11 @@ The admin clicks "Send Invite" on the client row. This does two things:
 
 The client record is updated with `invite_sent = true` and `invite_sent_at = timestamp`.
 
-### Step 3: Client Sets Their Password
+### Step 6: Client Sets Their Password
 
 The client clicks the link in the email, which opens the `/reset-password` page (`src/ResetPassword.jsx`). They enter a new password (minimum 6 characters). On success, they're redirected to the main app.
 
-### Step 4: Client Logs In and Hits the Subscription Gate
+### Step 7: Client Logs In and Hits the Subscription Gate
 
 When the client logs in, the app:
 1. Authenticates via Supabase Auth
@@ -98,7 +133,7 @@ When the client logs in, the app:
 3. Checks `subscription_status` — if it's `inactive`, the subscription gate activates
 4. The client sees ONLY the Billing tab with two plan options: **Standard ($495/mo)** and **Pro ($695/mo)**
 
-### Step 5: Client Chooses a Plan via Stripe Checkout
+### Step 8: Client Chooses a Plan via Stripe Checkout
 
 When the client clicks "Subscribe" on either plan:
 1. Frontend calls the `create-checkout-session` Edge Function with the selected `plan` key (`"standard"` or `"pro"`)
@@ -109,7 +144,7 @@ When the client clicks "Subscribe" on either plan:
 6. Client enters their credit card details on Stripe's secure page
 7. On success, Stripe redirects back to the app with `?billing=success` in the URL
 
-### Step 6: Webhook Activates the Subscription
+### Step 9: Webhook Activates the Subscription
 
 After Stripe processes the payment:
 1. Stripe sends a `checkout.session.completed` webhook to our `stripe-webhook` Edge Function
@@ -122,14 +157,14 @@ After Stripe processes the payment:
    - `stripe_price_id` = the Stripe price ID (identifies which plan: Standard or Pro)
    - `current_period_end` = the end date of the billing period
 
-### Step 7: Frontend Detects Activation
+### Step 10: Frontend Detects Activation
 
 Meanwhile, the frontend is polling:
 1. After the Stripe redirect, the app polls the `clients` table every 2 seconds (up to 6 attempts)
 2. When it detects `subscription_status = 'active'`, it stops the spinner
 3. The subscription gate lifts and the full dashboard is now accessible
 
-### Step 8: Ongoing Billing
+### Step 11: Ongoing Billing
 
 - Stripe automatically charges the client monthly
 - If payment succeeds: `invoice.paid` webhook fires (logged)
@@ -143,6 +178,21 @@ Meanwhile, the frontend is polling:
 ## 3. Stripe Configuration
 
 ### Stripe Products & Prices
+
+There are three products in Stripe — one for the setup fee and two for the recurring subscription plans:
+
+#### Setup Fee (one-time, collected before dashboard access)
+
+| Field | Value |
+|-------|-------|
+| Product Name | AI Receptionist — Setup Fee |
+| Price | $395.00 (USD, one-time) |
+| Delivery | Via **Stripe Payment Link** — sales person sends the link directly to the prospect |
+| Notifications | Configure Stripe email receipts and/or webhook notifications to alert the sales person and admin when payment succeeds |
+
+The setup fee is handled entirely through Stripe Payment Links and the Stripe Dashboard — it has **no connection to the dashboard codebase**. It is a prerequisite that must be paid before the admin begins setup and sends the dashboard invitation.
+
+#### Subscription Plans (recurring, collected via dashboard)
 
 | Field | Standard Plan | Pro Plan |
 |-------|---------------|----------|
@@ -580,7 +630,14 @@ If you're setting this up for a new project, here's the order of operations:
 
 ### Stripe Setup
 
+**Setup Fee (one-time):**
 - [ ] Create a Stripe account at stripe.com
+- [ ] Create a Product: "AI Receptionist — Setup Fee" with a $395 one-time price
+- [ ] Create a **Payment Link** for the setup fee product (Products > Payment Links)
+- [ ] Share the Payment Link URL with your sales team — they send it directly to prospects
+- [ ] Configure notifications so the sales person and admin are alerted on successful payment (Stripe email receipts, webhook, or manual Dashboard monitoring)
+
+**Subscription Plans (recurring):**
 - [ ] Create two Products:
   - "AI Receptionist — Standard"
   - "AI Receptionist — Pro"
@@ -668,6 +725,35 @@ After creating prices in Stripe, update these two files:
 ## Architecture Diagram
 
 ```
+PRE-DASHBOARD (Sales → Setup → Invite)
+════════════════════════════════════════
+
+  Sales Person                     Prospect
+       │                              │
+       │  sends Stripe Payment Link   │
+       │  ($395 setup fee)            │
+       │─────────────────────────────▶│
+       │                              │── pays via Stripe ──▶ STRIPE
+       │                              │                         │
+       │◄─── notification ────────────┼─────────────────────────┘
+       │                              │
+  Admin notified                      │
+       │                              │
+       ▼                              │
+  Admin completes setup               │
+  (Retell agent, business hours)      │
+       │                              │
+       ▼                              │
+  Admin creates client record         │
+  Admin sends invite email ──────────▶│
+                                      │
+                                      ▼
+                               Client sets password
+
+
+DASHBOARD (Login → Subscribe → Use)
+════════════════════════════════════
+
 ┌──────────────────────────────────────────────────────────────────┐
 │                         FRONTEND (React + Vite)                  │
 │                                                                  │
