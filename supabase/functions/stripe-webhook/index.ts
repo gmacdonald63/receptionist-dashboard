@@ -53,6 +53,8 @@ Deno.serve(async (req) => {
             session.subscription as string
           );
           const clientId = session.metadata?.client_id;
+          // Extract the price ID from the first subscription item
+          const priceId = subscription.items?.data?.[0]?.price?.id || null;
           if (clientId) {
             await supabase
               .from("clients")
@@ -60,12 +62,13 @@ Deno.serve(async (req) => {
                 stripe_customer_id: session.customer as string,
                 stripe_subscription_id: subscription.id,
                 subscription_status: subscription.status,
+                stripe_price_id: priceId,
                 current_period_end: new Date(
                   subscription.current_period_end * 1000
                 ).toISOString(),
               })
               .eq("id", parseInt(clientId));
-            console.log(`Client ${clientId} subscription activated: ${subscription.id}`);
+            console.log(`Client ${clientId} subscription activated: ${subscription.id} (price: ${priceId})`);
           }
         }
         break;
@@ -75,6 +78,8 @@ Deno.serve(async (req) => {
       case "customer.subscription.deleted": {
         const subscription = event.data.object as Stripe.Subscription;
         const customerId = subscription.customer as string;
+        // Extract the price ID from the first subscription item
+        const priceId = subscription.items?.data?.[0]?.price?.id || null;
 
         // Find client by stripe_customer_id
         const { data: client } = await supabase
@@ -89,13 +94,14 @@ Deno.serve(async (req) => {
             .update({
               stripe_subscription_id: subscription.id,
               subscription_status: subscription.status,
+              stripe_price_id: priceId,
               current_period_end: new Date(
                 subscription.current_period_end * 1000
               ).toISOString(),
             })
             .eq("id", client.id);
           console.log(
-            `Client ${client.id} subscription ${event.type}: status=${subscription.status}`
+            `Client ${client.id} subscription ${event.type}: status=${subscription.status}, price=${priceId}`
           );
         }
         break;

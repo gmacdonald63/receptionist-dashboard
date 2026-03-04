@@ -7,7 +7,11 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const PRICE_ID = "price_1T6jSqJVgG4IIGoFgZE6uXyf";
+// Plan price IDs — update these after creating products/prices in Stripe Dashboard
+const PLANS: Record<string, string> = {
+  standard: "price_STANDARD_PLAN_ID_HERE",  // Standard Plan — $495/month
+  pro: "price_PRO_PLAN_ID_HERE",            // Pro Plan — $695/month
+};
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -77,18 +81,28 @@ Deno.serve(async (req) => {
         .eq("id", client.id);
     }
 
-    // Parse request body for return URL
+    // Parse request body for return URL and plan selection
     const body = await req.json().catch(() => ({}));
     const returnUrl = body.return_url || "https://receptionist-dashboard.vercel.app";
+    const plan = body.plan || "standard";
+
+    // Validate the selected plan
+    const priceId = PLANS[plan];
+    if (!priceId) {
+      return new Response(JSON.stringify({ error: `Invalid plan: ${plan}. Must be 'standard' or 'pro'.` }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // Create Checkout Session
     const session = await stripe.checkout.sessions.create({
       customer: stripeCustomerId,
       mode: "subscription",
-      line_items: [{ price: PRICE_ID, quantity: 1 }],
+      line_items: [{ price: priceId, quantity: 1 }],
       success_url: `${returnUrl}?billing=success`,
       cancel_url: `${returnUrl}?billing=cancelled`,
-      metadata: { client_id: String(client.id) },
+      metadata: { client_id: String(client.id), plan },
     });
 
     return new Response(JSON.stringify({ url: session.url }), {
