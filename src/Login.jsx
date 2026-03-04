@@ -28,9 +28,10 @@ const Login = ({ onLogin }) => {
         .eq('email', email)
         .single();
 
-      if (clientError) {
-        console.error('Client lookup error:', clientError);
-        // User authenticated but no client record - might be first time
+      if (clientError || !clientData) {
+        // User authenticated but no client record — sign them out and show error
+        await supabase.auth.signOut();
+        throw new Error('No account found. Please contact your administrator for an invitation.');
       }
 
       onLogin(data.user, clientData);
