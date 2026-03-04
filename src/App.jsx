@@ -934,8 +934,20 @@ const App = () => {
     </div>
   );
 
-  const handleStripeCheckout = async () => {
-    setBillingAction('checkout');
+  // Plan definitions — price IDs must match Stripe Dashboard
+  const PLANS = {
+    standard: { name: 'Standard Plan', price: 495, priceId: 'price_STANDARD_PLAN_ID_HERE' },
+    pro: { name: 'Pro Plan', price: 695, priceId: 'price_PRO_PLAN_ID_HERE' },
+  };
+
+  const getPlanFromPriceId = (priceId) => {
+    if (priceId === PLANS.standard.priceId) return 'standard';
+    if (priceId === PLANS.pro.priceId) return 'pro';
+    return null;
+  };
+
+  const handleStripeCheckout = async (plan = 'standard') => {
+    setBillingAction(plan);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(`${SUPABASE_FUNCTIONS_URL}/create-checkout-session`, {
@@ -945,7 +957,7 @@ const App = () => {
           'Authorization': `Bearer ${session.access_token}`,
           'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InptcHBkbWZkaGtubnd6d2RmaHdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk4MzQyMDYsImV4cCI6MjA4NTQxMDIwNn0.mXfuz8mEZhizFen78gUaakBDbrzANn4ZM1a7KuDiKJs',
         },
-        body: JSON.stringify({ return_url: window.location.origin }),
+        body: JSON.stringify({ return_url: window.location.origin, plan }),
       });
       const data = await res.json();
       if (data.url) {
@@ -989,10 +1001,11 @@ const App = () => {
   };
 
   const renderBilling = () => {
-    const MONTHLY_FEE = 499;
     const subStatus = clientData?.subscription_status || 'inactive';
     const isActive = subStatus === 'active' || subStatus === 'trialing';
     const isPastDue = subStatus === 'past_due';
+    const currentPlan = getPlanFromPriceId(clientData?.stripe_price_id);
+    const currentPlanInfo = currentPlan ? PLANS[currentPlan] : null;
     const periodEnd = clientData?.current_period_end
       ? new Date(clientData.current_period_end).toLocaleDateString('en-US', {
           month: 'long', day: 'numeric', year: 'numeric'
@@ -1014,52 +1027,103 @@ const App = () => {
       }
     };
 
+    // Plan card component used for both the selection view and the active view
+    const renderPlanCard = (planKey, plan, isCurrent) => (
+      <div key={planKey} className={`bg-gray-800 rounded-lg p-4 border ${isCurrent ? 'border-blue-500' : 'border-gray-700'}`}>
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="text-lg font-semibold text-white">{plan.name}</h4>
+          {isCurrent && getStatusBadge(subStatus)}
+        </div>
+        <p className="text-3xl font-bold text-white mb-1">
+          ${plan.price.toFixed(2)}<span className="text-base font-normal text-gray-400">/mo</span>
+        </p>
+        <p className="text-gray-400 text-sm mb-4">AI Receptionist Service</p>
+
+        {/* Active subscriber info */}
+        {isCurrent && isActive && periodEnd && (
+          <div className="p-3 bg-gray-750 rounded-lg mb-4">
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-400">Next billing date</span>
+              <span className="text-white">{periodEnd}</span>
+            </div>
+          </div>
+        )}
+
+        {isCurrent && isPastDue && (
+          <div className="p-3 bg-red-900/30 border border-red-800/50 rounded-lg mb-4">
+            <p className="text-red-300 text-sm">Your payment failed. Please update your payment method to avoid service interruption.</p>
+          </div>
+        )}
+
+        {/* Button logic */}
+        {isCurrent && (isActive || isPastDue) ? (
+          <button
+            onClick={handleBillingPortal}
+            disabled={billingAction === 'portal'}
+            className="w-full py-3 bg-gray-700 text-white rounded-lg hover:bg-gray-600 font-medium disabled:opacity-50"
+          >
+            {billingAction === 'portal' ? 'Opening...' : 'Manage Subscription'}
+          </button>
+        ) : !isActive && !isPastDue ? (
+          <button
+            onClick={() => handleStripeCheckout(planKey)}
+            disabled={!!billingAction}
+            className={`w-full py-3 text-white rounded-lg font-medium disabled:opacity-50 ${
+              planKey === 'pro' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-600 hover:bg-gray-500'
+            }`}
+          >
+            {billingAction === planKey ? 'Redirecting to Stripe...' : `Subscribe — $${plan.price}/mo`}
+          </button>
+        ) : null}
+      </div>
+    );
+
     return (
       <div className="space-y-4">
-        {/* Subscription Status */}
-        <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-          <h3 className="text-lg font-semibold mb-4 text-white">Subscription</h3>
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <p className="text-3xl font-bold text-white">${MONTHLY_FEE.toFixed(2)}<span className="text-base font-normal text-gray-400">/mo</span></p>
-              <p className="text-gray-400 text-sm">AI Receptionist Service</p>
-            </div>
-            {getStatusBadge(subStatus)}
-          </div>
-
-          {isActive && periodEnd && (
-            <div className="p-3 bg-gray-750 rounded-lg mb-4">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-400">Next billing date</span>
-                <span className="text-white">{periodEnd}</span>
+        {/* Plan Selection or Current Plan */}
+        {isActive || isPastDue ? (
+          <>
+            <h3 className="text-lg font-semibold text-white">Your Plan</h3>
+            {currentPlanInfo ? (
+              renderPlanCard(currentPlan, currentPlanInfo, true)
+            ) : (
+              /* Fallback if price ID doesn't match known plans (e.g., legacy subscriber) */
+              <div className="bg-gray-800 rounded-lg p-4 border border-blue-500">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-lg font-semibold text-white">AI Receptionist Service</h4>
+                  {getStatusBadge(subStatus)}
+                </div>
+                {isActive && periodEnd && (
+                  <div className="p-3 bg-gray-750 rounded-lg mb-4">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-400">Next billing date</span>
+                      <span className="text-white">{periodEnd}</span>
+                    </div>
+                  </div>
+                )}
+                {isPastDue && (
+                  <div className="p-3 bg-red-900/30 border border-red-800/50 rounded-lg mb-4">
+                    <p className="text-red-300 text-sm">Your payment failed. Please update your payment method to avoid service interruption.</p>
+                  </div>
+                )}
+                <button
+                  onClick={handleBillingPortal}
+                  disabled={billingAction === 'portal'}
+                  className="w-full py-3 bg-gray-700 text-white rounded-lg hover:bg-gray-600 font-medium disabled:opacity-50"
+                >
+                  {billingAction === 'portal' ? 'Opening...' : 'Manage Subscription'}
+                </button>
               </div>
+            )}
+          </>
+        ) : (
+          <>
+            <h3 className="text-lg font-semibold text-white">Choose Your Plan</h3>
+            <div className="space-y-3">
+              {Object.entries(PLANS).map(([key, plan]) => renderPlanCard(key, plan, false))}
             </div>
-          )}
-
-          {isPastDue && (
-            <div className="p-3 bg-red-900/30 border border-red-800/50 rounded-lg mb-4">
-              <p className="text-red-300 text-sm">Your payment failed. Please update your payment method to avoid service interruption.</p>
-            </div>
-          )}
-
-          {!isActive && !isPastDue ? (
-            <button
-              onClick={handleStripeCheckout}
-              disabled={billingAction === 'checkout'}
-              className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50"
-            >
-              {billingAction === 'checkout' ? 'Redirecting to Stripe...' : 'Subscribe Now'}
-            </button>
-          ) : (
-            <button
-              onClick={handleBillingPortal}
-              disabled={billingAction === 'portal'}
-              className="w-full py-3 bg-gray-700 text-white rounded-lg hover:bg-gray-600 font-medium disabled:opacity-50"
-            >
-              {billingAction === 'portal' ? 'Opening...' : 'Manage Subscription'}
-            </button>
-          )}
-        </div>
+          </>
+        )}
 
         {/* Usage - only show for active/past_due subscribers */}
         {(isActive || isPastDue) && (
