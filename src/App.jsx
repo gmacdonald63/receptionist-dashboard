@@ -56,7 +56,7 @@ const App = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [addForm, setAddForm] = useState({
     firstName: '', lastName: '', phone: '', date: '', time: '',
-    service: '', address: '', city: '', state: '', zip: '', notes: ''
+    address: '', city: '', state: '', zip: '', notes: ''
   });
   const [savingAppointment, setSavingAppointment] = useState(false);
   const [reminderCount, setReminderCount] = useState(0);
@@ -269,7 +269,7 @@ const App = () => {
 
   const handleAddAppointment = async (e) => {
     e.preventDefault();
-    if (!addForm.lastName || !addForm.phone || !addForm.date || !addForm.time || !addForm.address || !addForm.city || !addForm.state || !addForm.zip) return;
+    if (!addForm.firstName || !addForm.lastName || !addForm.phone || !addForm.date || !addForm.time || !addForm.address || !addForm.city || !addForm.state || !addForm.zip || !addForm.notes) return;
 
     setSavingAppointment(true);
     const fullName = `${addForm.firstName.trim()} ${addForm.lastName.trim()}`.trim();
@@ -283,7 +283,6 @@ const App = () => {
           date: addForm.date,
           start_time: addForm.time,
           end_time: addForm.time,
-          service_type: addForm.service || null,
           address: addForm.address,
           city: addForm.city,
           state: addForm.state,
@@ -1340,9 +1339,10 @@ const App = () => {
             <form onSubmit={handleAddAppointment} className="p-4 space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-gray-400 text-sm mb-1">First Name</label>
+                  <label className="block text-gray-400 text-sm mb-1">First Name <span className="text-red-400">*</span></label>
                   <input
                     type="text"
+                    required
                     value={addForm.firstName}
                     onChange={e => setAddForm(f => ({ ...f, firstName: e.target.value }))}
                     placeholder="First name"
@@ -1447,22 +1447,12 @@ const App = () => {
               />
 
               <div>
-                <label className="block text-gray-400 text-sm mb-1">Service Type</label>
-                <input
-                  type="text"
-                  value={addForm.service}
-                  onChange={e => setAddForm(f => ({ ...f, service: e.target.value }))}
-                  placeholder="e.g. HVAC Repair, Plumbing"
-                  className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="block text-gray-400 text-sm mb-1">Notes</label>
+                <label className="block text-gray-400 text-sm mb-1">Details <span className="text-red-400">*</span></label>
                 <textarea
+                  required
                   value={addForm.notes}
                   onChange={e => setAddForm(f => ({ ...f, notes: e.target.value }))}
-                  placeholder="Any additional notes..."
+                  placeholder="Appointment details..."
                   rows={3}
                   className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm resize-none"
                 />
