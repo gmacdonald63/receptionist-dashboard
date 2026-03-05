@@ -936,8 +936,8 @@ const App = () => {
 
   // Plan definitions — price IDs must match Stripe Dashboard
   const PLANS = {
-    standard: { name: 'Standard Plan', price: 495, priceId: 'price_STANDARD_PLAN_ID_HERE' },
-    pro: { name: 'Pro Plan', price: 695, priceId: 'price_PRO_PLAN_ID_HERE' },
+    standard: { name: 'Standard Plan', price: 495, priceId: 'price_1T7BFxJVgG4IIGoFcnMC98UN' },
+    pro: { name: 'Pro Plan', price: 695, priceId: 'price_1T7BLkJVgG4IIGoFRdPuSpS9' },
   };
 
   const getPlanFromPriceId = (priceId) => {

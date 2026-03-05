@@ -9,8 +9,8 @@ const corsHeaders = {
 
 // Plan price IDs — update these after creating products/prices in Stripe Dashboard
 const PLANS: Record<string, string> = {
-  standard: "price_STANDARD_PLAN_ID_HERE",  // Standard Plan — $495/month
-  pro: "price_PRO_PLAN_ID_HERE",            // Pro Plan — $695/month
+  standard: "price_1T7BFxJVgG4IIGoFcnMC98UN",  // Standard Plan — $495/month
+  pro: "price_1T7BLkJVgG4IIGoFRdPuSpS9",       // Pro Plan — $695/month
 };
 
 Deno.serve(async (req) => {
