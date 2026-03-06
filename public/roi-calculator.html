@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Receptionist ROI Calculator — Reliant Support</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#111827;--card:#1f2937;--input:#2d3748;--border:#374151;
+    --text:#f9fafb;--muted:#9ca3af;--dim:#6b7280;
+    --green:#34d399;--red:#f87171;--blue:#60a5fa;--cyan:#22d3ee;--amber:#fbbf24;
+    --accent:#dc143c;
+  }
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.5}
+
+  .roi-calc{max-width:640px;margin:0 auto;padding:24px 16px}
+  .roi-header{text-align:center;margin-bottom:28px}
+  .roi-header h1{font-size:1.5rem;font-weight:700;margin-bottom:4px}
+  .roi-header p{color:var(--muted);font-size:.875rem}
+
+  .roi-section{margin-bottom:24px}
+  .roi-section h3{font-size:.75rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px}
+
+  .roi-grid{display:grid;gap:12px}
+  .roi-grid-2{grid-template-columns:1fr 1fr}
+  .roi-grid-3{grid-template-columns:1fr 1fr 1fr}
+  @media(max-width:480px){.roi-grid-3{grid-template-columns:1fr}.roi-grid-2{grid-template-columns:1fr}}
+
+  .field label{display:block;font-size:.8rem;color:var(--muted);margin-bottom:4px}
+  .field .wrap{position:relative}
+  .field .prefix,.field .suffix{position:absolute;top:50%;transform:translateY(-50%);color:var(--dim);font-size:.85rem;pointer-events:none}
+  .field .prefix{left:10px}
+  .field .suffix{right:10px}
+  .field input{width:100%;background:var(--input);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:.9rem;outline:none;transition:border-color .15s}
+  .field input:focus{border-color:var(--blue)}
+  .field input.has-prefix{padding-left:24px}
+  .field input.has-suffix{padding-right:32px}
+  .field input[type=number]{-moz-appearance:textfield}
+  .field input::-webkit-inner-spin-button,.field input::-webkit-outer-spin-button{-webkit-appearance:none}
+
+  .stat-card{background:var(--input);border-radius:8px;padding:12px;text-align:center}
+  .stat-card .val{font-size:1.25rem;font-weight:700}
+  .stat-card .lbl{font-size:.75rem;color:var(--muted);margin-top:2px}
+  .stat-card .sub{font-size:.7rem;color:var(--dim)}
+  .val-red{color:var(--red)}
+  .val-green{color:var(--green)}
+
+  .insight{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px 16px;display:flex;gap:12px;align-items:flex-start;margin-bottom:24px}
+  .insight .icon{font-size:1.25rem;flex-shrink:0;margin-top:2px}
+  .insight .title{font-size:.875rem;font-weight:500;color:var(--text)}
+  .insight .desc{font-size:.8rem;color:var(--muted);margin-top:2px}
+
+  .plan-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:480px){.plan-grid{grid-template-columns:1fr}}
+  .plan-card{background:var(--card);border-radius:8px;padding:16px;border:1px solid var(--border)}
+  .plan-card.highlight{border-color:rgba(96,165,250,.4)}
+  .plan-badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:.7rem;font-weight:600}
+  .badge-cyan{background:rgba(22,211,238,.15);color:var(--cyan)}
+  .badge-amber{background:rgba(251,191,36,.15);color:var(--amber)}
+  .plan-price{color:var(--muted);font-size:.85rem}
+  .plan-mins{color:var(--dim);font-size:.75rem;margin:4px 0 12px}
+  .plan-row{display:flex;justify-content:space-between;font-size:.85rem;padding:3px 0}
+  .plan-row .label{color:var(--muted)}
+  .plan-divider{border-top:1px solid var(--border);margin:6px 0;padding-top:6px}
+  .plan-total{font-weight:600;color:var(--muted)}
+  .plan-total .val{color:var(--green)}
+  .plan-roi{text-align:center;margin-top:12px}
+  .plan-roi .num{font-size:1.5rem;font-weight:700;color:var(--green)}
+  .plan-roi .lbl{font-size:.7rem;color:var(--dim)}
+
+  .annual{background:linear-gradient(135deg,rgba(16,185,129,.08),rgba(59,130,246,.08));border:1px solid rgba(16,185,129,.2);border-radius:8px;padding:16px}
+  .annual h3{font-size:.85rem;font-weight:600;color:var(--green);margin-bottom:12px}
+  .annual-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .annual .sub{font-size:.75rem;color:var(--muted)}
+  .annual .big{font-size:1.25rem;font-weight:700;color:var(--text);margin:2px 0}
+  .annual .note{font-size:.7rem;color:var(--dim)}
+
+  .disclaimer{text-align:center;font-size:.7rem;color:var(--dim);margin-top:20px}
+</style>
+</head>
+<body>
+<div class="roi-calc" id="roiCalc">
+  <div class="roi-header">
+    <h1>AI Receptionist ROI Calculator</h1>
+    <p>See how much an AI receptionist saves your business</p>
+  </div>
+
+  <!-- Inputs -->
+  <div class="roi-section">
+    <h3>Your Business</h3>
+    <div class="roi-grid roi-grid-2">
+      <div class="field">
+        <label>Calls per day</label>
+        <div class="wrap"><input type="number" id="callsPerDay" value="15" min="0"></div>
+      </div>
+      <div class="field">
+        <label>Missed call %</label>
+        <div class="wrap"><input type="number" id="missedPct" value="30" min="0" max="100" class="has-suffix"><span class="suffix">%</span></div>
+      </div>
+      <div class="field">
+        <label>Avg job value</label>
+        <div class="wrap"><span class="prefix">$</span><input type="number" id="avgJobValue" value="350" min="0" class="has-prefix"></div>
+      </div>
+      <div class="field">
+        <label>Receptionist cost/mo</label>
+        <div class="wrap"><span class="prefix">$</span><input type="number" id="receptionistCost" value="3200" min="0" class="has-prefix"></div>
+      </div>
+      <div class="field">
+        <label>Receptionist hours/day</label>
+        <div class="wrap"><input type="number" id="hoursPerDay" value="8" min="0" max="24" class="has-suffix"><span class="suffix">hrs</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Losses -->
+  <div class="roi-section">
+    <h3>What You're Losing Today</h3>
+    <div class="roi-grid roi-grid-3">
+      <div class="stat-card"><div class="val val-red" id="missedCalls">135</div><div class="lbl">Missed calls/mo</div></div>
+      <div class="stat-card"><div class="val val-red" id="lostJobs">47</div><div class="lbl">Lost jobs/mo</div><div class="sub">at 35% conversion</div></div>
+      <div class="stat-card"><div class="val val-red" id="lostRevenue">$16,538</div><div class="lbl">Lost revenue/mo</div></div>
+    </div>
+  </div>
+
+  <!-- After-hours -->
+  <div class="insight">
+    <div class="icon">&#128222;</div>
+    <div>
+      <div class="title">~<span id="afterHours">300</span> calls/mo come in after hours</div>
+      <div class="desc">Your receptionist covers <span id="coverHrs">8</span>hrs/day. AI covers all 24 — nights, weekends, and holidays.</div>
+    </div>
+  </div>
+
+  <!-- Plan comparison -->
+  <div class="roi-section">
+    <h3>With Reliant Support AI</h3>
+    <div class="plan-grid">
+      <!-- Standard -->
+      <div class="plan-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <span class="plan-badge badge-cyan">Standard</span>
+          <span class="plan-price">$495/mo</span>
+        </div>
+        <div class="plan-mins">1,000 minutes included</div>
+        <div class="plan-row"><span class="label">Salary savings</span><span class="val-green" id="savStd">$2,705/mo</span></div>
+        <div class="plan-row"><span class="label">Recovered revenue</span><span class="val-green" id="recRevStd">+$16,538/mo</span></div>
+        <div class="plan-row plan-divider plan-total"><span>Total value</span><span class="val" id="totalStd">$19,243/mo</span></div>
+        <div class="plan-roi"><div class="num" id="roiStd">3887%</div><div class="lbl">return on investment</div></div>
+      </div>
+      <!-- Pro -->
+      <div class="plan-card highlight">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <span class="plan-badge badge-amber">Pro</span>
+          <span class="plan-price">$695/mo</span>
+        </div>
+        <div class="plan-mins">2,000 minutes included</div>
+        <div class="plan-row"><span class="label">Salary savings</span><span class="val-green" id="savPro">$2,505/mo</span></div>
+        <div class="plan-row"><span class="label">Recovered revenue</span><span class="val-green" id="recRevPro">+$16,538/mo</span></div>
+        <div class="plan-row plan-divider plan-total"><span>Total value</span><span class="val" id="totalPro">$19,043/mo</span></div>
+        <div class="plan-roi"><div class="num" id="roiPro">2740%</div><div class="lbl">return on investment</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Annual -->
+  <div class="annual">
+    <h3>Annual Projection</h3>
+    <div class="annual-grid">
+      <div>
+        <div class="sub">Standard Plan — 1 year</div>
+        <div class="big" id="annStd">$230,916</div>
+        <div class="note">total value generated</div>
+      </div>
+      <div>
+        <div class="sub">Pro Plan — 1 year</div>
+        <div class="big" id="annPro">$228,516</div>
+        <div class="note">total value generated</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="disclaimer">Estimates based on a 35% conversion rate for recovered missed calls. Actual results may vary.</div>
+</div>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const fmt = n => n.toLocaleString('en-US');
+  const fmtD = n => '$' + fmt(n);
+
+  const inputs = ['callsPerDay','missedPct','avgJobValue','receptionistCost','hoursPerDay'];
+
+  function calc(){
+    const cpd = Math.max(0, +$('callsPerDay').value || 0);
+    const mp  = Math.max(0, Math.min(100, +$('missedPct').value || 0));
+    const ajv = Math.max(0, +$('avgJobValue').value || 0);
+    const rc  = Math.max(0, +$('receptionistCost').value || 0);
+    const hpd = Math.max(0, Math.min(24, +$('hoursPerDay').value || 0));
+
+    const monthly = cpd * 30;
+    const missed = Math.round(monthly * mp / 100);
+    const conv = 0.35;
+    const jobs = Math.round(missed * conv);
+    const rev = jobs * ajv;
+    const ahPct = Math.max(0, (24 - hpd) / 24);
+    const ahCalls = Math.round(monthly * ahPct);
+
+    const savStd = rc - 495;
+    const savPro = rc - 695;
+    const totStd = savStd + rev;
+    const totPro = savPro + rev;
+    const roiStd = 495 > 0 ? Math.round((totStd / 495) * 100) : 0;
+    const roiPro = 695 > 0 ? Math.round((totPro / 695) * 100) : 0;
+
+    $('missedCalls').textContent = fmt(missed);
+    $('lostJobs').textContent = fmt(jobs);
+    $('lostRevenue').textContent = fmtD(rev);
+    $('afterHours').textContent = fmt(ahCalls);
+    $('coverHrs').textContent = hpd;
+
+    $('savStd').textContent = fmtD(savStd) + '/mo';
+    $('savStd').className = savStd >= 0 ? 'val-green' : 'val-red';
+    $('recRevStd').textContent = '+' + fmtD(rev) + '/mo';
+    $('totalStd').textContent = fmtD(totStd) + '/mo';
+    $('roiStd').textContent = roiStd + '%';
+
+    $('savPro').textContent = fmtD(savPro) + '/mo';
+    $('savPro').className = savPro >= 0 ? 'val-green' : 'val-red';
+    $('recRevPro').textContent = '+' + fmtD(rev) + '/mo';
+    $('totalPro').textContent = fmtD(totPro) + '/mo';
+    $('roiPro').textContent = roiPro + '%';
+
+    $('annStd').textContent = fmtD(totStd * 12);
+    $('annPro').textContent = fmtD(totPro * 12);
+  }
+
+  inputs.forEach(id => $( id).addEventListener('input', calc));
+  calc();
+})();
+</script>
+</body>
+</html>
