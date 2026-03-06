@@ -221,7 +221,6 @@ const App = () => {
           time: apt.end_time
             ? `${apt.start_time} to ${apt.end_time}`
             : apt.start_time,
-          service: apt.service_type || '',
           address: apt.address || '',
           city: apt.city || '',
           state: apt.state || '',
@@ -303,7 +302,6 @@ const App = () => {
         time: data.end_time
           ? `${data.start_time} to ${data.end_time}`
           : data.start_time,
-        service: data.service_type || '',
         address: data.address || '',
         phone: data.caller_number || '',
         summary: data.notes || '',
@@ -319,7 +317,7 @@ const App = () => {
       const first = aptDate.getDate() - aptDate.getDay();
       setCurrentWeekStart(new Date(aptDate.getFullYear(), aptDate.getMonth(), first));
 
-      setAddForm({ firstName: '', lastName: '', phone: '', date: '', time: '', service: '', address: '', city: '', state: '', zip: '', notes: '' });
+      setAddForm({ firstName: '', lastName: '', phone: '', date: '', time: '', address: '', city: '', state: '', zip: '', notes: '' });
       setShowAddModal(false);
 
       // Re-fetch to show the new appointment
@@ -651,14 +649,8 @@ const App = () => {
                               )}
                               {apt.summary && (
                                 <div>
-                                  <p className="text-xs text-gray-300">Summary</p>
+                                  <p className="text-xs text-gray-300">Notes</p>
                                   <p className="text-white text-xs">{apt.summary}</p>
-                                </div>
-                              )}
-                              {apt.service && (
-                                <div>
-                                  <p className="text-xs text-gray-300">Service</p>
-                                  <p className="text-white text-xs">{apt.service}</p>
                                 </div>
                               )}
                             </div>
