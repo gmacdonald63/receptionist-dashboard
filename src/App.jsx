@@ -458,7 +458,7 @@ const App = () => {
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex-1">
                         <p className="font-medium text-white">{apt.name}</p>
-                        <p className="text-sm text-gray-400">{apt.service}</p>
+                        {apt.summary && <p className="text-sm text-gray-400 truncate">{apt.summary}</p>}
                       </div>
                     </div>
                     <div className="flex items-center justify-between text-sm">
