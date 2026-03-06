@@ -418,15 +418,47 @@ const Admin = ({ onBack }) => {
                     {client.is_admin && (
                       <span className="px-2 py-0.5 bg-purple-900 text-purple-300 rounded text-xs">Admin</span>
                     )}
-                    {client.invite_sent ? (
-                      <span className="px-2 py-0.5 bg-green-900 text-green-300 rounded text-xs">Invited</span>
-                    ) : (
-                      <span className="px-2 py-0.5 bg-yellow-900 text-yellow-300 rounded text-xs">Not Invited</span>
+                    {/* Account status badge */}
+                    {(() => {
+                      const status = client.subscription_status;
+                      if (status === 'active' || status === 'trialing') {
+                        return <span className="px-2 py-0.5 bg-blue-900 text-blue-300 rounded text-xs">Active</span>;
+                      } else if (status === 'past_due') {
+                        return <span className="px-2 py-0.5 bg-red-900 text-red-300 rounded text-xs">Past Due</span>;
+                      } else if (status === 'canceled' || status === 'cancelled') {
+                        return <span className="px-2 py-0.5 bg-red-900 text-red-300 rounded text-xs">Canceled</span>;
+                      } else if (client.invite_sent) {
+                        return <span className="px-2 py-0.5 bg-green-900 text-green-300 rounded text-xs">Invited</span>;
+                      } else {
+                        return <span className="px-2 py-0.5 bg-yellow-900 text-yellow-300 rounded text-xs">Not Invited</span>;
+                      }
+                    })()}
+                    {/* Plan tier badge */}
+                    {client.stripe_price_id && (
+                      client.stripe_price_id === 'price_1T7BLkJVgG4IIGoFRdPuSpS9'
+                        ? <span className="px-2 py-0.5 bg-amber-900 text-amber-300 rounded text-xs">Pro Member</span>
+                        : <span className="px-2 py-0.5 bg-cyan-900 text-cyan-300 rounded text-xs">Standard Member</span>
                     )}
                   </div>
                   <p className="text-sm text-gray-400">{client.email}</p>
                   {client.retell_agent_id && (
                     <p className="text-xs text-gray-500 mt-1">Agent: {client.retell_agent_id}</p>
+                  )}
+                  {client.subscription_status && client.subscription_status !== 'inactive' && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Recurring subscription
+                      {client.current_period_end && (
+                        <>
+                          {' · '}
+                          {client.subscription_status === 'canceled' || client.subscription_status === 'cancelled'
+                            ? `Expires: ${new Date(client.current_period_end).toLocaleDateString()}`
+                            : client.subscription_status === 'past_due'
+                              ? `Payment due: ${new Date(client.current_period_end).toLocaleDateString()}`
+                              : `Renews: ${new Date(client.current_period_end).toLocaleDateString()}`
+                          }
+                        </>
+                      )}
+                    </p>
                   )}
                 </div>
                 <div className="flex gap-2">
