@@ -249,15 +249,24 @@ const App = () => {
       // Fetch all appointments from Supabase (single source of truth)
       await fetchAppointments();
 
-      // Calculate stats
-      const totalMinutes = calls.reduce((sum, call) => sum + (call.call_duration || 0), 0) / 60;
-      const monthlyBill = totalMinutes * 0.10;
+      // Calculate stats — filter to current billing period
+      let periodStart = null;
+      if (clientData?.current_period_end) {
+        const periodEnd = new Date(clientData.current_period_end);
+        periodStart = new Date(periodEnd);
+        periodStart.setMonth(periodStart.getMonth() - 1);
+      }
+
+      const periodCalls = periodStart
+        ? calls.filter(call => call.start_timestamp && call.start_timestamp >= periodStart.getTime())
+        : calls;
+
+      const totalMinutes = periodCalls.reduce((sum, call) => sum + (call.call_duration || 0), 0) / 60;
 
       setStats({
-        totalCalls: calls.length,
+        totalCalls: periodCalls.length,
         appointments: appointments.length,
         totalMinutes: Math.round(totalMinutes),
-        monthlyBill: monthlyBill.toFixed(2)
       });
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -443,9 +452,57 @@ const App = () => {
           <div className="grid grid-cols-2 gap-3 md:gap-6">
             <StatCard icon={Phone} label="Total Calls" value={stats.totalCalls} color="bg-blue-600" />
             <StatCard icon={Calendar} label="Appointments" value={stats.appointments} color="bg-green-600" />
-            <StatCard icon={Clock} label="Total Minutes" value={stats.totalMinutes} color="bg-purple-600" />
-            <StatCard icon={DollarSign} label="Monthly Bill" value={`$${stats.monthlyBill}`} color="bg-orange-600" />
           </div>
+
+          {/* Plan minutes usage */}
+          {(() => {
+            const planKey = clientData?.stripe_price_id ? getPlanFromPriceId(clientData.stripe_price_id) : null;
+            const plan = planKey ? PLANS[planKey] : null;
+            const includedMinutes = plan?.minutes || 0;
+            const used = stats.totalMinutes || 0;
+            const remaining = Math.max(0, includedMinutes - used);
+            const pct = includedMinutes > 0 ? Math.min(100, (used / includedMinutes) * 100) : 0;
+            const isOver = used > includedMinutes;
+            const periodEnd = clientData?.current_period_end ? new Date(clientData.current_period_end) : null;
+
+            return includedMinutes > 0 ? (
+              <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 rounded-lg bg-purple-600">
+                      <Clock className="w-5 h-5 text-white" />
+                    </div>
+                    <span className="text-sm font-medium text-gray-400">Plan Minutes</span>
+                  </div>
+                  {periodEnd && (
+                    <span className="text-xs text-gray-500">
+                      Renews {periodEnd.toLocaleDateString()}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-baseline gap-1 mb-2">
+                  <span className="text-2xl font-bold text-white">{used}</span>
+                  <span className="text-gray-500 text-sm">/ {includedMinutes.toLocaleString()} min used</span>
+                </div>
+                <div className="w-full bg-gray-700 rounded-full h-2.5">
+                  <div
+                    className={`h-2.5 rounded-full transition-all ${isOver ? 'bg-red-500' : pct > 80 ? 'bg-yellow-500' : 'bg-purple-500'}`}
+                    style={{ width: `${Math.min(100, pct)}%` }}
+                  />
+                </div>
+                <div className="flex justify-between mt-1.5">
+                  <span className={`text-xs ${isOver ? 'text-red-400' : 'text-gray-500'}`}>
+                    {isOver ? `${used - includedMinutes} min over limit` : `${remaining.toLocaleString()} min remaining`}
+                  </span>
+                  <span className="text-xs text-gray-500">{Math.round(pct)}%</span>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3 md:gap-6">
+                <StatCard icon={Clock} label="Total Minutes" value={stats.totalMinutes} color="bg-purple-600" />
+              </div>
+            );
+          })()}
 
           <div className="bg-gray-800 rounded-lg p-4 md:p-6 border border-gray-700">
             <h3 className="text-lg md:text-xl font-semibold mb-4 text-white">Recent Appointments</h3>
@@ -927,8 +984,8 @@ const App = () => {
 
   // Plan definitions — price IDs must match Stripe Dashboard
   const PLANS = {
-    standard: { name: 'Standard Plan', price: 495, priceId: 'price_1T7BFxJVgG4IIGoFcnMC98UN' },
-    pro: { name: 'Pro Plan', price: 695, priceId: 'price_1T7BLkJVgG4IIGoFRdPuSpS9' },
+    standard: { name: 'Standard Plan', price: 495, priceId: 'price_1T7BFxJVgG4IIGoFcnMC98UN', minutes: 1000 },
+    pro: { name: 'Pro Plan', price: 695, priceId: 'price_1T7BLkJVgG4IIGoFRdPuSpS9', minutes: 2000 },
   };
 
   const getPlanFromPriceId = (priceId) => {
@@ -1130,7 +1187,33 @@ const App = () => {
                 <p className="text-gray-400 text-sm">Minutes</p>
               </div>
             </div>
-            <p className="text-gray-500 text-xs mt-3 text-center">All minutes included in your monthly plan</p>
+            {(() => {
+              const planKey = clientData?.stripe_price_id ? getPlanFromPriceId(clientData.stripe_price_id) : null;
+              const plan = planKey ? PLANS[planKey] : null;
+              const includedMinutes = plan?.minutes || 0;
+              const used = stats.totalMinutes || 0;
+              const remaining = Math.max(0, includedMinutes - used);
+              const pct = includedMinutes > 0 ? Math.min(100, (used / includedMinutes) * 100) : 0;
+              const isOver = used > includedMinutes;
+              return includedMinutes > 0 ? (
+                <>
+                  <div className="w-full bg-gray-700 rounded-full h-2 mt-3">
+                    <div
+                      className={`h-2 rounded-full transition-all ${isOver ? 'bg-red-500' : pct > 80 ? 'bg-yellow-500' : 'bg-purple-500'}`}
+                      style={{ width: `${Math.min(100, pct)}%` }}
+                    />
+                  </div>
+                  <p className={`text-xs mt-2 text-center ${isOver ? 'text-red-400' : 'text-gray-500'}`}>
+                    {isOver
+                      ? `${used - includedMinutes} min over your ${includedMinutes.toLocaleString()} min limit`
+                      : `${remaining.toLocaleString()} of ${includedMinutes.toLocaleString()} min remaining`
+                    }
+                  </p>
+                </>
+              ) : (
+                <p className="text-gray-500 text-xs mt-3 text-center">All minutes included in your monthly plan</p>
+              );
+            })()}
           </div>
         )}
 
