@@ -66,6 +66,7 @@ const Customers = ({ clientData, appointments, onReminderCountChange }) => {
   const [savingReminder, setSavingReminder] = useState(false);
   const [showRemindersPanel, setShowRemindersPanel] = useState(false);
   const [filterTag, setFilterTag] = useState('');
+  const [expandedCustApt, setExpandedCustApt] = useState(null);
 
   // Load customers on mount
   useEffect(() => {
@@ -791,13 +792,16 @@ const Customers = ({ clientData, appointments, onReminderCountChange }) => {
         {mostRecentApt && (
           <div className="bg-gray-800 rounded-lg p-3 border border-blue-800/50">
             <p className="text-xs text-blue-400 font-medium mb-1">Most Recent Appointment</p>
-            <p className="text-white text-sm font-medium">{mostRecentApt.service || 'Appointment'}</p>
+            <p className="text-white text-sm font-medium">{mostRecentApt.name || 'Appointment'}</p>
             <p className="text-gray-300 text-xs mt-0.5">
               {formatDate(mostRecentApt.date)}
-              {mostRecentApt.time ? ` · ${mostRecentApt.time}` : ''}
+              {mostRecentApt.time ? ` · ${formatTime(mostRecentApt.time)}` : ''}
             </p>
             {mostRecentApt.address && (
               <p className="text-gray-400 text-xs mt-0.5">{normalizeForDisplay(mostRecentApt.address)}</p>
+            )}
+            {mostRecentApt.summary && (
+              <p className="text-gray-500 text-xs mt-0.5 truncate">{mostRecentApt.summary}</p>
             )}
           </div>
         )}
@@ -1062,17 +1066,51 @@ const Customers = ({ clientData, appointments, onReminderCountChange }) => {
         </div>
       ) : (
         customerAppointments.map(apt => (
-          <div key={apt.id} className="bg-gray-800 rounded-lg p-3 border border-gray-700">
-            <div className="flex items-start justify-between mb-1">
-              <p className="text-white text-sm font-medium">{apt.service || 'Appointment'}</p>
-              <span className={`px-1.5 py-0.5 rounded text-[10px] ${
-                apt.source === 'manual' ? 'bg-green-700 text-green-200' : 'bg-blue-700 text-blue-200'
-              }`}>
-                {apt.source === 'manual' ? 'Manual' : 'AI'}
-              </span>
+          <div
+            key={apt.id}
+            className={`p-3 rounded-lg cursor-pointer transition-colors ${
+              expandedCustApt === apt.id
+                ? 'bg-blue-600'
+                : 'bg-gray-800 hover:bg-gray-700 border border-gray-700'
+            }`}
+            onClick={() => setExpandedCustApt(expandedCustApt === apt.id ? null : apt.id)}
+          >
+            <div className="flex items-start justify-between gap-1">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1">
+                  <p className="text-white text-sm font-medium truncate">{apt.name}</p>
+                  {apt.source === 'manual' ? (
+                    <span className="flex-shrink-0 px-1 py-0.5 bg-green-700 text-green-200 rounded text-[10px] leading-none">Manual</span>
+                  ) : (
+                    <span className="flex-shrink-0 px-1 py-0.5 bg-blue-700 text-blue-200 rounded text-[10px] leading-none">AI</span>
+                  )}
+                </div>
+                <p className="text-gray-300 text-xs mt-1">{formatDate(apt.date)} · {formatTime(apt.time)}</p>
+                {apt.address && (
+                  <p className="text-gray-400 text-xs mt-1 truncate">{normalizeForDisplay(apt.address)}</p>
+                )}
+              </div>
+              {expandedCustApt === apt.id && (
+                <ChevronDown className="w-4 h-4 text-white flex-shrink-0" />
+              )}
             </div>
-            <p className="text-gray-300 text-xs">{formatDate(apt.date)} • {apt.time}</p>
-            {apt.address && <p className="text-gray-500 text-xs mt-1">{normalizeForDisplay(apt.address)}</p>}
+
+            {expandedCustApt === apt.id && (
+              <div className="mt-3 pt-3 border-t border-blue-500/30 space-y-2">
+                {apt.phone && (
+                  <div>
+                    <p className="text-xs text-gray-300">Phone</p>
+                    <p className="text-white text-xs font-medium">{apt.phone}</p>
+                  </div>
+                )}
+                {apt.summary && (
+                  <div>
+                    <p className="text-xs text-gray-300">Notes</p>
+                    <p className="text-white text-xs">{apt.summary}</p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         ))
       )}
