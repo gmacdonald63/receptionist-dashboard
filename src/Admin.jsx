@@ -8,11 +8,11 @@ const Admin = ({ onBack }) => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingClient, setEditingClient] = useState(null);
   const [formData, setFormData] = useState({
-    email: '',
     company_name: '',
+    email: '',
+    phone: '',
     retell_agent_id: '',
     retell_api_key: '',
-    cal_com_link: '',
     is_admin: false
   });
   const [saving, setSaving] = useState(false);
@@ -52,11 +52,11 @@ const Admin = ({ onBack }) => {
 
   const resetForm = () => {
     setFormData({
-      email: '',
       company_name: '',
+      email: '',
+      phone: '',
       retell_agent_id: '',
       retell_api_key: '',
-      cal_com_link: '',
       is_admin: false
     });
     setEditingClient(null);
@@ -66,11 +66,11 @@ const Admin = ({ onBack }) => {
 
   const handleEdit = (client) => {
     setFormData({
-      email: client.email || '',
       company_name: client.company_name || '',
+      email: client.email || '',
+      phone: client.phone || '',
       retell_agent_id: client.retell_agent_id || '',
       retell_api_key: client.retell_api_key || '',
-      cal_com_link: client.cal_com_link || '',
       is_admin: client.is_admin || false
     });
     setEditingClient(client);
@@ -89,9 +89,9 @@ const Admin = ({ onBack }) => {
           .update({
             email: formData.email,
             company_name: formData.company_name,
+            phone: formData.phone,
             retell_agent_id: formData.retell_agent_id,
             retell_api_key: formData.retell_api_key,
-            cal_com_link: formData.cal_com_link,
             is_admin: formData.is_admin
           })
           .eq('id', editingClient.id);
@@ -118,9 +118,9 @@ const Admin = ({ onBack }) => {
           .insert([{
             email: formData.email.trim().toLowerCase(),
             company_name: formData.company_name,
+            phone: formData.phone,
             retell_agent_id: formData.retell_agent_id,
             retell_api_key: formData.retell_api_key,
-            cal_com_link: formData.cal_com_link,
             is_admin: formData.is_admin,
             invite_sent: false
           }]);
@@ -280,6 +280,17 @@ const Admin = ({ onBack }) => {
 
             <div className="space-y-4">
               <div>
+                <label className="block text-gray-400 text-sm mb-1">Company Name</label>
+                <input
+                  type="text"
+                  value={formData.company_name}
+                  onChange={(e) => setFormData({ ...formData, company_name: e.target.value })}
+                  className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
+                  placeholder="ABC Company"
+                />
+              </div>
+
+              <div>
                 <label className="block text-gray-400 text-sm mb-1">Email *</label>
                 <input
                   type="email"
@@ -296,13 +307,13 @@ const Admin = ({ onBack }) => {
               </div>
 
               <div>
-                <label className="block text-gray-400 text-sm mb-1">Company Name</label>
+                <label className="block text-gray-400 text-sm mb-1">Phone Number</label>
                 <input
-                  type="text"
-                  value={formData.company_name}
-                  onChange={(e) => setFormData({ ...formData, company_name: e.target.value })}
+                  type="tel"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                   className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
-                  placeholder="ABC Company"
+                  placeholder="(555) 123-4567"
                 />
               </div>
 
@@ -325,17 +336,6 @@ const Admin = ({ onBack }) => {
                   onChange={(e) => setFormData({ ...formData, retell_api_key: e.target.value })}
                   className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
                   placeholder="key_xxxxx"
-                />
-              </div>
-
-              <div>
-                <label className="block text-gray-400 text-sm mb-1">Cal.com Link</label>
-                <input
-                  type="text"
-                  value={formData.cal_com_link}
-                  onChange={(e) => setFormData({ ...formData, cal_com_link: e.target.value })}
-                  className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
-                  placeholder="https://cal.com/..."
                 />
               </div>
 
@@ -475,9 +475,6 @@ const Admin = ({ onBack }) => {
                   </button>
                 </div>
               </div>
-              {client.cal_com_link && (
-                <p className="text-xs text-gray-500 mt-2 truncate">Cal.com: {client.cal_com_link}</p>
-              )}
               <div className="flex gap-4 mt-2">
                 <p className="text-xs text-gray-600">
                   Created: {new Date(client.created_at).toLocaleDateString()}
