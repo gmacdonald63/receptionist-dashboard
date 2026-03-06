@@ -99,8 +99,7 @@ export const retellService = {
         address: customData.appointment_address || null,
         city: customData.appointment_city || null,
         state: customData.appointment_state || null,
-        zip: customData.appointment_zip || null,
-        service: this.extractIssue(customData, analysis.call_summary)
+        zip: customData.appointment_zip || null
       }
     };
   },
@@ -140,52 +139,6 @@ export const retellService = {
     return 'Call Completed';
   },
 
-  // Extract the issue/reason from call summary
-  extractIssue(customData, summary) {
-    // First check if there's a specific issue field in custom data
-    if (customData.issue) {
-      return customData.issue;
-    }
-    if (customData.service_type) {
-      return customData.service_type;
-    }
-    
-    if (summary) {
-      // Try to extract issue from patterns like "because his/her/their [issue]"
-      // Pattern: "because his/her/their [something] was [condition]"
-      const becausePattern = /because (?:his|her|their|the) (.+?)(?:\.|The agent|,|$)/i;
-      const becauseMatch = summary.match(becausePattern);
-      if (becauseMatch) {
-        let issue = becauseMatch[1].trim();
-        // Capitalize first letter
-        issue = issue.charAt(0).toUpperCase() + issue.slice(1);
-        // Remove trailing period if present
-        issue = issue.replace(/\.$/, '');
-        return issue;
-      }
-      
-      // Alternative pattern: "to schedule a [type] appointment"
-      const schedulePattern = /to schedule (?:a|an) (.+?) (?:appointment|visit|service)/i;
-      const scheduleMatch = summary.match(schedulePattern);
-      if (scheduleMatch) {
-        let service = scheduleMatch[1].trim();
-        service = service.charAt(0).toUpperCase() + service.slice(1);
-        return service;
-      }
-      
-      // Alternative pattern: "issue with [something]" or "problem with [something]"
-      const issuePattern = /(?:issue|problem) with (.+?)(?:\.|,|$)/i;
-      const issueMatch = summary.match(issuePattern);
-      if (issueMatch) {
-        let issue = issueMatch[1].trim();
-        issue = issue.charAt(0).toUpperCase() + issue.slice(1);
-        return issue;
-      }
-    }
-    
-    return 'Service Request';
-  },
-
   // Get appointments from calls
   async getAppointments(agentId = null) {
     const calls = await this.getCalls(100, agentId);
@@ -197,7 +150,6 @@ export const retellService = {
         name: call.caller,
         date: call.appointment.date,
         time: call.appointment.time,
-        service: call.appointment.service,
         address: call.appointment.address,
         city: call.appointment.city,
         state: call.appointment.state,

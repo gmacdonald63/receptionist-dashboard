@@ -24,7 +24,6 @@ serve(async (req) => {
     const apptCity     = customData.appointment_city    ?? null;
     const apptState    = customData.appointment_state   ?? null;
     const apptZip      = customData.appointment_zip     ?? null;
-    const serviceType  = customData.service_type        ?? customData.issue ?? null;
     // Insert call log
     const { error: callError } = await supabase.from("calls").insert({
       call_id:            call.call_id,
@@ -60,7 +59,6 @@ serve(async (req) => {
         city:          apptCity,
         state:         apptState,
         zip:           apptZip,
-        service_type:  serviceType,
         notes:         analysis.call_summary ?? null,
         source:        'call',
         status:        'confirmed',
