@@ -167,7 +167,7 @@
     </div>
   </div>
 
-  <div class="disclaimer">Estimates based on your inputs. Actual results may vary. Overage billed at $0.20/min beyond included minutes.</div>
+  <div class="disclaimer">Estimates based on your inputs. Actual results may vary. Overage billed at $0.40/min beyond included minutes.</div>
 </div>
 
 <script>
@@ -176,7 +176,7 @@
   const fmt = n => n.toLocaleString('en-US');
   const fmtD = n => (n < 0 ? '-$' + Math.abs(n).toLocaleString('en-US') : '$' + n.toLocaleString('en-US'));
 
-  const AVG = 5, DAYS = 24, OVR = 0.20;
+  const AVG = 5, DAYS = 24, OVR = 0.40;
   const STD_P = 495, STD_M = 1000, PRO_P = 695, PRO_M = 2000;
 
   function calc(){
