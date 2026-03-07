@@ -309,17 +309,29 @@
       <h2 class="text-3xl font-semibold mb-6 text-center">
         Request a Demo
       </h2>
-      <form class="space-y-4">
-        <input type="text" placeholder="Company Name"
+      <form id="demoForm" class="space-y-4">
+        <input type="text" id="demo_company" placeholder="Company Name" required
           class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-blue-500"/>
-        <input type="email" placeholder="Email Address"
+        <input type="text" id="demo_name" placeholder="Your Name" required
           class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-blue-500"/>
-        <textarea placeholder="Tell us about your HVAC business..."
-          class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-blue-500 h-32"></textarea>
-        <button class="w-full py-3 bg-blue-600 rounded-lg font-medium hover:bg-blue-700">
+        <input type="email" id="demo_email" placeholder="Email Address" required
+          class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-blue-500"/>
+        <input type="tel" id="demo_phone" placeholder="Phone Number (optional)"
+          class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-blue-500"/>
+        <button type="submit" id="demoSubmitBtn" class="w-full py-3 bg-blue-600 rounded-lg font-medium hover:bg-blue-700">
           Submit Request
         </button>
       </form>
+      <!-- Success message (hidden by default) -->
+      <div id="demoSuccess" class="hidden text-center py-8">
+        <div class="text-green-400 text-5xl mb-4">&#10003;</div>
+        <h3 class="text-xl font-semibold mb-2">Request Received!</h3>
+        <p class="text-gray-400">We'll be in touch shortly with your demo details.</p>
+      </div>
+      <!-- Error message (hidden by default) -->
+      <div id="demoError" class="hidden text-center py-4">
+        <p class="text-red-400 text-sm">Something went wrong. Please try again or email us directly.</p>
+      </div>
     </div>
   </section>
 
@@ -414,6 +426,68 @@
 
     ['rc_missedPerDay','rc_avgJobValue','rc_convPct'].forEach(id => $(id).addEventListener('input', calc));
     calc();
+  })();
+  </script>
+
+  <!-- Demo Request Form Handler -->
+  <script>
+  (function(){
+    const SUPABASE_URL = 'https://zmppdmfdhknnwzwdfhwf.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InptcHBkbWZkaGtubnd6d2RmaHdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk4MzQyMDYsImV4cCI6MjA4NTQxMDIwNn0.mXfuz8mEZhizFen78gUaakBDbrzANn4ZM1a7KuDiKJs';
+
+    const form = document.getElementById('demoForm');
+    const btn = document.getElementById('demoSubmitBtn');
+    const successDiv = document.getElementById('demoSuccess');
+    const errorDiv = document.getElementById('demoError');
+
+    form.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      errorDiv.classList.add('hidden');
+      btn.disabled = true;
+      btn.textContent = 'Submitting...';
+
+      const payload = {
+        company_name: document.getElementById('demo_company').value.trim(),
+        contact_name: document.getElementById('demo_name').value.trim(),
+        email: document.getElementById('demo_email').value.trim(),
+        phone: document.getElementById('demo_phone').value.trim() || null
+      };
+
+      try {
+        // Save to Supabase
+        const res = await fetch(SUPABASE_URL + '/rest/v1/demo_requests', {
+          method: 'POST',
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=minimal'
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) throw new Error('Failed to save');
+
+        // Send email notification via Edge Function
+        await fetch(SUPABASE_URL + '/functions/v1/demo-notification', {
+          method: 'POST',
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+
+        // Show success
+        form.classList.add('hidden');
+        successDiv.classList.remove('hidden');
+      } catch (err) {
+        errorDiv.classList.remove('hidden');
+        btn.disabled = false;
+        btn.textContent = 'Submit Request';
+      }
+    });
   })();
   </script>
 
