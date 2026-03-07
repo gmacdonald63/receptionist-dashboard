@@ -439,26 +439,26 @@ const Admin = ({ onBack }) => {
                         ? <span className="px-2 py-0.5 bg-amber-900 text-amber-300 rounded text-xs">Pro Member</span>
                         : <span className="px-2 py-0.5 bg-cyan-900 text-cyan-300 rounded text-xs">Standard Member</span>
                     )}
+                    {client.subscription_status && client.subscription_status !== 'inactive' && (
+                      <span className="text-xs text-gray-500">
+                        Recurring subscription
+                        {client.current_period_end && (
+                          <>
+                            {' · '}
+                            {client.subscription_status === 'canceled' || client.subscription_status === 'cancelled'
+                              ? `Expires: ${new Date(client.current_period_end).toLocaleDateString()}`
+                              : client.subscription_status === 'past_due'
+                                ? `Payment due: ${new Date(client.current_period_end).toLocaleDateString()}`
+                                : `Renews: ${new Date(client.current_period_end).toLocaleDateString()}`
+                            }
+                          </>
+                        )}
+                      </span>
+                    )}
                   </div>
                   <p className="text-sm text-gray-400">{client.email}</p>
                   {client.retell_agent_id && (
                     <p className="text-xs text-gray-500 mt-1">Agent: {client.retell_agent_id}</p>
-                  )}
-                  {client.subscription_status && client.subscription_status !== 'inactive' && (
-                    <p className="text-xs text-gray-500 mt-1">
-                      Recurring subscription
-                      {client.current_period_end && (
-                        <>
-                          {' · '}
-                          {client.subscription_status === 'canceled' || client.subscription_status === 'cancelled'
-                            ? `Expires: ${new Date(client.current_period_end).toLocaleDateString()}`
-                            : client.subscription_status === 'past_due'
-                              ? `Payment due: ${new Date(client.current_period_end).toLocaleDateString()}`
-                              : `Renews: ${new Date(client.current_period_end).toLocaleDateString()}`
-                          }
-                        </>
-                      )}
-                    </p>
                   )}
                 </div>
                 <div className="flex gap-2">
