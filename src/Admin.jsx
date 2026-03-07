@@ -457,6 +457,9 @@ const Admin = ({ onBack }) => {
                     )}
                   </div>
                   <p className="text-sm text-gray-400">{client.email}</p>
+                  {client.phone && (
+                    <p className="text-xs text-gray-500 mt-1">{client.phone}</p>
+                  )}
                   {client.retell_agent_id && (
                     <p className="text-xs text-gray-500 mt-1">Agent: {client.retell_agent_id}</p>
                   )}
