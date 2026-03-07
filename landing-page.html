@@ -18,7 +18,6 @@
     }
   </script>
   <style>
-    /* Hide number input spinners */
     input[type=number]::-webkit-inner-spin-button,
     input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
     input[type=number] { -moz-appearance: textfield; }
@@ -132,24 +131,16 @@
   <section id="roi" class="bg-gray-800 border-t border-b border-gray-700 py-20">
     <div class="max-w-3xl mx-auto px-6">
       <h2 class="text-3xl font-semibold mb-2 text-center">Calculate Your ROI</h2>
-      <p class="text-gray-400 text-center mb-12">Plug in your numbers and see what you're leaving on the table</p>
+      <p class="text-gray-400 text-center mb-12">See what those missed calls are really costing you</p>
 
       <!-- Inputs -->
       <div class="mb-10">
-        <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Your Business</p>
-        <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Your Missed Calls</p>
+        <div class="grid grid-cols-3 gap-4">
           <div>
-            <label class="block text-sm text-gray-400 mb-1">Calls per day</label>
-            <input type="number" id="rc_callsPerDay" value="15" min="0"
+            <label class="block text-sm text-gray-400 mb-1">Missed calls/day</label>
+            <input type="number" id="rc_missedPerDay" value="5" min="0"
               class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500"/>
-          </div>
-          <div>
-            <label class="block text-sm text-gray-400 mb-1">Missed call %</label>
-            <div class="relative">
-              <input type="number" id="rc_missedPct" value="30" min="0" max="100"
-                class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 pr-8 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500"/>
-              <span class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">%</span>
-            </div>
           </div>
           <div>
             <label class="block text-sm text-gray-400 mb-1">Avg job value</label>
@@ -160,22 +151,15 @@
             </div>
           </div>
           <div>
-            <label class="block text-sm text-gray-400 mb-1">Receptionist cost/mo</label>
+            <label class="block text-sm text-gray-400 mb-1">Booking rate</label>
             <div class="relative">
-              <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
-              <input type="number" id="rc_receptionistCost" value="3200" min="0"
-                class="w-full bg-gray-900 border border-gray-700 rounded-lg pl-7 pr-3 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500"/>
-            </div>
-          </div>
-          <div>
-            <label class="block text-sm text-gray-400 mb-1">Receptionist hours/day</label>
-            <div class="relative">
-              <input type="number" id="rc_hoursPerDay" value="8" min="0" max="24"
-                class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 pr-10 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500"/>
-              <span class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">hrs</span>
+              <input type="number" id="rc_convPct" value="35" min="0" max="100"
+                class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 pr-8 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500"/>
+              <span class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">%</span>
             </div>
           </div>
         </div>
+        <p class="text-xs text-gray-600 mt-2">Based on a 6-day work week (24 days/mo) and 5-minute average call</p>
       </div>
 
       <!-- What you're losing -->
@@ -183,37 +167,36 @@
         <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">What You're Losing Today</p>
         <div class="grid grid-cols-3 gap-4">
           <div class="bg-gray-900 border border-gray-700 rounded-xl p-4 text-center">
-            <p class="text-2xl font-bold text-red-400" id="rc_missedCalls">135</p>
+            <p class="text-2xl font-bold text-red-400" id="rc_missedMo">120</p>
             <p class="text-gray-400 text-xs mt-1">Missed calls/mo</p>
           </div>
           <div class="bg-gray-900 border border-gray-700 rounded-xl p-4 text-center">
-            <p class="text-2xl font-bold text-red-400" id="rc_lostJobs">47</p>
+            <p class="text-2xl font-bold text-red-400" id="rc_lostJobs">42</p>
             <p class="text-gray-400 text-xs mt-1">Lost jobs/mo</p>
-            <p class="text-gray-600 text-xs">at 35% conversion</p>
           </div>
           <div class="bg-gray-900 border border-gray-700 rounded-xl p-4 text-center">
-            <p class="text-2xl font-bold text-red-400" id="rc_lostRevenue">$16,538</p>
+            <p class="text-2xl font-bold text-red-400" id="rc_lostRev">$14,700</p>
             <p class="text-gray-400 text-xs mt-1">Lost revenue/mo</p>
           </div>
         </div>
       </div>
 
-      <!-- After-hours callout -->
+      <!-- Minutes needed -->
       <div class="bg-gray-900 border border-gray-700 rounded-xl p-4 flex items-start gap-3 mb-10">
         <span class="text-xl mt-0.5">&#128222;</span>
         <div>
           <p class="text-sm font-medium text-white">
-            ~<span id="rc_afterHours">300</span> calls/mo come in after hours
+            You'd need ~<span id="rc_minNeeded">600</span> AI minutes/mo to cover those calls
           </p>
-          <p class="text-xs text-gray-400 mt-0.5">
-            Your receptionist covers <span id="rc_coverHrs">8</span>hrs/day. AI covers all 24 — nights, weekends, and holidays.
+          <p class="text-xs text-gray-400 mt-0.5" id="rc_minDetail">
+            120 calls x 5 min avg = 600 min. The Standard plan covers this.
           </p>
         </div>
       </div>
 
       <!-- Plan comparison -->
       <div class="mb-8">
-        <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">With Reliant Support AI</p>
+        <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Plan Comparison</p>
         <div class="grid md:grid-cols-2 gap-4">
           <!-- Standard -->
           <div class="bg-gray-900 border border-gray-700 rounded-xl p-5">
@@ -221,23 +204,28 @@
               <span class="px-2 py-0.5 bg-cyan-900/50 text-cyan-400 rounded text-xs font-semibold">Standard</span>
               <span class="text-gray-400 text-sm">$495/mo</span>
             </div>
-            <p class="text-gray-600 text-xs mb-4">1,000 minutes included</p>
+            <p class="text-gray-600 text-xs mb-1">1,000 min included (200 calls)</p>
+            <p class="text-gray-600 text-xs mb-4">~8.3 calls/day at 5 min avg</p>
             <div class="space-y-2 text-sm">
               <div class="flex justify-between">
-                <span class="text-gray-400">Salary savings</span>
-                <span class="text-green-400" id="rc_savStd">$2,705/mo</span>
+                <span class="text-gray-400">Recovered revenue</span>
+                <span class="text-green-400" id="rc_recRevStd">+$14,700</span>
               </div>
               <div class="flex justify-between">
-                <span class="text-gray-400">Recovered revenue</span>
-                <span class="text-green-400" id="rc_recRevStd">+$16,538/mo</span>
+                <span class="text-gray-400">Plan cost</span>
+                <span class="text-gray-300">-$495</span>
+              </div>
+              <div class="flex justify-between" id="rc_overStdRow" style="display:none">
+                <span class="text-gray-400">Overage (<span id="rc_overStdMin">0</span> min)</span>
+                <span class="text-red-400">-$<span id="rc_overStdCost">0</span></span>
               </div>
               <div class="border-t border-gray-700 pt-2 flex justify-between font-semibold">
-                <span class="text-gray-300">Total value</span>
-                <span class="text-green-400" id="rc_totalStd">$19,243/mo</span>
+                <span class="text-gray-300">Net profit</span>
+                <span class="text-green-400" id="rc_netStd">$14,205/mo</span>
               </div>
             </div>
             <div class="mt-4 text-center">
-              <p class="text-3xl font-bold text-green-400" id="rc_roiStd">3887%</p>
+              <p class="text-3xl font-bold text-green-400" id="rc_roiStd">2870%</p>
               <p class="text-gray-600 text-xs">return on investment</p>
             </div>
           </div>
@@ -248,23 +236,28 @@
               <span class="px-2 py-0.5 bg-amber-900/50 text-amber-400 rounded text-xs font-semibold">Pro</span>
               <span class="text-gray-400 text-sm">$695/mo</span>
             </div>
-            <p class="text-gray-600 text-xs mb-4">2,000 minutes included</p>
+            <p class="text-gray-600 text-xs mb-1">2,000 min included (400 calls)</p>
+            <p class="text-gray-600 text-xs mb-4">~16.6 calls/day at 5 min avg</p>
             <div class="space-y-2 text-sm">
               <div class="flex justify-between">
-                <span class="text-gray-400">Salary savings</span>
-                <span class="text-green-400" id="rc_savPro">$2,505/mo</span>
+                <span class="text-gray-400">Recovered revenue</span>
+                <span class="text-green-400" id="rc_recRevPro">+$14,700</span>
               </div>
               <div class="flex justify-between">
-                <span class="text-gray-400">Recovered revenue</span>
-                <span class="text-green-400" id="rc_recRevPro">+$16,538/mo</span>
+                <span class="text-gray-400">Plan cost</span>
+                <span class="text-gray-300">-$695</span>
+              </div>
+              <div class="flex justify-between" id="rc_overProRow" style="display:none">
+                <span class="text-gray-400">Overage (<span id="rc_overProMin">0</span> min)</span>
+                <span class="text-red-400">-$<span id="rc_overProCost">0</span></span>
               </div>
               <div class="border-t border-gray-700 pt-2 flex justify-between font-semibold">
-                <span class="text-gray-300">Total value</span>
-                <span class="text-green-400" id="rc_totalPro">$19,043/mo</span>
+                <span class="text-gray-300">Net profit</span>
+                <span class="text-green-400" id="rc_netPro">$14,005/mo</span>
               </div>
             </div>
             <div class="mt-4 text-center">
-              <p class="text-3xl font-bold text-green-400" id="rc_roiPro">2740%</p>
+              <p class="text-3xl font-bold text-green-400" id="rc_roiPro">2015%</p>
               <p class="text-gray-600 text-xs">return on investment</p>
             </div>
           </div>
@@ -277,20 +270,19 @@
         <div class="grid grid-cols-2 gap-6">
           <div>
             <p class="text-xs text-gray-400">Standard Plan — 1 year</p>
-            <p class="text-xl font-bold text-white" id="rc_annStd">$230,916</p>
-            <p class="text-xs text-gray-600">total value generated</p>
+            <p class="text-xl font-bold text-white" id="rc_annStd">$170,460</p>
+            <p class="text-xs text-gray-600">net profit from recovered calls</p>
           </div>
           <div>
             <p class="text-xs text-gray-400">Pro Plan — 1 year</p>
-            <p class="text-xl font-bold text-white" id="rc_annPro">$228,516</p>
-            <p class="text-xs text-gray-600">total value generated</p>
+            <p class="text-xl font-bold text-white" id="rc_annPro">$168,060</p>
+            <p class="text-xs text-gray-600">net profit from recovered calls</p>
           </div>
         </div>
       </div>
 
-      <p class="text-center text-xs text-gray-600">Estimates based on a 35% conversion rate for recovered missed calls. Actual results may vary.</p>
+      <p class="text-center text-xs text-gray-600">Estimates based on your inputs. Actual results may vary. Overage billed at $0.20/min beyond included minutes.</p>
 
-      <!-- CTA after calculator -->
       <div class="mt-10 text-center">
         <a href="#contact" class="inline-block px-8 py-3 bg-blue-600 rounded-lg font-medium hover:bg-blue-700 text-lg">
           Ready to Stop Losing Calls? Request a Demo
@@ -329,55 +321,86 @@
   (function(){
     const $ = id => document.getElementById(id);
     const fmt = n => n.toLocaleString('en-US');
-    const fmtD = n => '$' + fmt(n);
+    const fmtD = n => (n < 0 ? '-$' + Math.abs(n).toLocaleString('en-US') : '$' + n.toLocaleString('en-US'));
 
-    const inputs = ['rc_callsPerDay','rc_missedPct','rc_avgJobValue','rc_receptionistCost','rc_hoursPerDay'];
+    const AVG_CALL_MIN = 5;
+    const WORK_DAYS = 24;
+    const OVERAGE = 0.20;
+    const STD_PRICE = 495, STD_MIN = 1000;
+    const PRO_PRICE = 695, PRO_MIN = 2000;
 
     function calc(){
-      const cpd = Math.max(0, +$('rc_callsPerDay').value || 0);
-      const mp  = Math.max(0, Math.min(100, +$('rc_missedPct').value || 0));
+      const mpd = Math.max(0, +$('rc_missedPerDay').value || 0);
       const ajv = Math.max(0, +$('rc_avgJobValue').value || 0);
-      const rc  = Math.max(0, +$('rc_receptionistCost').value || 0);
-      const hpd = Math.max(0, Math.min(24, +$('rc_hoursPerDay').value || 0));
+      const cp  = Math.max(0, Math.min(100, +$('rc_convPct').value || 0));
 
-      const monthly = cpd * 30;
-      const missed = Math.round(monthly * mp / 100);
-      const conv = 0.35;
-      const jobs = Math.round(missed * conv);
+      const conv = cp / 100;
+      const missedMo = Math.round(mpd * WORK_DAYS);
+      const jobs = Math.round(missedMo * conv);
       const rev = jobs * ajv;
-      const ahPct = Math.max(0, (24 - hpd) / 24);
-      const ahCalls = Math.round(monthly * ahPct);
+      const minNeeded = missedMo * AVG_CALL_MIN;
 
-      const savStd = rc - 495;
-      const savPro = rc - 695;
-      const totStd = savStd + rev;
-      const totPro = savPro + rev;
-      const roiStd = 495 > 0 ? Math.round((totStd / 495) * 100) : 0;
-      const roiPro = 695 > 0 ? Math.round((totPro / 695) * 100) : 0;
+      // Standard
+      const overMinStd = Math.max(0, minNeeded - STD_MIN);
+      const overCostStd = Math.round(overMinStd * OVERAGE);
+      const totalCostStd = STD_PRICE + overCostStd;
+      const netStd = rev - totalCostStd;
+      const roiStd = totalCostStd > 0 ? Math.round((netStd / totalCostStd) * 100) : 0;
 
-      $('rc_missedCalls').textContent = fmt(missed);
+      // Pro
+      const overMinPro = Math.max(0, minNeeded - PRO_MIN);
+      const overCostPro = Math.round(overMinPro * OVERAGE);
+      const totalCostPro = PRO_PRICE + overCostPro;
+      const netPro = rev - totalCostPro;
+      const roiPro = totalCostPro > 0 ? Math.round((netPro / totalCostPro) * 100) : 0;
+
+      // Update DOM
+      $('rc_missedMo').textContent = fmt(missedMo);
       $('rc_lostJobs').textContent = fmt(jobs);
-      $('rc_lostRevenue').textContent = fmtD(rev);
-      $('rc_afterHours').textContent = fmt(ahCalls);
-      $('rc_coverHrs').textContent = hpd;
+      $('rc_lostRev').textContent = fmtD(rev);
+      $('rc_minNeeded').textContent = fmt(minNeeded);
 
-      $('rc_savStd').textContent = fmtD(savStd) + '/mo';
-      $('rc_savStd').className = savStd >= 0 ? 'text-green-400' : 'text-red-400';
-      $('rc_recRevStd').textContent = '+' + fmtD(rev) + '/mo';
-      $('rc_totalStd').textContent = fmtD(totStd) + '/mo';
-      $('rc_roiStd').textContent = roiStd + '%';
+      // Minutes detail
+      var detail = fmt(missedMo) + ' calls x ' + AVG_CALL_MIN + ' min avg = ' + fmt(minNeeded) + ' min. ';
+      if (minNeeded <= STD_MIN) detail += 'The Standard plan covers this.';
+      else if (minNeeded <= PRO_MIN) detail += 'The Pro plan covers this.';
+      else detail += 'Overage is billed at $' + OVERAGE.toFixed(2) + '/min.';
+      $('rc_minDetail').textContent = detail;
 
-      $('rc_savPro').textContent = fmtD(savPro) + '/mo';
-      $('rc_savPro').className = savPro >= 0 ? 'text-green-400' : 'text-red-400';
-      $('rc_recRevPro').textContent = '+' + fmtD(rev) + '/mo';
-      $('rc_totalPro').textContent = fmtD(totPro) + '/mo';
-      $('rc_roiPro').textContent = roiPro + '%';
+      // Standard plan
+      $('rc_recRevStd').textContent = '+' + fmtD(rev);
+      if (overCostStd > 0) {
+        $('rc_overStdRow').style.display = 'flex';
+        $('rc_overStdMin').textContent = fmt(overMinStd);
+        $('rc_overStdCost').textContent = fmt(overCostStd);
+      } else {
+        $('rc_overStdRow').style.display = 'none';
+      }
+      $('rc_netStd').textContent = fmtD(netStd) + '/mo';
+      $('rc_netStd').className = netStd >= 0 ? 'text-green-400' : 'text-red-400';
+      $('rc_roiStd').textContent = fmt(roiStd) + '%';
+      $('rc_roiStd').className = 'text-3xl font-bold ' + (roiStd >= 0 ? 'text-green-400' : 'text-red-400');
 
-      $('rc_annStd').textContent = fmtD(totStd * 12);
-      $('rc_annPro').textContent = fmtD(totPro * 12);
+      // Pro plan
+      $('rc_recRevPro').textContent = '+' + fmtD(rev);
+      if (overCostPro > 0) {
+        $('rc_overProRow').style.display = 'flex';
+        $('rc_overProMin').textContent = fmt(overMinPro);
+        $('rc_overProCost').textContent = fmt(overCostPro);
+      } else {
+        $('rc_overProRow').style.display = 'none';
+      }
+      $('rc_netPro').textContent = fmtD(netPro) + '/mo';
+      $('rc_netPro').className = netPro >= 0 ? 'text-green-400' : 'text-red-400';
+      $('rc_roiPro').textContent = fmt(roiPro) + '%';
+      $('rc_roiPro').className = 'text-3xl font-bold ' + (roiPro >= 0 ? 'text-green-400' : 'text-red-400');
+
+      // Annual
+      $('rc_annStd').textContent = fmtD(netStd * 12);
+      $('rc_annPro').textContent = fmtD(netPro * 12);
     }
 
-    inputs.forEach(id => $(id).addEventListener('input', calc));
+    ['rc_missedPerDay','rc_avgJobValue','rc_convPct'].forEach(id => $(id).addEventListener('input', calc));
     calc();
   })();
   </script>

@@ -8,7 +8,6 @@ import ResetPassword from './ResetPassword';
 import Customers from './Customers';
 import InstallPrompt from './InstallPrompt';
 import UpdatePrompt from './UpdatePrompt';
-import ROICalculator from './ROICalculator';
 import ClockPicker from './ClockPicker';
 
 const formatPhone = (raw) => {
@@ -65,7 +64,6 @@ const App = () => {
   // Billing / Stripe state
   const [billingLoading, setBillingLoading] = useState(false);
   const [billingAction, setBillingAction] = useState(null); // 'checkout' | 'portal'
-  const [showROI, setShowROI] = useState(false);
   const [awaitingSubscription, setAwaitingSubscription] = useState(false);
   const SUPABASE_FUNCTIONS_URL = 'https://zmppdmfdhknnwzwdfhwf.supabase.co/functions/v1';
 
@@ -1238,14 +1236,6 @@ const App = () => {
           </div>
         )}
 
-        {/* ROI Calculator */}
-        <button
-          onClick={() => setShowROI(true)}
-          className="w-full py-3 bg-blue-600/20 text-blue-400 border border-blue-600/30 rounded-lg hover:bg-blue-600/30 font-medium text-sm"
-        >
-          ROI Calculator — See What You Save
-        </button>
-        {showROI && <ROICalculator onClose={() => setShowROI(false)} />}
       </div>
     );
   };
