@@ -10,9 +10,10 @@
     --bg:#111827;--card:#1f2937;--input:#2d3748;--border:#374151;
     --text:#f9fafb;--muted:#9ca3af;--dim:#6b7280;
     --green:#34d399;--red:#f87171;--blue:#60a5fa;--cyan:#22d3ee;--amber:#fbbf24;
-    --accent:#dc143c;
   }
   body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.5}
+  input[type=number]{-moz-appearance:textfield}
+  input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none}
 
   .roi-calc{max-width:640px;margin:0 auto;padding:24px 16px}
   .roi-header{text-align:center;margin-bottom:28px}
@@ -20,12 +21,11 @@
   .roi-header p{color:var(--muted);font-size:.875rem}
 
   .roi-section{margin-bottom:24px}
-  .roi-section h3{font-size:.75rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px}
+  .roi-section h3{font-size:.75rem;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px}
 
   .roi-grid{display:grid;gap:12px}
-  .roi-grid-2{grid-template-columns:1fr 1fr}
   .roi-grid-3{grid-template-columns:1fr 1fr 1fr}
-  @media(max-width:480px){.roi-grid-3{grid-template-columns:1fr}.roi-grid-2{grid-template-columns:1fr}}
+  @media(max-width:480px){.roi-grid-3{grid-template-columns:1fr}}
 
   .field label{display:block;font-size:.8rem;color:var(--muted);margin-bottom:4px}
   .field .wrap{position:relative}
@@ -36,15 +36,13 @@
   .field input:focus{border-color:var(--blue)}
   .field input.has-prefix{padding-left:24px}
   .field input.has-suffix{padding-right:32px}
-  .field input[type=number]{-moz-appearance:textfield}
-  .field input::-webkit-inner-spin-button,.field input::-webkit-outer-spin-button{-webkit-appearance:none}
+
+  .hint{font-size:.7rem;color:var(--dim);margin-top:8px}
 
   .stat-card{background:var(--input);border-radius:8px;padding:12px;text-align:center}
   .stat-card .val{font-size:1.25rem;font-weight:700}
   .stat-card .lbl{font-size:.75rem;color:var(--muted);margin-top:2px}
-  .stat-card .sub{font-size:.7rem;color:var(--dim)}
-  .val-red{color:var(--red)}
-  .val-green{color:var(--green)}
+  .val-red{color:var(--red)}.val-green{color:var(--green)}
 
   .insight{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px 16px;display:flex;gap:12px;align-items:flex-start;margin-bottom:24px}
   .insight .icon{font-size:1.25rem;flex-shrink:0;margin-top:2px}
@@ -59,14 +57,13 @@
   .badge-cyan{background:rgba(22,211,238,.15);color:var(--cyan)}
   .badge-amber{background:rgba(251,191,36,.15);color:var(--amber)}
   .plan-price{color:var(--muted);font-size:.85rem}
-  .plan-mins{color:var(--dim);font-size:.75rem;margin:4px 0 12px}
+  .plan-detail{color:var(--dim);font-size:.75rem;margin:2px 0}
   .plan-row{display:flex;justify-content:space-between;font-size:.85rem;padding:3px 0}
   .plan-row .label{color:var(--muted)}
   .plan-divider{border-top:1px solid var(--border);margin:6px 0;padding-top:6px}
-  .plan-total{font-weight:600;color:var(--muted)}
-  .plan-total .val{color:var(--green)}
+  .plan-total{font-weight:600}
   .plan-roi{text-align:center;margin-top:12px}
-  .plan-roi .num{font-size:1.5rem;font-weight:700;color:var(--green)}
+  .plan-roi .num{font-size:1.5rem;font-weight:700}
   .plan-roi .lbl{font-size:.7rem;color:var(--dim)}
 
   .annual{background:linear-gradient(135deg,rgba(16,185,129,.08),rgba(59,130,246,.08));border:1px solid rgba(16,185,129,.2);border-radius:8px;padding:16px}
@@ -80,162 +77,165 @@
 </style>
 </head>
 <body>
-<div class="roi-calc" id="roiCalc">
+<div class="roi-calc">
   <div class="roi-header">
     <h1>AI Receptionist ROI Calculator</h1>
-    <p>See how much an AI receptionist saves your business</p>
+    <p>See what those missed calls are really costing you</p>
   </div>
 
-  <!-- Inputs -->
   <div class="roi-section">
-    <h3>Your Business</h3>
-    <div class="roi-grid roi-grid-2">
+    <h3>Your Missed Calls</h3>
+    <div class="roi-grid roi-grid-3">
       <div class="field">
-        <label>Calls per day</label>
-        <div class="wrap"><input type="number" id="callsPerDay" value="15" min="0"></div>
-      </div>
-      <div class="field">
-        <label>Missed call %</label>
-        <div class="wrap"><input type="number" id="missedPct" value="30" min="0" max="100" class="has-suffix"><span class="suffix">%</span></div>
+        <label>Missed calls/day</label>
+        <div class="wrap"><input type="number" id="missedPerDay" value="5" min="0"></div>
       </div>
       <div class="field">
         <label>Avg job value</label>
         <div class="wrap"><span class="prefix">$</span><input type="number" id="avgJobValue" value="350" min="0" class="has-prefix"></div>
       </div>
       <div class="field">
-        <label>Receptionist cost/mo</label>
-        <div class="wrap"><span class="prefix">$</span><input type="number" id="receptionistCost" value="3200" min="0" class="has-prefix"></div>
-      </div>
-      <div class="field">
-        <label>Receptionist hours/day</label>
-        <div class="wrap"><input type="number" id="hoursPerDay" value="8" min="0" max="24" class="has-suffix"><span class="suffix">hrs</span></div>
+        <label>Booking rate</label>
+        <div class="wrap"><input type="number" id="convPct" value="35" min="0" max="100" class="has-suffix"><span class="suffix">%</span></div>
       </div>
     </div>
+    <div class="hint">Based on a 6-day work week (24 days/mo) and 5-minute average call</div>
   </div>
 
-  <!-- Losses -->
   <div class="roi-section">
     <h3>What You're Losing Today</h3>
     <div class="roi-grid roi-grid-3">
-      <div class="stat-card"><div class="val val-red" id="missedCalls">135</div><div class="lbl">Missed calls/mo</div></div>
-      <div class="stat-card"><div class="val val-red" id="lostJobs">47</div><div class="lbl">Lost jobs/mo</div><div class="sub">at 35% conversion</div></div>
-      <div class="stat-card"><div class="val val-red" id="lostRevenue">$16,538</div><div class="lbl">Lost revenue/mo</div></div>
+      <div class="stat-card"><div class="val val-red" id="missedMo">120</div><div class="lbl">Missed calls/mo</div></div>
+      <div class="stat-card"><div class="val val-red" id="lostJobs">42</div><div class="lbl">Lost jobs/mo</div></div>
+      <div class="stat-card"><div class="val val-red" id="lostRev">$14,700</div><div class="lbl">Lost revenue/mo</div></div>
     </div>
   </div>
 
-  <!-- After-hours -->
   <div class="insight">
     <div class="icon">&#128222;</div>
     <div>
-      <div class="title">~<span id="afterHours">300</span> calls/mo come in after hours</div>
-      <div class="desc">Your receptionist covers <span id="coverHrs">8</span>hrs/day. AI covers all 24 — nights, weekends, and holidays.</div>
+      <div class="title">You'd need ~<span id="minNeeded">600</span> AI minutes/mo to cover those calls</div>
+      <div class="desc" id="minDetail">120 calls x 5 min avg = 600 min. The Standard plan covers this.</div>
     </div>
   </div>
 
-  <!-- Plan comparison -->
   <div class="roi-section">
-    <h3>With Reliant Support AI</h3>
+    <h3>Plan Comparison</h3>
     <div class="plan-grid">
-      <!-- Standard -->
       <div class="plan-card">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
           <span class="plan-badge badge-cyan">Standard</span>
           <span class="plan-price">$495/mo</span>
         </div>
-        <div class="plan-mins">1,000 minutes included</div>
-        <div class="plan-row"><span class="label">Salary savings</span><span class="val-green" id="savStd">$2,705/mo</span></div>
-        <div class="plan-row"><span class="label">Recovered revenue</span><span class="val-green" id="recRevStd">+$16,538/mo</span></div>
-        <div class="plan-row plan-divider plan-total"><span>Total value</span><span class="val" id="totalStd">$19,243/mo</span></div>
-        <div class="plan-roi"><div class="num" id="roiStd">3887%</div><div class="lbl">return on investment</div></div>
+        <div class="plan-detail">1,000 min included (200 calls)</div>
+        <div class="plan-detail" style="margin-bottom:12px">~8.3 calls/day at 5 min avg</div>
+        <div class="plan-row"><span class="label">Recovered revenue</span><span class="val-green" id="recRevStd">+$14,700</span></div>
+        <div class="plan-row"><span class="label">Plan cost</span><span style="color:var(--muted)">-$495</span></div>
+        <div class="plan-row" id="overStdRow" style="display:none"><span class="label">Overage (<span id="overStdMin">0</span> min)</span><span class="val-red">-$<span id="overStdCost">0</span></span></div>
+        <div class="plan-row plan-divider plan-total"><span style="color:var(--muted)">Net profit</span><span class="val-green" id="netStd">$14,205/mo</span></div>
+        <div class="plan-roi"><div class="num val-green" id="roiStd">2870%</div><div class="lbl">return on investment</div></div>
       </div>
-      <!-- Pro -->
       <div class="plan-card highlight">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
           <span class="plan-badge badge-amber">Pro</span>
           <span class="plan-price">$695/mo</span>
         </div>
-        <div class="plan-mins">2,000 minutes included</div>
-        <div class="plan-row"><span class="label">Salary savings</span><span class="val-green" id="savPro">$2,505/mo</span></div>
-        <div class="plan-row"><span class="label">Recovered revenue</span><span class="val-green" id="recRevPro">+$16,538/mo</span></div>
-        <div class="plan-row plan-divider plan-total"><span>Total value</span><span class="val" id="totalPro">$19,043/mo</span></div>
-        <div class="plan-roi"><div class="num" id="roiPro">2740%</div><div class="lbl">return on investment</div></div>
+        <div class="plan-detail">2,000 min included (400 calls)</div>
+        <div class="plan-detail" style="margin-bottom:12px">~16.6 calls/day at 5 min avg</div>
+        <div class="plan-row"><span class="label">Recovered revenue</span><span class="val-green" id="recRevPro">+$14,700</span></div>
+        <div class="plan-row"><span class="label">Plan cost</span><span style="color:var(--muted)">-$695</span></div>
+        <div class="plan-row" id="overProRow" style="display:none"><span class="label">Overage (<span id="overProMin">0</span> min)</span><span class="val-red">-$<span id="overProCost">0</span></span></div>
+        <div class="plan-row plan-divider plan-total"><span style="color:var(--muted)">Net profit</span><span class="val-green" id="netPro">$14,005/mo</span></div>
+        <div class="plan-roi"><div class="num val-green" id="roiPro">2015%</div><div class="lbl">return on investment</div></div>
       </div>
     </div>
   </div>
 
-  <!-- Annual -->
   <div class="annual">
     <h3>Annual Projection</h3>
     <div class="annual-grid">
       <div>
         <div class="sub">Standard Plan — 1 year</div>
-        <div class="big" id="annStd">$230,916</div>
-        <div class="note">total value generated</div>
+        <div class="big" id="annStd">$170,460</div>
+        <div class="note">net profit from recovered calls</div>
       </div>
       <div>
         <div class="sub">Pro Plan — 1 year</div>
-        <div class="big" id="annPro">$228,516</div>
-        <div class="note">total value generated</div>
+        <div class="big" id="annPro">$168,060</div>
+        <div class="note">net profit from recovered calls</div>
       </div>
     </div>
   </div>
 
-  <div class="disclaimer">Estimates based on a 35% conversion rate for recovered missed calls. Actual results may vary.</div>
+  <div class="disclaimer">Estimates based on your inputs. Actual results may vary. Overage billed at $0.20/min beyond included minutes.</div>
 </div>
 
 <script>
 (function(){
   const $ = id => document.getElementById(id);
   const fmt = n => n.toLocaleString('en-US');
-  const fmtD = n => '$' + fmt(n);
+  const fmtD = n => (n < 0 ? '-$' + Math.abs(n).toLocaleString('en-US') : '$' + n.toLocaleString('en-US'));
 
-  const inputs = ['callsPerDay','missedPct','avgJobValue','receptionistCost','hoursPerDay'];
+  const AVG = 5, DAYS = 24, OVR = 0.20;
+  const STD_P = 495, STD_M = 1000, PRO_P = 695, PRO_M = 2000;
 
   function calc(){
-    const cpd = Math.max(0, +$('callsPerDay').value || 0);
-    const mp  = Math.max(0, Math.min(100, +$('missedPct').value || 0));
+    const mpd = Math.max(0, +$('missedPerDay').value || 0);
     const ajv = Math.max(0, +$('avgJobValue').value || 0);
-    const rc  = Math.max(0, +$('receptionistCost').value || 0);
-    const hpd = Math.max(0, Math.min(24, +$('hoursPerDay').value || 0));
+    const cp  = Math.max(0, Math.min(100, +$('convPct').value || 0));
 
-    const monthly = cpd * 30;
-    const missed = Math.round(monthly * mp / 100);
-    const conv = 0.35;
-    const jobs = Math.round(missed * conv);
+    const conv = cp / 100;
+    const mo = Math.round(mpd * DAYS);
+    const jobs = Math.round(mo * conv);
     const rev = jobs * ajv;
-    const ahPct = Math.max(0, (24 - hpd) / 24);
-    const ahCalls = Math.round(monthly * ahPct);
+    const mins = mo * AVG;
 
-    const savStd = rc - 495;
-    const savPro = rc - 695;
-    const totStd = savStd + rev;
-    const totPro = savPro + rev;
-    const roiStd = 495 > 0 ? Math.round((totStd / 495) * 100) : 0;
-    const roiPro = 695 > 0 ? Math.round((totPro / 695) * 100) : 0;
+    function plan(price, included){
+      const om = Math.max(0, mins - included);
+      const oc = Math.round(om * OVR);
+      const tc = price + oc;
+      const net = rev - tc;
+      const roi = tc > 0 ? Math.round((net / tc) * 100) : 0;
+      return { om, oc, tc, net, roi };
+    }
 
-    $('missedCalls').textContent = fmt(missed);
+    const s = plan(STD_P, STD_M);
+    const p = plan(PRO_P, PRO_M);
+
+    $('missedMo').textContent = fmt(mo);
     $('lostJobs').textContent = fmt(jobs);
-    $('lostRevenue').textContent = fmtD(rev);
-    $('afterHours').textContent = fmt(ahCalls);
-    $('coverHrs').textContent = hpd;
+    $('lostRev').textContent = fmtD(rev);
+    $('minNeeded').textContent = fmt(mins);
 
-    $('savStd').textContent = fmtD(savStd) + '/mo';
-    $('savStd').className = savStd >= 0 ? 'val-green' : 'val-red';
-    $('recRevStd').textContent = '+' + fmtD(rev) + '/mo';
-    $('totalStd').textContent = fmtD(totStd) + '/mo';
-    $('roiStd').textContent = roiStd + '%';
+    var d = fmt(mo)+' calls x '+AVG+' min avg = '+fmt(mins)+' min. ';
+    if(mins<=STD_M) d+='The Standard plan covers this.';
+    else if(mins<=PRO_M) d+='The Pro plan covers this.';
+    else d+='Overage is billed at $'+OVR.toFixed(2)+'/min.';
+    $('minDetail').textContent = d;
 
-    $('savPro').textContent = fmtD(savPro) + '/mo';
-    $('savPro').className = savPro >= 0 ? 'val-green' : 'val-red';
-    $('recRevPro').textContent = '+' + fmtD(rev) + '/mo';
-    $('totalPro').textContent = fmtD(totPro) + '/mo';
-    $('roiPro').textContent = roiPro + '%';
+    $('recRevStd').textContent = '+'+fmtD(rev);
+    $('overStdRow').style.display = s.oc>0?'flex':'none';
+    $('overStdMin').textContent = fmt(s.om);
+    $('overStdCost').textContent = fmt(s.oc);
+    $('netStd').textContent = fmtD(s.net)+'/mo';
+    $('netStd').className = s.net>=0?'val-green':'val-red';
+    $('roiStd').textContent = fmt(s.roi)+'%';
+    $('roiStd').className = 'num '+(s.roi>=0?'val-green':'val-red');
 
-    $('annStd').textContent = fmtD(totStd * 12);
-    $('annPro').textContent = fmtD(totPro * 12);
+    $('recRevPro').textContent = '+'+fmtD(rev);
+    $('overProRow').style.display = p.oc>0?'flex':'none';
+    $('overProMin').textContent = fmt(p.om);
+    $('overProCost').textContent = fmt(p.oc);
+    $('netPro').textContent = fmtD(p.net)+'/mo';
+    $('netPro').className = p.net>=0?'val-green':'val-red';
+    $('roiPro').textContent = fmt(p.roi)+'%';
+    $('roiPro').className = 'num '+(p.roi>=0?'val-green':'val-red');
+
+    $('annStd').textContent = fmtD(s.net*12);
+    $('annPro').textContent = fmtD(p.net*12);
   }
 
-  inputs.forEach(id => $( id).addEventListener('input', calc));
+  ['missedPerDay','avgJobValue','convPct'].forEach(id=>$(id).addEventListener('input',calc));
   calc();
 })();
 </script>
