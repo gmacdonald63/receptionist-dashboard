@@ -117,13 +117,22 @@ const App = () => {
       if (event === 'PASSWORD_RECOVERY') {
         setShowResetPassword(true);
         showResetPasswordRef.current = true;
+        // Clear any existing user/client state so the recovery flow is clean
+        setUser(null);
+        setClientData(null);
         return;
       }
-      
+
       if (showResetPasswordRef.current) {
         return;
       }
-      
+
+      if (event === 'SIGNED_OUT') {
+        setUser(null);
+        setClientData(null);
+        return;
+      }
+
       setUser(session?.user || null);
       if (!session) {
         setClientData(null);

@@ -9,6 +9,29 @@ const ResetPassword = ({ onComplete }) => {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
 
+  // On mount: ensure the recovery token from the URL is exchanged properly
+  // This signs in as the recovery user, replacing any existing admin session
+  useEffect(() => {
+    const exchangeRecoveryToken = async () => {
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const accessToken = hashParams.get('access_token');
+      const refreshToken = hashParams.get('refresh_token');
+      const type = hashParams.get('type');
+
+      if (type === 'recovery' && accessToken) {
+        // First sign out any existing session (e.g. admin who is testing)
+        await supabase.auth.signOut();
+
+        // Now set the recovery session so updateUser targets the correct user
+        await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken || '',
+        });
+      }
+    };
+    exchangeRecoveryToken();
+  }, []);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
@@ -33,8 +56,11 @@ const ResetPassword = ({ onComplete }) => {
       if (error) throw error;
 
       setSuccess(true);
-      
-      // Redirect to main app after 2 seconds
+
+      // Sign out completely so user must log in fresh with their own credentials
+      await supabase.auth.signOut();
+
+      // Redirect to login after brief success message
       setTimeout(() => {
         onComplete();
       }, 2000);
@@ -57,7 +83,7 @@ const ResetPassword = ({ onComplete }) => {
             <div className="mb-4 p-3 bg-green-900/50 border border-green-700 rounded-lg">
               <p className="text-green-300">Password set successfully!</p>
             </div>
-            <p className="text-gray-400">Redirecting to complete your setup...</p>
+            <p className="text-gray-400">Redirecting to login...</p>
           </div>
         ) : (
           <>
