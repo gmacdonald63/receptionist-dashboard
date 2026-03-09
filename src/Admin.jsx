@@ -177,6 +177,7 @@ const Admin = ({ onBack }) => {
             role: 'sales_rep',
             is_admin: false,
             invite_sent: false,
+            demo_client_id: 9999,
           }]);
         if (error) throw error;
         setSuccessMessage("Sales rep added! Click 'Send Invite' to email them.");
