@@ -1,6 +1,81 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import Stripe from "https://esm.sh/stripe@17.7.0?target=deno";
 
+// Commission amounts by Stripe price ID (flat, one-time per signup)
+const COMMISSION_MAP: Record<string, { amount: number; plan_type: string }> = {
+  "price_1T7BFxJVgG4IIGoFcnMC98UN": { amount: 495, plan_type: "standard_monthly" },
+  "price_1T7BLkJVgG4IIGoFRdPuSpS9": { amount: 695, plan_type: "pro_monthly" },
+  // Annual price IDs — add here when created in Stripe
+  // "price_ANNUAL_STANDARD": { amount: 695, plan_type: "standard_annual" },
+  // "price_ANNUAL_PRO": { amount: 895, plan_type: "pro_annual" },
+};
+
+// Check if a newly-activated client matches a sales rep's lead, and auto-convert
+async function tryAutoConvertLead(
+  supabase: ReturnType<typeof createClient>,
+  clientId: number,
+  priceId: string | null
+) {
+  try {
+    // Fetch client email
+    const { data: client } = await supabase
+      .from("clients")
+      .select("id, email")
+      .eq("id", clientId)
+      .single();
+
+    if (!client?.email) return;
+
+    // Find an unconverted lead with matching email
+    const { data: lead } = await supabase
+      .from("leads")
+      .select("id, sales_rep_id")
+      .eq("email", client.email.toLowerCase())
+      .is("converted_client_id", null)
+      .in("stage", ["new", "contacted", "demo"])
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .single();
+
+    if (!lead) return;
+
+    // Determine commission amount
+    const commission = priceId && COMMISSION_MAP[priceId]
+      ? COMMISSION_MAP[priceId]
+      : { amount: 495, plan_type: "unknown" };
+
+    // Update lead to signed_up
+    await supabase
+      .from("leads")
+      .update({
+        stage: "signed_up",
+        converted_client_id: client.id,
+        converted_at: new Date().toISOString(),
+      })
+      .eq("id", lead.id);
+
+    // Create commission record
+    await supabase
+      .from("commissions")
+      .insert({
+        sales_rep_id: lead.sales_rep_id,
+        lead_id: lead.id,
+        client_id: client.id,
+        amount: commission.amount,
+        plan_type: commission.plan_type,
+        stripe_price_id: priceId,
+        status: "pending",
+      });
+
+    console.log(
+      `Auto-conversion: Lead ${lead.id} → Client ${client.id}, commission $${commission.amount} (${commission.plan_type})`
+    );
+  } catch (err) {
+    // Log but don't fail the webhook — auto-conversion is best-effort
+    console.error("Auto-conversion error:", err);
+  }
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "Content-Type, stripe-signature",
@@ -69,6 +144,9 @@ Deno.serve(async (req) => {
               })
               .eq("id", parseInt(clientId));
             console.log(`Client ${clientId} subscription activated: ${subscription.id} (price: ${priceId})`);
+
+            // Auto-convert matching lead and create commission
+            await tryAutoConvertLead(supabase, parseInt(clientId), priceId);
           }
         }
         break;
@@ -103,6 +181,11 @@ Deno.serve(async (req) => {
           console.log(
             `Client ${client.id} subscription ${event.type}: status=${subscription.status}, price=${priceId}`
           );
+
+          // Auto-convert if subscription just became active (e.g. trial → active)
+          if (subscription.status === "active") {
+            await tryAutoConvertLead(supabase, client.id, priceId);
+          }
         }
         break;
       }

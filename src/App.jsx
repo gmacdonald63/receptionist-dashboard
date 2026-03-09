@@ -6,6 +6,7 @@ import Login from './Login';
 import Admin from './Admin';
 import ResetPassword from './ResetPassword';
 import Customers from './Customers';
+import SalesDashboard from './SalesDashboard';
 import InstallPrompt from './InstallPrompt';
 import UpdatePrompt from './UpdatePrompt';
 import ClockPicker from './ClockPicker';
@@ -1299,6 +1300,11 @@ const App = () => {
   // Show admin dashboard if admin and showAdmin is true
   if (showAdmin && clientData?.is_admin) {
     return <Admin onBack={() => setShowAdmin(false)} />;
+  }
+
+  // Sales rep role — show dedicated sales dashboard
+  if (clientData?.role === 'sales_rep') {
+    return <SalesDashboard clientData={clientData} onLogout={handleLogout} />;
   }
 
   // Subscription gate — admins bypass, non-subscribers see only billing
