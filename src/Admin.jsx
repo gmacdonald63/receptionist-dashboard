@@ -1,28 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, Edit, Trash2, Save, X, RefreshCw, ArrowLeft, Mail, Check, DollarSign, TrendingUp, Building, Phone as PhoneIcon, UserPlus } from 'lucide-react';
+import { Users, Plus, Edit, Trash2, Save, X, RefreshCw, ArrowLeft, Mail, Check, UserPlus } from 'lucide-react';
 import { supabase } from './supabaseClient';
-
-const STAGE_LABELS = {
-  new: 'New',
-  contacted: 'Contacted',
-  demo: 'Demo',
-  signed_up: 'Signed Up',
-  lost: 'Lost',
-};
-
-const STAGE_COLORS = {
-  new: 'bg-blue-900/60 text-blue-300',
-  contacted: 'bg-yellow-900/60 text-yellow-300',
-  demo: 'bg-purple-900/60 text-purple-300',
-  signed_up: 'bg-green-900/60 text-green-300',
-  lost: 'bg-red-900/60 text-red-300',
-};
-
-const COMMISSION_STATUS_COLORS = {
-  pending: 'bg-yellow-900/60 text-yellow-300',
-  owed: 'bg-orange-900/60 text-orange-300',
-  paid: 'bg-green-900/60 text-green-300',
-};
 
 const Admin = ({ onBack }) => {
   const [adminTab, setAdminTab] = useState('clients');
@@ -49,28 +27,13 @@ const Admin = ({ onBack }) => {
     company_name: '', email: '', phone: ''
   });
 
-  // Sales data state
-  const [allLeads, setAllLeads] = useState([]);
-  const [allCommissions, setAllCommissions] = useState([]);
-  const [salesLoading, setSalesLoading] = useState(false);
-  const [repFilter, setRepFilter] = useState('all');
-  const [editingLead, setEditingLead] = useState(null);
-  const [editLeadForm, setEditLeadForm] = useState({});
-
   // Derived lists
   const clientsOnly = allRecords.filter(c => c.role !== 'sales_rep' && c.role !== 'admin');
   const repsOnly = allRecords.filter(c => c.role === 'sales_rep');
-  const repNameMap = Object.fromEntries(allRecords.map(c => [c.id, c.company_name || c.email]));
 
   useEffect(() => {
     fetchAllRecords();
   }, []);
-
-  useEffect(() => {
-    if (adminTab === 'sales') {
-      fetchSalesData();
-    }
-  }, [adminTab]);
 
   useEffect(() => {
     if (successMessage) {
@@ -278,62 +241,6 @@ const Admin = ({ onBack }) => {
     await handleSendInvite(record);
   };
 
-  // ==================== SALES DATA HANDLERS ====================
-
-  const fetchSalesData = async () => {
-    setSalesLoading(true);
-    try {
-      const [leadsRes, commissionsRes] = await Promise.all([
-        supabase.from('leads').select('*').order('created_at', { ascending: false }),
-        supabase.from('commissions').select('*').order('created_at', { ascending: false }),
-      ]);
-      if (!leadsRes.error) setAllLeads(leadsRes.data || []);
-      if (!commissionsRes.error) setAllCommissions(commissionsRes.data || []);
-    } finally { setSalesLoading(false); }
-  };
-
-  const filteredSalesLeads = repFilter === 'all'
-    ? allLeads
-    : allLeads.filter(l => l.sales_rep_id === parseInt(repFilter));
-
-  const filteredCommissions = repFilter === 'all'
-    ? allCommissions
-    : allCommissions.filter(c => c.sales_rep_id === parseInt(repFilter));
-
-  const salesStats = {
-    totalReps: repsOnly.length,
-    totalLeads: allLeads.length,
-    totalConversions: allLeads.filter(l => l.stage === 'signed_up').length,
-    commissionsOwed: allCommissions.filter(c => c.status === 'pending' || c.status === 'owed').reduce((s, c) => s + Number(c.amount), 0),
-    commissionsPaid: allCommissions.filter(c => c.status === 'paid').reduce((s, c) => s + Number(c.amount), 0),
-  };
-
-  const handleCommissionStatusChange = async (commissionId, newStatus) => {
-    const updates = { status: newStatus };
-    if (newStatus === 'paid') updates.paid_at = new Date().toISOString();
-    const { error } = await supabase.from('commissions').update(updates).eq('id', commissionId);
-    if (!error) { setSuccessMessage(`Commission marked as ${newStatus}`); fetchSalesData(); }
-  };
-
-  const handleAdminEditLead = async (leadId) => {
-    if (!editLeadForm.contact_name?.trim()) return;
-    setSaving(true);
-    const { error } = await supabase
-      .from('leads')
-      .update({
-        contact_name: editLeadForm.contact_name,
-        company_name: editLeadForm.company_name || null,
-        email: editLeadForm.email || null,
-        phone: editLeadForm.phone || null,
-        stage: editLeadForm.stage,
-        notes: editLeadForm.notes || null,
-        next_follow_up: editLeadForm.next_follow_up || null,
-      })
-      .eq('id', leadId);
-    if (!error) { setSuccessMessage('Lead updated'); setEditingLead(null); fetchSalesData(); }
-    setSaving(false);
-  };
-
   // ==================== RENDER HELPERS ====================
 
   const renderInviteButton = (record) => (
@@ -409,19 +316,10 @@ const Admin = ({ onBack }) => {
               </button>
             </>
           )}
-          {adminTab === 'sales' && (
-            <button
-              onClick={fetchSalesData}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 border border-gray-700"
-            >
-              <RefreshCw className={`w-4 h-4 ${salesLoading ? 'animate-spin' : ''}`} />
-              <span className="hidden sm:inline">Refresh</span>
-            </button>
-          )}
         </div>
       </div>
 
-      {/* Tab Navigation — 3 tabs */}
+      {/* Tab Navigation */}
       <div className="flex gap-1 mb-6 bg-gray-800 rounded-lg p-1 border border-gray-700">
         <button
           onClick={() => setAdminTab('clients')}
@@ -438,14 +336,6 @@ const Admin = ({ onBack }) => {
           }`}
         >
           <UserPlus className="w-4 h-4" /> Reps
-        </button>
-        <button
-          onClick={() => setAdminTab('sales')}
-          className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-            adminTab === 'sales' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'
-          }`}
-        >
-          <TrendingUp className="w-4 h-4" /> Sales Data
         </button>
       </div>
 
@@ -577,7 +467,7 @@ const Admin = ({ onBack }) => {
             </div>
             {!editingRep && (
               <div className="mt-4 p-3 bg-teal-900/30 border border-teal-700 rounded-lg">
-                <p className="text-teal-300 text-xs">After adding the rep, click "Send Invite" to email them a link to set their password and access the sales dashboard.</p>
+                <p className="text-teal-300 text-xs">After adding the rep, click "Send Invite" to email them a link to set their password and access the demo dashboard.</p>
               </div>
             )}
           </div>
@@ -610,7 +500,6 @@ const Admin = ({ onBack }) => {
                     {(client.role === 'admin' || client.is_admin) && (
                       <span className="px-2 py-0.5 bg-purple-900 text-purple-300 rounded text-xs">Admin</span>
                     )}
-                    {/* Account status badge */}
                     {(() => {
                       const status = client.subscription_status;
                       if (status === 'active' || status === 'trialing')
@@ -623,7 +512,6 @@ const Admin = ({ onBack }) => {
                         return <span className="px-2 py-0.5 bg-green-900 text-green-300 rounded text-xs">Invited</span>;
                       return <span className="px-2 py-0.5 bg-yellow-900 text-yellow-300 rounded text-xs">Not Invited</span>;
                     })()}
-                    {/* Plan tier badge */}
                     {client.stripe_price_id && (
                       client.stripe_price_id === 'price_1T7BLkJVgG4IIGoFRdPuSpS9'
                         ? <span className="px-2 py-0.5 bg-amber-900 text-amber-300 rounded text-xs">Pro</span>
@@ -678,7 +566,7 @@ const Admin = ({ onBack }) => {
         <div className="bg-gray-800 rounded-lg p-8 border border-gray-700 text-center">
           <UserPlus className="w-12 h-12 text-gray-600 mx-auto mb-4" />
           <p className="text-gray-400 mb-2">No sales reps yet</p>
-          <p className="text-gray-500 text-sm mb-4">Add a rep and send them an invite. They'll get their own sales dashboard to track leads and commissions.</p>
+          <p className="text-gray-500 text-sm mb-4">Add a rep and send them an invite. They'll get access to the demo dashboard to show prospects.</p>
           <button onClick={() => setShowRepForm(true)}
             className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700">
             Add Your First Rep
@@ -686,274 +574,41 @@ const Admin = ({ onBack }) => {
         </div>
       ) : (
         <div className="space-y-3">
-          {repsOnly.map(rep => {
-            const repLeads = allLeads.filter(l => l.sales_rep_id === rep.id);
-            const repCommissions = allCommissions.filter(c => c.sales_rep_id === rep.id);
-            const activeLeads = repLeads.filter(l => !['signed_up', 'lost'].includes(l.stage)).length;
-            const conversions = repLeads.filter(l => l.stage === 'signed_up').length;
-            const totalOwed = repCommissions.filter(c => c.status === 'pending' || c.status === 'owed').reduce((s, c) => s + Number(c.amount), 0);
-            const totalPaid = repCommissions.filter(c => c.status === 'paid').reduce((s, c) => s + Number(c.amount), 0);
-
-            return (
-              <div key={rep.id} className="bg-gray-800 rounded-lg border border-gray-700 p-4">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <p className="font-medium text-white">{rep.company_name || 'No name'}</p>
-                      <span className="px-2 py-0.5 bg-teal-900 text-teal-300 rounded text-xs">Sales Rep</span>
-                      {!rep.invite_sent
-                        ? <span className="px-2 py-0.5 bg-yellow-900 text-yellow-300 rounded text-xs">Not Invited</span>
-                        : <span className="px-2 py-0.5 bg-green-900 text-green-300 rounded text-xs">Invited</span>
-                      }
-                    </div>
-                    <p className="text-sm text-gray-400">{rep.email}</p>
-                    {rep.phone && <p className="text-xs text-gray-500 mt-1">{rep.phone}</p>}
-
-                    {/* Rep stats row */}
-                    <div className="flex flex-wrap gap-3 mt-2">
-                      <span className="text-xs text-gray-500">
-                        <span className="text-blue-400 font-medium">{repLeads.length}</span> leads
-                      </span>
-                      <span className="text-xs text-gray-500">
-                        <span className="text-yellow-400 font-medium">{activeLeads}</span> active
-                      </span>
-                      <span className="text-xs text-gray-500">
-                        <span className="text-green-400 font-medium">{conversions}</span> conversions
-                      </span>
-                      {totalOwed > 0 && (
-                        <span className="text-xs text-orange-400 font-medium">${totalOwed.toLocaleString()} owed</span>
-                      )}
-                      {totalPaid > 0 && (
-                        <span className="text-xs text-green-400 font-medium">${totalPaid.toLocaleString()} paid</span>
-                      )}
-                    </div>
+          {repsOnly.map(rep => (
+            <div key={rep.id} className="bg-gray-800 rounded-lg border border-gray-700 p-4">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <p className="font-medium text-white">{rep.company_name || 'No name'}</p>
+                    <span className="px-2 py-0.5 bg-teal-900 text-teal-300 rounded text-xs">Sales Rep</span>
+                    {!rep.invite_sent
+                      ? <span className="px-2 py-0.5 bg-yellow-900 text-yellow-300 rounded text-xs">Not Invited</span>
+                      : <span className="px-2 py-0.5 bg-green-900 text-green-300 rounded text-xs">Invited</span>
+                    }
                   </div>
-                  <div className="flex gap-2">
-                    {renderInviteButton(rep)}
-                    <button onClick={() => handleEditRep(rep)} className="p-2 hover:bg-gray-700 rounded-lg" title="Edit">
-                      <Edit className="w-4 h-4 text-gray-400" />
-                    </button>
-                    <button onClick={() => handleDelete(rep)} className="p-2 hover:bg-gray-700 rounded-lg" title="Delete">
-                      <Trash2 className="w-4 h-4 text-red-400" />
-                    </button>
-                  </div>
+                  <p className="text-sm text-gray-400">{rep.email}</p>
+                  {rep.phone && <p className="text-xs text-gray-500 mt-1">{rep.phone}</p>}
                 </div>
-                <div className="flex gap-4 mt-2">
-                  <p className="text-xs text-gray-600">Added: {new Date(rep.created_at).toLocaleDateString()}</p>
-                  {rep.invite_sent_at && (
-                    <p className="text-xs text-gray-600">Invited: {new Date(rep.invite_sent_at).toLocaleDateString()}</p>
-                  )}
+                <div className="flex gap-2">
+                  {renderInviteButton(rep)}
+                  <button onClick={() => handleEditRep(rep)} className="p-2 hover:bg-gray-700 rounded-lg" title="Edit">
+                    <Edit className="w-4 h-4 text-gray-400" />
+                  </button>
+                  <button onClick={() => handleDelete(rep)} className="p-2 hover:bg-gray-700 rounded-lg" title="Delete">
+                    <Trash2 className="w-4 h-4 text-red-400" />
+                  </button>
                 </div>
               </div>
-            );
-          })}
+              <div className="flex gap-4 mt-2">
+                <p className="text-xs text-gray-600">Added: {new Date(rep.created_at).toLocaleDateString()}</p>
+                {rep.invite_sent_at && (
+                  <p className="text-xs text-gray-600">Invited: {new Date(rep.invite_sent_at).toLocaleDateString()}</p>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       ))}
-
-      {/* ==================== SALES DATA TAB ==================== */}
-      {adminTab === 'sales' && (
-        salesLoading ? (
-          <div className="text-center py-12">
-            <RefreshCw className="w-8 h-8 animate-spin text-blue-500 mx-auto mb-4" />
-            <p className="text-gray-400">Loading sales data...</p>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {/* Sales Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-              <div className="bg-gray-800 rounded-lg p-3 text-center border border-gray-700">
-                <p className="text-xl font-bold text-white">{salesStats.totalReps}</p>
-                <p className="text-gray-400 text-xs">Reps</p>
-              </div>
-              <div className="bg-gray-800 rounded-lg p-3 text-center border border-gray-700">
-                <p className="text-xl font-bold text-blue-400">{salesStats.totalLeads}</p>
-                <p className="text-gray-400 text-xs">Total Leads</p>
-              </div>
-              <div className="bg-gray-800 rounded-lg p-3 text-center border border-gray-700">
-                <p className="text-xl font-bold text-green-400">{salesStats.totalConversions}</p>
-                <p className="text-gray-400 text-xs">Conversions</p>
-              </div>
-              <div className="bg-gray-800 rounded-lg p-3 text-center border border-gray-700">
-                <p className="text-xl font-bold text-orange-400">${salesStats.commissionsOwed.toLocaleString()}</p>
-                <p className="text-gray-400 text-xs">Owed</p>
-              </div>
-              <div className="bg-gray-800 rounded-lg p-3 text-center border border-gray-700">
-                <p className="text-xl font-bold text-green-400">${salesStats.commissionsPaid.toLocaleString()}</p>
-                <p className="text-gray-400 text-xs">Paid</p>
-              </div>
-            </div>
-
-            {/* Rep Filter */}
-            {repsOnly.length > 0 && (
-              <div>
-                <label className="block text-gray-400 text-sm mb-1">Filter by Rep</label>
-                <select value={repFilter} onChange={(e) => setRepFilter(e.target.value)}
-                  className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-blue-500 text-sm">
-                  <option value="all">All Reps</option>
-                  {repsOnly.map(rep => (
-                    <option key={rep.id} value={rep.id}>{rep.company_name || rep.email}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {/* Leads Section */}
-            <div>
-              <h2 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
-                <Users className="w-5 h-5 text-blue-400" /> Leads ({filteredSalesLeads.length})
-              </h2>
-              {filteredSalesLeads.length === 0 ? (
-                <div className="bg-gray-800 rounded-lg p-6 border border-gray-700 text-center">
-                  <p className="text-gray-400">No leads yet</p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {filteredSalesLeads.map(lead => (
-                    <div key={lead.id} className="bg-gray-800 rounded-lg border border-gray-700 p-4">
-                      {editingLead === lead.id ? (
-                        <div className="space-y-3">
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <input type="text" value={editLeadForm.contact_name || ''}
-                              onChange={(e) => setEditLeadForm({ ...editLeadForm, contact_name: e.target.value })}
-                              placeholder="Contact name"
-                              className="px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
-                            <input type="text" value={editLeadForm.company_name || ''}
-                              onChange={(e) => setEditLeadForm({ ...editLeadForm, company_name: e.target.value })}
-                              placeholder="Company"
-                              className="px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
-                            <input type="email" value={editLeadForm.email || ''}
-                              onChange={(e) => setEditLeadForm({ ...editLeadForm, email: e.target.value })}
-                              placeholder="Email"
-                              className="px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
-                            <input type="tel" value={editLeadForm.phone || ''}
-                              onChange={(e) => setEditLeadForm({ ...editLeadForm, phone: e.target.value })}
-                              placeholder="Phone"
-                              className="px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
-                          </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <select value={editLeadForm.stage}
-                              onChange={(e) => setEditLeadForm({ ...editLeadForm, stage: e.target.value })}
-                              className="px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500">
-                              {Object.entries(STAGE_LABELS).map(([k, v]) => (
-                                <option key={k} value={k}>{v}</option>
-                              ))}
-                            </select>
-                            <input type="date" value={editLeadForm.next_follow_up || ''}
-                              onChange={(e) => setEditLeadForm({ ...editLeadForm, next_follow_up: e.target.value })}
-                              className="px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
-                          </div>
-                          <textarea value={editLeadForm.notes || ''}
-                            onChange={(e) => setEditLeadForm({ ...editLeadForm, notes: e.target.value })}
-                            placeholder="Notes" rows={2}
-                            className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500 resize-none" />
-                          <div className="flex gap-2">
-                            <button onClick={() => setEditingLead(null)}
-                              className="px-3 py-1.5 bg-gray-700 text-white rounded-lg text-sm hover:bg-gray-600">Cancel</button>
-                            <button onClick={() => handleAdminEditLead(lead.id)} disabled={saving}
-                              className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1">
-                              {saving ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-                              Save
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap mb-1">
-                              <span className="text-white font-medium">{lead.contact_name}</span>
-                              {lead.company_name && (
-                                <span className="text-gray-400 text-sm flex items-center gap-1">
-                                  <Building className="w-3 h-3" /> {lead.company_name}
-                                </span>
-                              )}
-                              <span className={`px-2 py-0.5 rounded text-xs font-medium ${STAGE_COLORS[lead.stage]}`}>
-                                {STAGE_LABELS[lead.stage]}
-                              </span>
-                            </div>
-                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
-                              {lead.email && <span>{lead.email}</span>}
-                              {lead.phone && <span>{lead.phone}</span>}
-                              <span>Rep: {repNameMap[lead.sales_rep_id] || 'Unknown'}</span>
-                              <span>{new Date(lead.created_at).toLocaleDateString()}</span>
-                            </div>
-                            {lead.notes && <p className="text-gray-500 text-xs mt-1 truncate">{lead.notes}</p>}
-                          </div>
-                          <button
-                            onClick={() => {
-                              setEditLeadForm({
-                                contact_name: lead.contact_name || '', company_name: lead.company_name || '',
-                                email: lead.email || '', phone: lead.phone || '', stage: lead.stage,
-                                notes: lead.notes || '', next_follow_up: lead.next_follow_up || '',
-                              });
-                              setEditingLead(lead.id);
-                            }}
-                            className="p-2 hover:bg-gray-700 rounded-lg flex-shrink-0" title="Edit Lead">
-                            <Edit className="w-4 h-4 text-gray-400" />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Commissions Section */}
-            <div>
-              <h2 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
-                <DollarSign className="w-5 h-5 text-green-400" /> Commissions ({filteredCommissions.length})
-              </h2>
-              {filteredCommissions.length === 0 ? (
-                <div className="bg-gray-800 rounded-lg p-6 border border-gray-700 text-center">
-                  <p className="text-gray-400">No commissions yet</p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {filteredCommissions.map(commission => {
-                    const repName = repNameMap[commission.sales_rep_id] || 'Unknown';
-                    return (
-                      <div key={commission.id} className="bg-gray-800 rounded-lg border border-gray-700 p-4">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 flex-wrap mb-1">
-                              <span className="text-white font-medium">${Number(commission.amount).toLocaleString()}</span>
-                              <span className="text-gray-400 text-sm capitalize">{(commission.plan_type || '').replace(/_/g, ' ')}</span>
-                              <span className={`px-2 py-0.5 rounded text-xs font-medium ${COMMISSION_STATUS_COLORS[commission.status]}`}>
-                                {commission.status.charAt(0).toUpperCase() + commission.status.slice(1)}
-                              </span>
-                            </div>
-                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
-                              <span>Rep: {repName}</span>
-                              <span>{new Date(commission.created_at).toLocaleDateString()}</span>
-                              {commission.paid_at && (
-                                <span className="text-green-400">Paid {new Date(commission.paid_at).toLocaleDateString()}</span>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex gap-2 flex-shrink-0">
-                            {commission.status === 'pending' && (
-                              <button onClick={() => handleCommissionStatusChange(commission.id, 'owed')}
-                                className="px-3 py-1.5 bg-orange-600 text-white rounded-lg text-xs hover:bg-orange-700">
-                                Mark Owed
-                              </button>
-                            )}
-                            {(commission.status === 'pending' || commission.status === 'owed') && (
-                              <button onClick={() => handleCommissionStatusChange(commission.id, 'paid')}
-                                className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs hover:bg-green-700">
-                                Mark Paid
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-        )
-      )}
     </div>
   );
 };

@@ -6,10 +6,13 @@ import Login from './Login';
 import Admin from './Admin';
 import ResetPassword from './ResetPassword';
 import Customers from './Customers';
-import SalesDashboard from './SalesDashboard';
+import DemoDashboard from './DemoDashboard';
+
 import InstallPrompt from './InstallPrompt';
 import UpdatePrompt from './UpdatePrompt';
 import ClockPicker from './ClockPicker';
+
+const SUPABASE_URL = 'https://zmppdmfdhknnwzwdfhwf.supabase.co';
 
 const formatPhone = (raw) => {
   const digits = raw.replace(/\D/g, '').slice(0, 10);
@@ -62,11 +65,22 @@ const App = () => {
   const [savingAppointment, setSavingAppointment] = useState(false);
   const [reminderCount, setReminderCount] = useState(0);
 
+  // Demo mode state
+  const [demoMode, setDemoMode] = useState(false);
+  const [demoClientData, setDemoClientData] = useState(null);
+  const [isPublicDemo, setIsPublicDemo] = useState(false);
+  const [demoToken, setDemoToken] = useState(null);
+  const [demoExpiresAt, setDemoExpiresAt] = useState(null);
+  const [demoLoading, setDemoLoading] = useState(false);
+
   // Billing / Stripe state
   const [billingLoading, setBillingLoading] = useState(false);
   const [billingAction, setBillingAction] = useState(null); // 'checkout' | 'portal'
   const [awaitingSubscription, setAwaitingSubscription] = useState(false);
   const SUPABASE_FUNCTIONS_URL = 'https://zmppdmfdhknnwzwdfhwf.supabase.co/functions/v1';
+
+  // The effective client data — uses demo client when in demo mode
+  const effectiveClientData = demoMode && demoClientData ? demoClientData : clientData;
 
   // Check for existing session on load
   useEffect(() => {
@@ -142,6 +156,62 @@ const App = () => {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Check for public demo token in URL (?demo=TOKEN)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('demo');
+    if (!token) return;
+
+    setDemoLoading(true);
+    // Clean up URL
+    window.history.replaceState({}, '', window.location.pathname);
+
+    const validateToken = async () => {
+      try {
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/validate-demo-token`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token }),
+        });
+        const data = await res.json();
+        if (data.valid) {
+          setDemoClientData(data.demo_client_data);
+          setDemoExpiresAt(data.expires_at);
+          setDemoToken(token);
+          setIsPublicDemo(true);
+          setDemoMode(true);
+        }
+      } catch (err) {
+        console.error('Demo token validation failed:', err);
+      } finally {
+        setDemoLoading(false);
+        setAuthLoading(false);
+      }
+    };
+    validateToken();
+  }, []);
+
+  // Sales rep auto-enters demo mode
+  useEffect(() => {
+    if (clientData?.role === 'sales_rep' && clientData?.demo_client_id) {
+      const fetchDemoClient = async () => {
+        const { data } = await supabase
+          .from('clients')
+          .select('*')
+          .eq('id', clientData.demo_client_id)
+          .single();
+        if (data) {
+          setDemoClientData(data);
+          // Sales reps get a 1-hour session from now
+          setDemoExpiresAt(new Date(Date.now() + 60 * 60 * 1000).toISOString());
+          setDemoMode(true);
+          setIsPublicDemo(false);
+        }
+      };
+      fetchDemoClient();
+    }
+  }, [clientData]);
+
   // After Stripe checkout redirect, poll for subscription activation (webhook may be slightly delayed)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -173,15 +243,17 @@ const App = () => {
     }
   }, [user]);
 
-  // Fetch data from Retell API and Supabase (only for users with dashboard access)
+  // Fetch data from Retell API and Supabase (for authenticated dashboard users OR demo mode)
   useEffect(() => {
-    if (user && clientData) {
+    if (demoMode && demoClientData) {
+      fetchData();
+    } else if (user && clientData) {
       const hasAccess = clientData.is_admin || ['active', 'trialing'].includes(clientData.subscription_status);
       if (hasAccess) {
         fetchData();
       }
     }
-  }, [user, clientData]);
+  }, [user, clientData, demoMode, demoClientData]);
 
   // Scroll to today when appointments tab is active
   useEffect(() => {
@@ -204,16 +276,37 @@ const App = () => {
     await supabase.auth.signOut();
     setUser(null);
     setClientData(null);
+    setDemoMode(false);
+    setDemoClientData(null);
+  };
+
+  const handleExitDemo = async () => {
+    setDemoMode(false);
+    setDemoClientData(null);
+    setDemoExpiresAt(null);
+    setDemoToken(null);
+    setIsPublicDemo(false);
+    // Sales reps have nothing outside demo — log them out
+    if (clientData?.role === 'sales_rep') {
+      await supabase.auth.signOut();
+      setUser(null);
+      setClientData(null);
+    }
+  };
+
+  const handleDemoDataRefresh = () => {
+    fetchData();
   };
 
   // Fetch all appointments from the unified Supabase table
   const fetchAppointments = async () => {
-    if (!clientData?.id) return;
+    const cid = effectiveClientData?.id;
+    if (!cid) return;
     try {
       const { data, error } = await supabase
         .from('appointments')
         .select('*')
-        .eq('client_id', clientData.id)
+        .eq('client_id', cid)
         .neq('status', 'cancelled')
         .order('date', { ascending: true });
 
@@ -248,8 +341,8 @@ const App = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Get the agent_id from client data (if available)
-      const agentId = clientData?.retell_agent_id || null;
+      // Get the agent_id from effective client data (demo or real)
+      const agentId = effectiveClientData?.retell_agent_id || null;
       
       // Fetch calls from Retell API (for call logs display)
       const calls = await retellService.getCalls(100, agentId);
@@ -261,8 +354,8 @@ const App = () => {
 
       // Calculate stats — filter to current billing period
       let periodStart = null;
-      if (clientData?.current_period_end) {
-        const periodEnd = new Date(clientData.current_period_end);
+      if (effectiveClientData?.current_period_end) {
+        const periodEnd = new Date(effectiveClientData.current_period_end);
         periodStart = new Date(periodEnd);
         periodStart.setMonth(periodStart.getMonth() - 1);
       }
@@ -295,7 +388,7 @@ const App = () => {
       const { data, error } = await supabase
         .from('appointments')
         .insert({
-          client_id: clientData.id,
+          client_id: effectiveClientData.id,
           caller_name: fullName,
           caller_number: addForm.phone,
           date: addForm.date,
@@ -1250,6 +1343,66 @@ const App = () => {
     );
   };
 
+  const renderAddAppointmentModal = () => (
+    <div className="fixed inset-0 bg-black/70 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="bg-gray-800 border border-gray-700 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg max-h-[92vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-4 border-b border-gray-700 sticky top-0 bg-gray-800 rounded-t-2xl sm:rounded-t-2xl">
+          <h2 className="text-lg font-semibold text-white">Add Appointment</h2>
+          <button onClick={() => setShowAddModal(false)} className="p-2 hover:bg-gray-700 rounded-lg">
+            <X className="w-5 h-5 text-gray-400" />
+          </button>
+        </div>
+        <form onSubmit={handleAddAppointment} className="p-4 space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-gray-400 text-sm mb-1">First Name <span className="text-red-400">*</span></label>
+              <input type="text" required value={addForm.firstName} onChange={e => setAddForm(f => ({ ...f, firstName: e.target.value }))} placeholder="First name" className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm" />
+            </div>
+            <div>
+              <label className="block text-gray-400 text-sm mb-1">Last Name <span className="text-red-400">*</span></label>
+              <input type="text" required value={addForm.lastName} onChange={e => setAddForm(f => ({ ...f, lastName: e.target.value }))} placeholder="Last name" className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-gray-400 text-sm mb-1">Phone <span className="text-red-400">*</span></label>
+            <input type="tel" required value={addForm.phone} onChange={e => setAddForm(f => ({ ...f, phone: formatPhone(e.target.value) }))} placeholder="(555) 123-4567" className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm" />
+          </div>
+          <div>
+            <label className="block text-gray-400 text-sm mb-1">Address <span className="text-red-400">*</span></label>
+            <input type="text" required value={addForm.address} onChange={e => setAddForm(f => ({ ...f, address: e.target.value }))} placeholder="123 Main St" className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm" />
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-gray-400 text-sm mb-1">City <span className="text-red-400">*</span></label>
+              <input type="text" required value={addForm.city} onChange={e => setAddForm(f => ({ ...f, city: e.target.value }))} placeholder="City" className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm" />
+            </div>
+            <div>
+              <label className="block text-gray-400 text-sm mb-1">State <span className="text-red-400">*</span></label>
+              <input type="text" required value={addForm.state} onChange={e => setAddForm(f => ({ ...f, state: e.target.value.toUpperCase().slice(0, 2) }))} placeholder="IL" maxLength={2} className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm" />
+            </div>
+            <div>
+              <label className="block text-gray-400 text-sm mb-1">ZIP <span className="text-red-400">*</span></label>
+              <input type="text" required value={addForm.zip} onChange={e => setAddForm(f => ({ ...f, zip: e.target.value.replace(/\D/g, '').slice(0, 5) }))} placeholder="12345" className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-gray-400 text-sm mb-1">Date <span className="text-red-400">*</span></label>
+            <input type="date" required value={addForm.date} onChange={e => setAddForm(f => ({ ...f, date: e.target.value }))} className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 text-sm" style={{ colorScheme: 'dark' }} />
+          </div>
+          <ClockPicker label="Time" required value={addForm.time} onChange={val => setAddForm(f => ({ ...f, time: val }))} placeholder="Select appointment time" />
+          <div>
+            <label className="block text-gray-400 text-sm mb-1">Details <span className="text-red-400">*</span></label>
+            <textarea required value={addForm.notes} onChange={e => setAddForm(f => ({ ...f, notes: e.target.value }))} placeholder="Appointment details..." rows={3} className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm resize-none" />
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={() => setShowAddModal(false)} className="flex-1 px-4 py-3 bg-gray-700 text-white rounded-lg hover:bg-gray-600 text-sm font-medium">Cancel</button>
+            <button type="submit" disabled={savingAppointment} className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium disabled:opacity-50">{savingAppointment ? 'Saving...' : 'Add Appointment'}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+
   const navItems = [
     { id: 'appointments', label: 'Appointments', icon: Calendar },
     { id: 'customers', label: 'Customers', icon: Users },
@@ -1257,11 +1410,66 @@ const App = () => {
     { id: 'billing', label: 'Billing', icon: DollarSign }
   ];
 
-  // Show loading while checking auth
-  if (authLoading) {
+  // Show loading while checking auth or demo token
+  if (authLoading || demoLoading) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <RefreshCw className="w-8 h-8 animate-spin text-blue-500" />
+      </div>
+    );
+  }
+
+  // Public demo mode — no login required
+  if (isPublicDemo && demoMode && demoClientData) {
+    return (
+      <div className="min-h-screen bg-gray-900 pb-20">
+        <DemoDashboard
+          demoClientData={demoClientData}
+          expiresAt={demoExpiresAt}
+          isPublicDemo={true}
+          demoToken={demoToken}
+          onExitDemo={handleExitDemo}
+          onDataRefresh={handleDemoDataRefresh}
+        />
+
+        {/* Header */}
+        <header className="bg-gray-800 border-b border-gray-700 px-4 sticky top-0 z-50 flex items-center justify-center" style={{ height: '72px' }}>
+          <img src={logo} alt="Reliant Support" style={{ height: '40px', width: 'auto' }} />
+        </header>
+
+        {/* Main Content */}
+        <main className="p-4 md:p-6">
+          {activeTab === 'appointments' && renderAppointments()}
+          {activeTab === 'customers' && (
+            <Customers
+              clientData={effectiveClientData}
+              appointments={appointments}
+              onReminderCountChange={setReminderCount}
+            />
+          )}
+          {activeTab === 'calls' && renderCallLogs()}
+        </main>
+
+        {/* Add Appointment Modal */}
+        {showAddModal && renderAddAppointmentModal()}
+
+        {/* Bottom Navigation — 3 tabs for demo (no billing) */}
+        <nav className="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 z-30">
+          <div className="grid grid-cols-3 gap-1">
+            {navItems.filter(item => item.id !== 'billing').map(item => (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                className={`flex flex-col items-center gap-1 py-3 ${
+                  activeTab === item.id ? 'text-blue-500' : 'text-gray-400'
+                }`}
+              >
+                <item.icon className="w-5 h-5" />
+                <span className="text-xs">{item.label}</span>
+              </button>
+            ))}
+          </div>
+        </nav>
       </div>
     );
   }
@@ -1309,11 +1517,6 @@ const App = () => {
   // Show admin dashboard if admin and showAdmin is true
   if (showAdmin && clientData?.is_admin) {
     return <Admin onBack={() => setShowAdmin(false)} />;
-  }
-
-  // Sales rep role — show dedicated sales dashboard
-  if (clientData?.role === 'sales_rep') {
-    return <SalesDashboard clientData={clientData} onLogout={handleLogout} />;
   }
 
   // Subscription gate — admins and sales reps bypass, non-subscribers see only billing
@@ -1376,6 +1579,18 @@ const App = () => {
       <InstallPrompt />
       <UpdatePrompt />
 
+      {/* Demo overlay for authenticated sales reps */}
+      {demoMode && !isPublicDemo && (
+        <DemoDashboard
+          demoClientData={demoClientData}
+          expiresAt={demoExpiresAt}
+          isPublicDemo={false}
+          demoToken={demoToken}
+          onExitDemo={handleExitDemo}
+          onDataRefresh={handleDemoDataRefresh}
+        />
+      )}
+
       {/* Header */}
       <header className="bg-gray-800 border-b border-gray-700 px-4 sticky top-0 z-50 flex items-center justify-between" style={{ height: '72px' }}>
         <div className="flex items-center gap-2">
@@ -1405,7 +1620,7 @@ const App = () => {
         {activeTab === 'appointments' && renderAppointments()}
         {activeTab === 'customers' && (
           <Customers
-            clientData={clientData}
+            clientData={effectiveClientData}
             appointments={appointments}
             onReminderCountChange={setReminderCount}
           />
@@ -1415,166 +1630,12 @@ const App = () => {
       </main>
 
       {/* Add Appointment Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black/70 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="bg-gray-800 border border-gray-700 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg max-h-[92vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-4 border-b border-gray-700 sticky top-0 bg-gray-800 rounded-t-2xl sm:rounded-t-2xl">
-              <h2 className="text-lg font-semibold text-white">Add Appointment</h2>
-              <button
-                onClick={() => setShowAddModal(false)}
-                className="p-2 hover:bg-gray-700 rounded-lg"
-              >
-                <X className="w-5 h-5 text-gray-400" />
-              </button>
-            </div>
-
-            <form onSubmit={handleAddAppointment} className="p-4 space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-gray-400 text-sm mb-1">First Name <span className="text-red-400">*</span></label>
-                  <input
-                    type="text"
-                    required
-                    value={addForm.firstName}
-                    onChange={e => setAddForm(f => ({ ...f, firstName: e.target.value }))}
-                    placeholder="First name"
-                    className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-gray-400 text-sm mb-1">Last Name <span className="text-red-400">*</span></label>
-                  <input
-                    type="text"
-                    required
-                    value={addForm.lastName}
-                    onChange={e => setAddForm(f => ({ ...f, lastName: e.target.value }))}
-                    placeholder="Last name"
-                    className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-gray-400 text-sm mb-1">Phone Number <span className="text-red-400">*</span></label>
-                <input
-                  type="tel"
-                  required
-                  value={addForm.phone}
-                  onChange={e => setAddForm(f => ({ ...f, phone: formatPhone(e.target.value) }))}
-                  placeholder="(555) 555-5555"
-                  className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="block text-gray-400 text-sm mb-1">Address <span className="text-red-400">*</span></label>
-                <input
-                  type="text"
-                  required
-                  value={addForm.address}
-                  onChange={e => setAddForm(f => ({ ...f, address: e.target.value }))}
-                  placeholder="Street address"
-                  className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="block text-gray-400 text-sm mb-1">City <span className="text-red-400">*</span></label>
-                <input
-                  type="text"
-                  required
-                  value={addForm.city}
-                  onChange={e => setAddForm(f => ({ ...f, city: e.target.value }))}
-                  placeholder="City"
-                  className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-gray-400 text-sm mb-1">State <span className="text-red-400">*</span></label>
-                  <input
-                    type="text"
-                    required
-                    maxLength={2}
-                    value={addForm.state}
-                    onChange={e => setAddForm(f => ({ ...f, state: e.target.value.toUpperCase() }))}
-                    placeholder="TX"
-                    className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm uppercase"
-                  />
-                </div>
-                <div>
-                  <label className="block text-gray-400 text-sm mb-1">Zip Code <span className="text-red-400">*</span></label>
-                  <input
-                    type="text"
-                    required
-                    maxLength={5}
-                    pattern="\d{5}"
-                    value={addForm.zip}
-                    onChange={e => setAddForm(f => ({ ...f, zip: e.target.value.replace(/\D/g, '').slice(0, 5) }))}
-                    placeholder="12345"
-                    className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-gray-400 text-sm mb-1">Date <span className="text-red-400">*</span></label>
-                <input
-                  type="date"
-                  required
-                  value={addForm.date}
-                  onChange={e => setAddForm(f => ({ ...f, date: e.target.value }))}
-                  className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 text-sm"
-                  style={{ colorScheme: 'dark' }}
-                />
-              </div>
-
-              <ClockPicker
-                label="Time"
-                required
-                value={addForm.time}
-                onChange={val => setAddForm(f => ({ ...f, time: val }))}
-                placeholder="Select appointment time"
-              />
-
-              <div>
-                <label className="block text-gray-400 text-sm mb-1">Details <span className="text-red-400">*</span></label>
-                <textarea
-                  required
-                  value={addForm.notes}
-                  onChange={e => setAddForm(f => ({ ...f, notes: e.target.value }))}
-                  placeholder="Appointment details..."
-                  rows={3}
-                  className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm resize-none"
-                />
-              </div>
-
-              <div className="flex gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowAddModal(false)}
-                  className="flex-1 px-4 py-3 bg-gray-700 text-white rounded-lg hover:bg-gray-600 text-sm font-medium"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={savingAppointment}
-                  className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium disabled:opacity-50"
-                >
-                  {savingAppointment ? 'Saving...' : 'Add Appointment'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {showAddModal && renderAddAppointmentModal()}
 
       {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 z-30">
-        <div className="grid grid-cols-4 gap-1">
-          {navItems.map(item => (
+        <div className={demoMode ? 'grid grid-cols-3 gap-1' : 'grid grid-cols-4 gap-1'}>
+          {(demoMode ? navItems.filter(item => item.id !== 'billing') : navItems).map(item => (
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}

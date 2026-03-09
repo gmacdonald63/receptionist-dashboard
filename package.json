@@ -13,7 +13,8 @@
     "fill-range": "^7.1.1",
     "lucide-react": "^0.263.1",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "retell-client-js-sdk": "^2.0.7"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.0.0",
