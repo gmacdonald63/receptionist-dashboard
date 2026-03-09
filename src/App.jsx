@@ -1307,8 +1307,9 @@ const App = () => {
     return <SalesDashboard clientData={clientData} onLogout={handleLogout} />;
   }
 
-  // Subscription gate — admins bypass, non-subscribers see only billing
+  // Subscription gate — admins and sales reps bypass, non-subscribers see only billing
   const isSubscriptionActive = clientData?.is_admin ||
+    clientData?.role === 'sales_rep' ||
     ['active', 'trialing'].includes(clientData?.subscription_status);
 
   if (!isSubscriptionActive && clientData) {
