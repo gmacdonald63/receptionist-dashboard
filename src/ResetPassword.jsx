@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { supabase } from './supabaseClient';
 import logo from './assets/RELIANT SUPPORT LOGO.svg';
 
@@ -8,29 +8,8 @@ const ResetPassword = ({ onComplete }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
-
-  // On mount: ensure the recovery token from the URL is exchanged properly
-  // This signs in as the recovery user, replacing any existing admin session
-  useEffect(() => {
-    const exchangeRecoveryToken = async () => {
-      const hashParams = new URLSearchParams(window.location.hash.substring(1));
-      const accessToken = hashParams.get('access_token');
-      const refreshToken = hashParams.get('refresh_token');
-      const type = hashParams.get('type');
-
-      if (type === 'recovery' && accessToken) {
-        // First sign out any existing session (e.g. admin who is testing)
-        await supabase.auth.signOut();
-
-        // Now set the recovery session so updateUser targets the correct user
-        await supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken || '',
-        });
-      }
-    };
-    exchangeRecoveryToken();
-  }, []);
+  // Supabase automatically exchanges the recovery token from the URL hash
+  // and sets the session for the correct user. No manual handling needed.
 
   const handleSubmit = async (e) => {
     e.preventDefault();
