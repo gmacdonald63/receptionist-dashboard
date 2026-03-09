@@ -343,10 +343,56 @@ const App = () => {
     try {
       // Get the agent_id from effective client data (demo or real)
       const agentId = effectiveClientData?.retell_agent_id || null;
-      
-      // Fetch calls from Retell API (for call logs display)
-      const calls = await retellService.getCalls(100, agentId);
-      const transformedCalls = calls.map(call => retellService.transformCallData(call));
+
+      let calls = [];
+      let transformedCalls = [];
+
+      if (demoMode) {
+        // In demo mode, fetch appointments first, then calls from Supabase (not Retell API)
+        const { data: demoApts } = await supabase
+          .from('appointments')
+          .select('*')
+          .eq('client_id', effectiveClientData.id)
+          .order('date', { ascending: true });
+
+        const { data: demoCalls } = await supabase
+          .from('calls')
+          .select('*')
+          .eq('agent_id', agentId)
+          .order('created_at', { ascending: false });
+
+        transformedCalls = (demoCalls || []).map(call => {
+          // Find matching appointment for this call
+          const matchingApt = (demoApts || []).find(a => a.call_id === call.call_id);
+          return {
+            id: call.call_id,
+            caller: call.caller_name || 'Unknown',
+            number: call.caller_number || 'N/A',
+            duration: retellService.formatDuration(call.duration_seconds || 0),
+            time: new Date(call.created_at).toLocaleString('en-US', {
+              year: 'numeric', month: '2-digit', day: '2-digit',
+              hour: '2-digit', minute: '2-digit', hour12: true
+            }),
+            outcome: call.appointment_booked ? 'Appointment Booked' : 'Call Completed',
+            hasRecording: !!call.recording_url,
+            hasTranscript: !!call.transcript,
+            recording_url: call.recording_url,
+            transcript: call.transcript,
+            call_summary: call.summary || '',
+            appointment: matchingApt ? {
+              date: matchingApt.date,
+              time: matchingApt.start_time,
+              address: [matchingApt.address, matchingApt.city, matchingApt.state, matchingApt.zip].filter(Boolean).join(', '),
+            } : { date: null, time: null, address: null }
+          };
+        });
+        calls = demoCalls || [];
+      } else {
+        // Normal mode: fetch from Retell API
+        calls = await retellService.getCalls(100, agentId);
+        transformedCalls = calls.map(call => retellService.transformCallData(call));
+      }
+
       setCallLogs(transformedCalls);
 
       // Fetch all appointments from Supabase (single source of truth)
@@ -360,14 +406,23 @@ const App = () => {
         periodStart.setMonth(periodStart.getMonth() - 1);
       }
 
-      const periodCalls = periodStart
-        ? calls.filter(call => call.start_timestamp && call.start_timestamp >= periodStart.getTime())
-        : calls;
+      const totalMinutes = demoMode
+        ? calls.reduce((sum, call) => sum + (call.duration_seconds || 0), 0) / 60
+        : (() => {
+            const periodCalls = periodStart
+              ? calls.filter(call => call.start_timestamp && call.start_timestamp >= periodStart.getTime())
+              : calls;
+            return periodCalls.reduce((sum, call) => sum + (call.call_duration || 0), 0) / 60;
+          })();
 
-      const totalMinutes = periodCalls.reduce((sum, call) => sum + (call.call_duration || 0), 0) / 60;
+      const totalCalls = demoMode
+        ? calls.length
+        : (periodStart
+            ? calls.filter(call => call.start_timestamp && call.start_timestamp >= periodStart.getTime()).length
+            : calls.length);
 
       setStats({
-        totalCalls: periodCalls.length,
+        totalCalls,
         appointments: appointments.length,
         totalMinutes: Math.round(totalMinutes),
       });
