@@ -25,8 +25,12 @@ BEGIN
   -- Customers
   DELETE FROM customers WHERE client_id = demo_cid;
 
-  -- Appointments
+  -- Appointments (clear technician_id first to avoid FK issues)
+  UPDATE appointments SET technician_id = NULL WHERE client_id = demo_cid;
   DELETE FROM appointments WHERE client_id = demo_cid;
+
+  -- Technicians
+  DELETE FROM technicians WHERE client_id = demo_cid;
 
   -- Calls for the demo agent
   DELETE FROM calls WHERE agent_id = demo_agent;
@@ -47,7 +51,7 @@ BEGIN
     subscription_status = 'active',
     company_name = 'Reliant Support Heating & Air',
     retell_agent_id = demo_agent,
-    appointment_duration = 120,
+    appointment_duration = 60,
     buffer_time = 0,
     timezone = 'America/New_York'
   WHERE id = demo_cid;
@@ -73,106 +77,129 @@ BEGIN
     (demo_cid, 'Patrick',  'Coleman',  'Patrick Coleman',  '(503) 555-0648', NULL, '5783 Riverbend Way',       ARRAY[]::text[]);
 
   -- ============================================================
-  -- 4. SEED APPOINTMENTS (13)
+  -- 4. SEED TECHNICIANS (3)
+  -- ============================================================
+
+  INSERT INTO technicians (client_id, name, phone, color, is_active) VALUES
+    (demo_cid, 'Mike Rodriguez',  '(503) 555-0901', '#3B82F6', true),
+    (demo_cid, 'Sarah Chen',      '(503) 555-0902', '#10B981', true),
+    (demo_cid, 'Jake Thompson',   '(503) 555-0903', '#F59E0B', true);
+
+  -- ============================================================
+  -- 5. SEED APPOINTMENTS (13)
   -- ============================================================
 
   INSERT INTO appointments (
     client_id, caller_name, caller_number, date, start_time, end_time,
-    address, city, state, zip, notes, source, status, service_type, call_id
+    address, city, state, zip, notes, source, status, service_type, call_id,
+    technician_id
   ) VALUES
-    -- 1. Dan Morales — today
+    -- 1. Dan Morales — today (Mike)
     (demo_cid, 'Dan Morales', '(503) 555-0634',
-     CURRENT_DATE + 0, '11:00', '11:00',
+     CURRENT_DATE + 0, '11:00', '12:00',
      '745 Pine Crest Way', 'Gresham', 'OR', '97080',
      'Furnace is blowing cold air.',
-     'manual', 'confirmed', NULL, NULL),
+     'manual', 'confirmed', NULL, NULL,
+     (SELECT id FROM technicians WHERE client_id = demo_cid AND name = 'Mike Rodriguez')),
 
-    -- 2. Derek Wright — tomorrow
+    -- 2. Derek Wright — tomorrow (Sarah)
     (demo_cid, 'Derek Wright', '(503) 555-0253',
-     CURRENT_DATE + 1, '09:30', '09:30',
+     CURRENT_DATE + 1, '09:30', '10:30',
      '8914 Juniper Ct', 'Wilsonville', 'OR', '97070',
      $n$The furnace sells like something is burning or melting.  It currently turned off at the breaker so it won't come on.$n$,
-     'manual', 'confirmed', NULL, NULL),
+     'manual', 'confirmed', NULL, NULL,
+     (SELECT id FROM technicians WHERE client_id = demo_cid AND name = 'Sarah Chen')),
 
-    -- 3. Megan Stewart — tomorrow
+    -- 3. Megan Stewart — tomorrow (Jake)
     (demo_cid, 'Megan Stewart', '(503) 555-0549',
-     CURRENT_DATE + 1, '13:30', '13:30',
+     CURRENT_DATE + 1, '13:30', '14:30',
      '1534 Rolling Hills Rd', 'Oregon City', 'OR', '97045',
      'Furnace is making a squeaking/grinding noise.',
-     'manual', 'confirmed', NULL, NULL),
+     'manual', 'confirmed', NULL, NULL,
+     (SELECT id FROM technicians WHERE client_id = demo_cid AND name = 'Jake Thompson')),
 
-    -- 4. Nicole Reed — +2 days
+    -- 4. Nicole Reed — +2 days (Mike)
     (demo_cid, 'Nicole Reed', '(503) 555-0356',
-     CURRENT_DATE + 2, '08:00', '08:00',
+     CURRENT_DATE + 2, '08:00', '09:00',
      '4412 Foxglove Terr', 'Portland', 'OR', '97215',
      $n$The AC isn't very cold. Airflow is strong.$n$,
-     'manual', 'confirmed', NULL, NULL),
+     'manual', 'confirmed', NULL, NULL,
+     (SELECT id FROM technicians WHERE client_id = demo_cid AND name = 'Mike Rodriguez')),
 
-    -- 5. James Mitchell — +2 days (AI call)
+    -- 5. James Mitchell — +2 days (AI call) (Sarah)
     (demo_cid, 'James Mitchell', '5035550132',
-     CURRENT_DATE + 2, '16:00', '18:00',
+     CURRENT_DATE + 2, '16:00', '17:00',
      '1842 Maple Creek Drive', 'Portland', 'OR', '97201',
      $s$Furnace not turning on; thermostat says it's on but nothing happens.$s$,
-     'ai', 'confirmed', 'Heating Repair', 'call_d0464b90542de2ac010d5c8b6d1'),
+     'ai', 'confirmed', 'Heating Repair', 'call_d0464b90542de2ac010d5c8b6d1',
+     (SELECT id FROM technicians WHERE client_id = demo_cid AND name = 'Sarah Chen')),
 
-    -- 6. Steven Cooper — +3 days (AI call)
+    -- 6. Steven Cooper — +3 days (AI call) (Mike)
     (demo_cid, 'Steven Cooper', '5035550683',
-     CURRENT_DATE + 3, '08:00', '10:00',
+     CURRENT_DATE + 3, '08:00', '09:00',
      '978 Walnut Grove Avenue', 'Gresham', 'OR', '97030',
      'AC not turning on, thermostat display works but system unresponsive. Circuit breaker checked.',
-     'ai', 'confirmed', 'Air Conditioning Repair', 'call_cd492b208b2dff19e53c25dcad2'),
+     'ai', 'confirmed', 'Air Conditioning Repair', 'call_cd492b208b2dff19e53c25dcad2',
+     (SELECT id FROM technicians WHERE client_id = demo_cid AND name = 'Mike Rodriguez')),
 
-    -- 7. Courtney Bell — +3 days (AI call)
+    -- 7. Courtney Bell — +3 days (AI call) (Sarah)
     (demo_cid, 'Courtney Bell', '503-555-0396',
-     CURRENT_DATE + 3, '10:00', '12:00',
+     CURRENT_DATE + 3, '10:00', '11:00',
      '642 Silverleaf Drive', 'Hillsborough', 'OR', '97123',
      'Customer requests filter change and system checkup.',
-     'ai', 'confirmed', 'Preventative Maintenance and Filter Change', 'call_2dd4de63ad36bb8d0a695bdfc31'),
+     'ai', 'confirmed', 'Preventative Maintenance and Filter Change', 'call_2dd4de63ad36bb8d0a695bdfc31',
+     (SELECT id FROM technicians WHERE client_id = demo_cid AND name = 'Sarah Chen')),
 
-    -- 8. Tiffany Diaz — +3 days
+    -- 8. Tiffany Diaz — +3 days (Jake)
     (demo_cid, 'Tiffany Diaz', '(503) 555-0358',
-     CURRENT_DATE + 3, '13:30', '13:30',
+     CURRENT_DATE + 3, '13:30', '14:30',
      '3087 Fern Valley Rd', 'Tigard', 'OR', '97223',
      $n$There's water leaking from the air handler in the garage.$n$,
-     'manual', 'confirmed', NULL, NULL),
+     'manual', 'confirmed', NULL, NULL,
+     (SELECT id FROM technicians WHERE client_id = demo_cid AND name = 'Jake Thompson')),
 
-    -- 9. Monica Jenkins — +6 days (AI call)
+    -- 9. Monica Jenkins — +6 days (AI call) (Mike)
     (demo_cid, 'Monica Jenkins', '503-555-0568',
-     CURRENT_DATE + 6, '08:00', '10:00',
+     CURRENT_DATE + 6, '08:00', '09:00',
      '1785 Evergreen Boulevard', 'Portland', 'OR', '97211',
      'Furnace not turning on, no sound or attempt to start.',
-     'ai', 'confirmed', 'Heating Repair', 'call_57da93e096cbc58ca5a5392fb17'),
+     'ai', 'confirmed', 'Heating Repair', 'call_57da93e096cbc58ca5a5392fb17',
+     (SELECT id FROM technicians WHERE client_id = demo_cid AND name = 'Mike Rodriguez')),
 
-    -- 10. Greg Barnes — +6 days
+    -- 10. Greg Barnes — +6 days (Sarah)
     (demo_cid, 'Greg Barnes', '(503) 555-0935',
-     CURRENT_DATE + 6, '13:00', '13:00',
+     CURRENT_DATE + 6, '13:00', '14:00',
      '4102 Stone Bridge Dr', 'Gresham', 'OR', '97030',
      'The furnace won''t turn off and it is just blowing cold air.',
-     'manual', 'confirmed', NULL, NULL),
+     'manual', 'confirmed', NULL, NULL,
+     (SELECT id FROM technicians WHERE client_id = demo_cid AND name = 'Sarah Chen')),
 
-    -- 11. Tim Powell — +6 days
+    -- 11. Tim Powell — +6 days (Jake)
     (demo_cid, 'Tim Powell', '(503) 555-0142',
-     CURRENT_DATE + 6, '14:30', '14:30',
+     CURRENT_DATE + 6, '14:30', '15:30',
      '3570 Ridgewood Dr', 'Beaverton', 'OR', '97006',
      'The outdoor condensing unit is frozen.',
-     'manual', 'confirmed', NULL, NULL),
+     'manual', 'confirmed', NULL, NULL,
+     (SELECT id FROM technicians WHERE client_id = demo_cid AND name = 'Jake Thompson')),
 
-    -- 12. Travis Long — +7 days (AI call)
+    -- 12. Travis Long — +7 days (AI call) (Jake)
     (demo_cid, 'Travis Long', '503-555-0821',
-     CURRENT_DATE + 7, '10:00', '12:00',
+     CURRENT_DATE + 7, '10:00', '11:00',
      '2578 Brentwood Avenue', 'Tigard', 'OR', '97224',
      'Customer requested seasonal tune-up and filter replacement.',
-     'ai', 'confirmed', 'Seasonal tune-up and filter service', 'call_a1e21951b2240c142a3be8fa6d9'),
+     'ai', 'confirmed', 'Seasonal tune-up and filter service', 'call_a1e21951b2240c142a3be8fa6d9',
+     (SELECT id FROM technicians WHERE client_id = demo_cid AND name = 'Jake Thompson')),
 
-    -- 13. Patrick Coleman — +8 days
+    -- 13. Patrick Coleman — +8 days (Mike)
     (demo_cid, 'Patrick Coleman', '(503) 555-0648',
-     CURRENT_DATE + 8, '09:30', '09:30',
+     CURRENT_DATE + 8, '09:30', '10:30',
      '5783 Riverbend Way', 'Oregon City', 'OR', '97045',
      'regular 6 month maintenance.',
-     'manual', 'confirmed', NULL, NULL);
+     'manual', 'confirmed', NULL, NULL,
+     (SELECT id FROM technicians WHERE client_id = demo_cid AND name = 'Mike Rodriguez'));
 
   -- ============================================================
-  -- 5. SEED CALLS (5)
+  -- 6. SEED CALLS (5)
   -- ============================================================
 
   -- Call 1: James Mitchell (5 hours ago)

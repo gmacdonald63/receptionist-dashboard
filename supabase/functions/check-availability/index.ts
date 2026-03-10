@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const BUFFER_MINS = 120; // 2-hour spacing between appointments
+const TECH_BUFFER_MINS = 30; // 30-min travel buffer between a tech's appointments
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -67,6 +67,58 @@ function addDays(dateStr: string, days: number): string {
   return d.toISOString().split("T")[0];
 }
 
+// Check if a specific tech is free at a given time, considering their existing appointments + buffer
+function isTechFreeAtSlot(
+  techId: number | null,
+  slotStartMins: number,
+  slotDurationMins: number,
+  appointments: { start_time: string; end_time: string | null; technician_id: number | null }[]
+): boolean {
+  const slotEndMins = slotStartMins + slotDurationMins;
+
+  for (const apt of appointments) {
+    // Only check appointments assigned to this tech (or unassigned if techId is null)
+    if (apt.technician_id !== techId) continue;
+
+    const aptStart = toMinutes(apt.start_time);
+    const aptEnd = apt.end_time && apt.end_time !== apt.start_time
+      ? toMinutes(apt.end_time)
+      : aptStart + 60; // default 1hr if no end_time
+
+    // Add buffer after the appointment for travel time
+    const aptEndWithBuffer = aptEnd + TECH_BUFFER_MINS;
+
+    // Check overlap: new slot overlaps if it starts before apt ends (with buffer) AND ends after apt starts
+    // Also add buffer before: the new slot's end + buffer must not overlap the apt start
+    if (slotStartMins < aptEndWithBuffer && slotEndMins + TECH_BUFFER_MINS > aptStart) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// Check if ANY tech is available at a given slot
+function isAnyTechFree(
+  techIds: number[],
+  slotStartMins: number,
+  slotDurationMins: number,
+  appointments: { start_time: string; end_time: string | null; technician_id: number | null }[]
+): boolean {
+  if (techIds.length === 0) {
+    // No techs configured — fall back to global conflict check (any appointment = conflict)
+    return !appointments.some(apt => {
+      const aptStart = toMinutes(apt.start_time);
+      const aptEnd = apt.end_time && apt.end_time !== apt.start_time
+        ? toMinutes(apt.end_time)
+        : aptStart + 60;
+      const slotEnd = slotStartMins + slotDurationMins;
+      return slotStartMins < aptEnd + TECH_BUFFER_MINS && slotEnd + TECH_BUFFER_MINS > aptStart;
+    });
+  }
+
+  return techIds.some(techId => isTechFreeAtSlot(techId, slotStartMins, slotDurationMins, appointments));
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
@@ -115,10 +167,10 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Resolve agent_id → client_id
+    // Resolve agent_id → client
     const { data: clientRow, error: clientError } = await supabase
       .from("clients")
-      .select("id")
+      .select("id, appointment_duration")
       .eq("retell_agent_id", agent_id)
       .single();
 
@@ -131,15 +183,25 @@ serve(async (req) => {
     }
 
     const clientId = clientRow.id;
+    const aptDuration = clientRow.appointment_duration || 60; // default 1hr
     const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
+    // Fetch active technicians for this client
+    const { data: techs } = await supabase
+      .from("technicians")
+      .select("id")
+      .eq("client_id", clientId)
+      .eq("is_active", true);
+
+    const techIds = (techs || []).map(t => t.id);
+
     // ─── FIND-NEXT MODE ───────────────────────────────────────────────────────
-    // Returns the next N available slots starting from `date`.
     if (findNext) {
       const slots: { date: string; display_date: string; time: string; time_24: string }[] = [];
       let searchDate = date;
       let daysSearched = 0;
       const MAX_DAYS = 30;
+      const SLOT_STEP = 30; // check every 30 minutes
 
       while (slots.length < findNext && daysSearched < MAX_DAYS) {
         const dateObj = new Date(searchDate + "T00:00:00Z");
@@ -156,18 +218,18 @@ serve(async (req) => {
           const dayStart = toMinutes(dayHours.open_time);
           const dayEnd   = toMinutes(dayHours.close_time);
 
+          // Fetch all appointments for this day (include tech assignment)
           const { data: appts } = await supabase
             .from("appointments")
-            .select("start_time")
+            .select("start_time, end_time, technician_id")
             .eq("client_id", clientId)
             .eq("date", searchDate)
             .neq("status", "cancelled");
 
-          const bookedMins = (appts || []).map((a) => toMinutes(a.start_time));
-          const isConflict = (t: number) => bookedMins.some((b) => Math.abs(t - b) < BUFFER_MINS);
+          const dayAppts = appts || [];
 
-          for (let t = dayStart; t < dayEnd && slots.length < findNext; t += BUFFER_MINS) {
-            if (!isConflict(t)) {
+          for (let t = dayStart; t + aptDuration <= dayEnd && slots.length < findNext; t += SLOT_STEP) {
+            if (isAnyTechFree(techIds, t, aptDuration, dayAppts)) {
               const time24 = fromMinutes(t);
               slots.push({
                 date: searchDate,
@@ -185,7 +247,7 @@ serve(async (req) => {
         daysSearched++;
       }
 
-      console.log(`📅 [${agent_id}] find_next=${findNext} from ${date} → ${slots.length} slots found`);
+      console.log(`📅 [${agent_id}] find_next=${findNext} from ${date} → ${slots.length} slots found (${techIds.length} techs)`);
 
       return new Response(
         JSON.stringify({ slots }),
@@ -240,9 +302,10 @@ serve(async (req) => {
       );
     }
 
+    // Fetch all non-cancelled appointments for the day with tech info
     const { data: appointments, error } = await supabase
       .from("appointments")
-      .select("start_time")
+      .select("start_time, end_time, technician_id")
       .eq("client_id", clientId)
       .eq("date", date)
       .neq("status", "cancelled");
@@ -255,29 +318,27 @@ serve(async (req) => {
       });
     }
 
-    const bookedMins   = (appointments || []).map((a) => toMinutes(a.start_time)).sort((a, b) => a - b);
-    const isConflict   = (t: number) => bookedMins.some((b) => Math.abs(t - b) < BUFFER_MINS);
-    const isAvailable  = !isConflict(normalizedTimeMins);
+    const dayAppts = appointments || [];
+    const isAvailable = isAnyTechFree(techIds, normalizedTimeMins, aptDuration, dayAppts);
 
     let nextOpen: string | null = null;
     let nextOpenDisplay: string | null = null;
     if (!isAvailable) {
-      const conflicting    = bookedMins.filter((b) => Math.abs(normalizedTimeMins - b) < BUFFER_MINS);
-      const latestConflict = conflicting.reduce((max, b) => Math.max(max, b), -Infinity);
-      const firstCandidate = latestConflict + BUFFER_MINS;
-      const searchStart    = Math.max(firstCandidate, START_OF_DAY);
-      for (let t = searchStart; t <= END_OF_DAY; t += 30) {
-        if (!isConflict(t)) {
-          nextOpen        = fromMinutes(t);
+      // Find the next available slot on this day
+      for (let t = normalizedTimeMins + 30; t + aptDuration <= END_OF_DAY; t += 30) {
+        if (isAnyTechFree(techIds, t, aptDuration, dayAppts)) {
+          nextOpen = fromMinutes(t);
           nextOpenDisplay = toDisplayTime(nextOpen);
           break;
         }
       }
     }
 
+    // Show currently booked times for context
+    const bookedMins = dayAppts.map((a) => toMinutes(a.start_time)).sort((a, b) => a - b);
     const bookedDisplay = bookedMins.map((m) => toDisplayTime(fromMinutes(m)));
 
-    console.log(`📅 [${agent_id}] ${date} ${normalizedTime} → available: ${isAvailable}, next_open: ${nextOpen}`);
+    console.log(`📅 [${agent_id}] ${date} ${normalizedTime} → available: ${isAvailable}, next_open: ${nextOpen} (${techIds.length} techs)`);
 
     return new Response(
       JSON.stringify({
