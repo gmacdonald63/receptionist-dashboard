@@ -72,14 +72,16 @@ CREATE POLICY "Demo access to appointments"
   USING (
     client_id = 9999
     AND EXISTS (
-      SELECT 1 FROM clients WHERE clients.id = (auth.jwt() -> 'user_metadata' ->> 'client_id')::bigint
+      SELECT 1 FROM clients
+      WHERE clients.email = auth.email()
       AND clients.demo_client_id = 9999
     )
   )
   WITH CHECK (
     client_id = 9999
     AND EXISTS (
-      SELECT 1 FROM clients WHERE clients.id = (auth.jwt() -> 'user_metadata' ->> 'client_id')::bigint
+      SELECT 1 FROM clients
+      WHERE clients.email = auth.email()
       AND clients.demo_client_id = 9999
     )
   );
@@ -91,14 +93,29 @@ CREATE POLICY "Demo access to customers"
   USING (
     client_id = 9999
     AND EXISTS (
-      SELECT 1 FROM clients WHERE clients.id = (auth.jwt() -> 'user_metadata' ->> 'client_id')::bigint
+      SELECT 1 FROM clients
+      WHERE clients.email = auth.email()
       AND clients.demo_client_id = 9999
     )
   )
   WITH CHECK (
     client_id = 9999
     AND EXISTS (
-      SELECT 1 FROM clients WHERE clients.id = (auth.jwt() -> 'user_metadata' ->> 'client_id')::bigint
+      SELECT 1 FROM clients
+      WHERE clients.email = auth.email()
+      AND clients.demo_client_id = 9999
+    )
+  );
+
+-- Business hours: sales reps can read demo business hours
+CREATE POLICY "Demo access to business_hours"
+  ON business_hours FOR SELECT
+  TO authenticated
+  USING (
+    client_id = 9999
+    AND EXISTS (
+      SELECT 1 FROM clients
+      WHERE clients.email = auth.email()
       AND clients.demo_client_id = 9999
     )
   );

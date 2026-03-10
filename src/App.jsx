@@ -1448,15 +1448,16 @@ const App = () => {
             />
           )}
           {activeTab === 'calls' && renderCallLogs()}
+          {activeTab === 'billing' && renderBilling()}
         </main>
 
         {/* Add Appointment Modal */}
         {showAddModal && renderAddAppointmentModal()}
 
-        {/* Bottom Navigation — 3 tabs for demo (no billing) */}
+        {/* Bottom Navigation */}
         <nav className="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 z-30">
-          <div className="grid grid-cols-3 gap-1">
-            {navItems.filter(item => item.id !== 'billing').map(item => (
+          <div className="grid grid-cols-4 gap-1">
+            {navItems.map(item => (
               <button
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
@@ -1634,8 +1635,8 @@ const App = () => {
 
       {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 z-30">
-        <div className={demoMode ? 'grid grid-cols-3 gap-1' : 'grid grid-cols-4 gap-1'}>
-          {(demoMode ? navItems.filter(item => item.id !== 'billing') : navItems).map(item => (
+        <div className="grid grid-cols-4 gap-1">
+          {navItems.map(item => (
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
