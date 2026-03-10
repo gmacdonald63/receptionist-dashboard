@@ -731,12 +731,10 @@ const AppointmentCalendar = ({
               <AppointmentSidePanel
                 mode={sidePanelMode}
                 selectedSlot={selectedSlot}
-                selectedAppointment={selectedAppointment}
+                appointment={selectedAppointment}
                 technicians={technicians}
                 onSave={handleSave}
                 onClose={handleCloseSidePanel}
-                onPreviewDurationChange={handlePreviewDurationChange}
-                clientId={clientId}
                 isMobile={false}
               />
             </div>
@@ -759,12 +757,10 @@ const AppointmentCalendar = ({
                 <AppointmentSidePanel
                   mode={sidePanelMode}
                   selectedSlot={selectedSlot}
-                  selectedAppointment={selectedAppointment}
+                  appointment={selectedAppointment}
                   technicians={technicians}
                   onSave={handleSave}
                   onClose={handleCloseSidePanel}
-                  onPreviewDurationChange={handlePreviewDurationChange}
-                  clientId={clientId}
                   isMobile={true}
                 />
               </div>
