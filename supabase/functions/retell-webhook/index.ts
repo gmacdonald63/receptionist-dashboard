@@ -60,7 +60,7 @@ serve(async (req) => {
         state:         apptState,
         zip:           apptZip,
         notes:         analysis.call_summary ?? null,
-        source:        'call',
+        source:        'ai',
         status:        'confirmed',
       });
       if (apptError) console.error("🚨 Appointment insert error:", JSON.stringify(apptError));

@@ -344,9 +344,51 @@ const App = () => {
       // Get the agent_id from effective client data (demo or real)
       const agentId = effectiveClientData?.retell_agent_id || null;
 
-      // Fetch calls from Retell API (works for both demo and normal mode)
-      const calls = await retellService.getCalls(100, agentId);
-      const transformedCalls = calls.map(call => retellService.transformCallData(call));
+      let transformedCalls = [];
+      let rawCallsForStats = [];
+
+      if (demoMode) {
+        // Demo mode: fetch calls from Supabase (controllable, resetable)
+        const { data: supabaseCalls, error: callsError } = await supabase
+          .from('calls')
+          .select('*')
+          .eq('agent_id', agentId)
+          .order('created_at', { ascending: false });
+
+        if (callsError) console.error('Error fetching demo calls:', callsError);
+
+        // Deduplicate by call_id (keep the one with the most data)
+        const callMap = new Map();
+        (supabaseCalls || []).forEach(call => {
+          const existing = callMap.get(call.call_id);
+          if (!existing || (call.caller_name && !existing.caller_name)) {
+            callMap.set(call.call_id, call);
+          }
+        });
+
+        transformedCalls = Array.from(callMap.values()).map(call => ({
+          id: call.call_id,
+          caller: call.caller_name || 'Unknown',
+          number: call.caller_number || 'N/A',
+          duration: call.duration_seconds ? `${Math.floor(call.duration_seconds / 60)}:${String(Math.floor(call.duration_seconds % 60)).padStart(2, '0')}` : '0:00',
+          time: call.created_at ? new Date(call.created_at).toLocaleString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true }) : 'N/A',
+          outcome: call.appointment_booked ? 'Appointment Booked' : 'Call Completed',
+          hasRecording: !!call.recording_url,
+          hasTranscript: !!call.transcript,
+          recording_url: call.recording_url,
+          transcript: call.transcript,
+          call_summary: call.summary || '',
+          appointment: {}
+        }));
+
+        rawCallsForStats = supabaseCalls || [];
+      } else {
+        // Normal mode: fetch calls from Retell API
+        const calls = await retellService.getCalls(100, agentId);
+        transformedCalls = calls.map(call => retellService.transformCallData(call));
+        rawCallsForStats = calls;
+      }
+
       setCallLogs(transformedCalls);
 
       // Fetch all appointments from Supabase (single source of truth)
@@ -360,14 +402,12 @@ const App = () => {
         periodStart.setMonth(periodStart.getMonth() - 1);
       }
 
-      const periodCalls = periodStart
-        ? calls.filter(call => call.start_timestamp && call.start_timestamp >= periodStart.getTime())
-        : calls;
-
-      const totalMinutes = periodCalls.reduce((sum, call) => sum + (call.call_duration || 0), 0) / 60;
+      const totalMinutes = demoMode
+        ? rawCallsForStats.reduce((sum, call) => sum + (call.duration_seconds || 0), 0) / 60
+        : rawCallsForStats.reduce((sum, call) => sum + (call.call_duration || 0), 0) / 60;
 
       setStats({
-        totalCalls: periodCalls.length,
+        totalCalls: rawCallsForStats.length,
         appointments: appointments.length,
         totalMinutes: Math.round(totalMinutes),
       });
@@ -1152,6 +1192,113 @@ const App = () => {
   };
 
   const renderBilling = () => {
+    // Demo mode: show a realistic billing page as if on Standard Plan
+    if (demoMode) {
+      const nextBilling = new Date();
+      nextBilling.setDate(nextBilling.getDate() + 22);
+      const nextBillingStr = nextBilling.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
+      // Fake 3 months of payment history
+      const invoices = [];
+      for (let i = 0; i < 3; i++) {
+        const d = new Date();
+        d.setMonth(d.getMonth() - i);
+        d.setDate(8);
+        invoices.push({
+          date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          amount: '$495.00',
+          status: 'Paid',
+        });
+      }
+
+      const usedMins = stats.totalMinutes || 0;
+      const includedMins = 1000;
+      const remaining = Math.max(0, includedMins - usedMins);
+      const pct = Math.min(100, (usedMins / includedMins) * 100);
+
+      return (
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold text-white">Your Plan</h3>
+          <div className="bg-gray-800 rounded-lg p-4 border border-blue-500">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-lg font-semibold text-white">Standard Plan</h4>
+              <span className="px-2 py-1 bg-green-900 text-green-300 rounded text-xs">Active</span>
+            </div>
+            <p className="text-3xl font-bold text-white mb-1">
+              $495.00<span className="text-base font-normal text-gray-400">/mo</span>
+            </p>
+            <p className="text-gray-400 text-sm mb-4">AI Receptionist Service</p>
+            <div className="p-3 bg-gray-750 rounded-lg mb-4">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-400">Next billing date</span>
+                <span className="text-white">{nextBillingStr}</span>
+              </div>
+            </div>
+            <button
+              onClick={() => alert('Billing portal is not available in demo mode.')}
+              className="w-full py-3 bg-gray-700 text-white rounded-lg hover:bg-gray-600 font-medium text-sm"
+            >
+              Manage Subscription
+            </button>
+          </div>
+
+          {/* Usage */}
+          <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+            <h3 className="text-lg font-semibold mb-4 text-white">Usage This Month</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-4 bg-gray-750 rounded-lg text-center">
+                <p className="text-2xl font-bold text-white">{stats.totalCalls}</p>
+                <p className="text-gray-400 text-sm">Calls</p>
+              </div>
+              <div className="p-4 bg-gray-750 rounded-lg text-center">
+                <p className="text-2xl font-bold text-white">{usedMins}</p>
+                <p className="text-gray-400 text-sm">Minutes</p>
+              </div>
+            </div>
+            <div className="w-full bg-gray-700 rounded-full h-2 mt-3">
+              <div className="h-2 rounded-full bg-purple-500 transition-all" style={{ width: `${pct}%` }} />
+            </div>
+            <p className="text-xs mt-2 text-center text-gray-500">
+              {remaining.toLocaleString()} of {includedMins.toLocaleString()} min remaining
+            </p>
+          </div>
+
+          {/* Payment History */}
+          <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+            <h3 className="text-lg font-semibold mb-4 text-white">Payment History</h3>
+            <div className="space-y-2">
+              {invoices.map((inv, i) => (
+                <div key={i} className="flex items-center justify-between p-3 bg-gray-750 rounded-lg">
+                  <div>
+                    <p className="text-white text-sm">{inv.date}</p>
+                    <p className="text-gray-400 text-xs">Standard Plan — Monthly</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-white text-sm font-medium">{inv.amount}</p>
+                    <span className="text-xs text-green-400">{inv.status}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Billing Portal */}
+          <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+            <h3 className="text-lg font-semibold mb-4 text-white">Payment & Invoices</h3>
+            <p className="text-gray-400 text-sm mb-3">
+              Update your payment method, view invoices, or cancel your subscription through the Stripe billing portal.
+            </p>
+            <button
+              onClick={() => alert('Billing portal is not available in demo mode.')}
+              className="w-full py-3 bg-gray-700 text-white rounded-lg hover:bg-gray-600 font-medium text-sm"
+            >
+              Open Billing Portal
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     const subStatus = clientData?.subscription_status || 'inactive';
     const isActive = subStatus === 'active' || subStatus === 'trialing';
     const isPastDue = subStatus === 'past_due';
