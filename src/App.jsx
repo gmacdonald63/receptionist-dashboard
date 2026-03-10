@@ -1485,25 +1485,21 @@ const App = () => {
               onRefresh={fetchData}
               loading={loading}
               clientId={effectiveClientData?.id}
-              headerLeft={<img src={logo} alt="Reliant Support" className="h-5 w-auto" />}
+              headerLeft={<img src={logo} alt="Reliant Support" style={{ height: '30px', width: 'auto' }} />}
             />
           )}
           {activeTab === 'customers' && (
-            <>
-              <div className="flex items-center mb-3">
-                <img src={logo} alt="Reliant Support" className="h-5 w-auto" />
-              </div>
-              <Customers
-                clientData={effectiveClientData}
-                appointments={appointments}
-                onReminderCountChange={setReminderCount}
-              />
-            </>
+            <Customers
+              clientData={effectiveClientData}
+              appointments={appointments}
+              onReminderCountChange={setReminderCount}
+              headerLeft={<img src={logo} alt="Reliant Support" style={{ height: '30px', width: 'auto' }} />}
+            />
           )}
           {activeTab === 'calls' && (
             <>
               <div className="flex items-center mb-3">
-                <img src={logo} alt="Reliant Support" className="h-5 w-auto" />
+                <img src={logo} alt="Reliant Support" style={{ height: '30px', width: 'auto' }} />
               </div>
               {renderCallLogs()}
             </>
@@ -1511,7 +1507,7 @@ const App = () => {
           {activeTab === 'billing' && (
             <>
               <div className="flex items-center mb-3">
-                <img src={logo} alt="Reliant Support" className="h-5 w-auto" />
+                <img src={logo} alt="Reliant Support" style={{ height: '30px', width: 'auto' }} />
               </div>
               {renderBilling()}
             </>
@@ -1601,7 +1597,7 @@ const App = () => {
         <main className="p-4 md:p-6 max-w-lg mx-auto">
           {/* Compact app bar */}
           <div className="flex items-center justify-between mb-4">
-            <img src={logo} alt="Reliant Support" style={{ height: '24px', width: 'auto' }} />
+            <img src={logo} alt="Reliant Support" style={{ height: '30px', width: 'auto' }} />
             <button
               onClick={handleLogout}
               className="p-2 hover:bg-gray-700 rounded-lg"
@@ -1659,7 +1655,7 @@ const App = () => {
         {activeTab === 'overview' && (
           <>
             <div className="flex items-center justify-between mb-3">
-              <img src={logo} alt="Reliant Support" className="h-5 w-auto" />
+              <img src={logo} alt="Reliant Support" style={{ height: '30px', width: 'auto' }} />
               <div className="flex items-center gap-1">
                 {clientData?.is_admin && (
                   <button onClick={() => setShowAdmin(true)} className="p-2 hover:bg-gray-700 rounded-lg" title="Admin Dashboard">
@@ -1685,7 +1681,7 @@ const App = () => {
             onRefresh={fetchData}
             loading={loading}
             clientId={effectiveClientData?.id}
-            headerLeft={<img src={logo} alt="Reliant Support" className="h-5 w-auto" />}
+            headerLeft={<img src={logo} alt="Reliant Support" style={{ height: '30px', width: 'auto' }} />}
             headerRight={
               <div className="flex items-center gap-1">
                 {clientData?.is_admin && (
@@ -1701,9 +1697,12 @@ const App = () => {
           />
         )}
         {activeTab === 'customers' && (
-          <>
-            <div className="flex items-center justify-between mb-3">
-              <img src={logo} alt="Reliant Support" className="h-5 w-auto" />
+          <Customers
+            clientData={effectiveClientData}
+            appointments={appointments}
+            onReminderCountChange={setReminderCount}
+            headerLeft={<img src={logo} alt="Reliant Support" style={{ height: '30px', width: 'auto' }} />}
+            headerRight={
               <div className="flex items-center gap-1">
                 {clientData?.is_admin && (
                   <button onClick={() => setShowAdmin(true)} className="p-2 hover:bg-gray-700 rounded-lg" title="Admin Dashboard">
@@ -1714,18 +1713,13 @@ const App = () => {
                   <LogOut className="w-5 h-5 text-gray-400" />
                 </button>
               </div>
-            </div>
-            <Customers
-              clientData={effectiveClientData}
-              appointments={appointments}
-              onReminderCountChange={setReminderCount}
-            />
-          </>
+            }
+          />
         )}
         {activeTab === 'calls' && (
           <>
             <div className="flex items-center justify-between mb-3">
-              <img src={logo} alt="Reliant Support" className="h-5 w-auto" />
+              <img src={logo} alt="Reliant Support" style={{ height: '30px', width: 'auto' }} />
               <div className="flex items-center gap-1">
                 {clientData?.is_admin && (
                   <button onClick={() => setShowAdmin(true)} className="p-2 hover:bg-gray-700 rounded-lg" title="Admin Dashboard">
@@ -1743,7 +1737,7 @@ const App = () => {
         {activeTab === 'billing' && (
           <>
             <div className="flex items-center justify-between mb-3">
-              <img src={logo} alt="Reliant Support" className="h-5 w-auto" />
+              <img src={logo} alt="Reliant Support" style={{ height: '30px', width: 'auto' }} />
               <div className="flex items-center gap-1">
                 {clientData?.is_admin && (
                   <button onClick={() => setShowAdmin(true)} className="p-2 hover:bg-gray-700 rounded-lg" title="Admin Dashboard">

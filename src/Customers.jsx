@@ -35,7 +35,7 @@ const getTagColor = (tag) => {
   return TAG_COLORS[Math.abs(hash) % TAG_COLORS.length];
 };
 
-const Customers = ({ clientData, appointments, onReminderCountChange }) => {
+const Customers = ({ clientData, appointments, onReminderCountChange, headerLeft, headerRight }) => {
   const [customers, setCustomers] = useState([]);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -1120,9 +1120,12 @@ const Customers = ({ clientData, appointments, onReminderCountChange }) => {
   // ============ RENDER: Customer List ============
   const renderCustomerList = () => (
     <div className="space-y-4">
-      {/* Header with Reminders button */}
+      {/* Header row: logo + title on left, action buttons + app controls on right */}
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-white">Customers</h2>
+        <div className="flex items-center gap-3">
+          {headerLeft}
+          <h2 className="text-xl font-semibold text-white">Customers</h2>
+        </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowRemindersPanel(true)}
@@ -1150,6 +1153,7 @@ const Customers = ({ clientData, appointments, onReminderCountChange }) => {
             <Plus className="w-4 h-4" />
             <span className="hidden sm:inline">Add</span>
           </button>
+          {headerRight}
         </div>
       </div>
 
