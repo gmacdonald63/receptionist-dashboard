@@ -1472,11 +1472,6 @@ const App = () => {
           onDataRefresh={handleDemoDataRefresh}
         />
 
-        {/* Header */}
-        <header className="bg-gray-800 border-b border-gray-700 px-4 sticky top-0 z-50 flex items-center justify-center" style={{ height: '72px' }}>
-          <img src={logo} alt="Reliant Support" style={{ height: '40px', width: 'auto' }} />
-        </header>
-
         {/* Main Content */}
         <main className="p-4 md:p-6">
           {activeTab === 'appointments' && (
@@ -1490,17 +1485,37 @@ const App = () => {
               onRefresh={fetchData}
               loading={loading}
               clientId={effectiveClientData?.id}
+              headerLeft={<img src={logo} alt="Reliant Support" className="h-5 w-auto" />}
             />
           )}
           {activeTab === 'customers' && (
-            <Customers
-              clientData={effectiveClientData}
-              appointments={appointments}
-              onReminderCountChange={setReminderCount}
-            />
+            <>
+              <div className="flex items-center mb-3">
+                <img src={logo} alt="Reliant Support" className="h-5 w-auto" />
+              </div>
+              <Customers
+                clientData={effectiveClientData}
+                appointments={appointments}
+                onReminderCountChange={setReminderCount}
+              />
+            </>
           )}
-          {activeTab === 'calls' && renderCallLogs()}
-          {activeTab === 'billing' && renderBilling()}
+          {activeTab === 'calls' && (
+            <>
+              <div className="flex items-center mb-3">
+                <img src={logo} alt="Reliant Support" className="h-5 w-auto" />
+              </div>
+              {renderCallLogs()}
+            </>
+          )}
+          {activeTab === 'billing' && (
+            <>
+              <div className="flex items-center mb-3">
+                <img src={logo} alt="Reliant Support" className="h-5 w-auto" />
+              </div>
+              {renderBilling()}
+            </>
+          )}
         </main>
 
         {/* Bottom Navigation */}
@@ -1582,21 +1597,19 @@ const App = () => {
         <InstallPrompt />
         <UpdatePrompt />
 
-        {/* Header */}
-        <header className="bg-gray-800 border-b border-gray-700 px-4 sticky top-0 z-50 flex items-center justify-between" style={{ height: '72px' }}>
-          <div />
-          <img src={logo} alt="Reliant Support" style={{ height: '40px', width: 'auto' }} />
-          <button
-            onClick={handleLogout}
-            className="p-2 hover:bg-gray-700 rounded-lg"
-            title="Sign out"
-          >
-            <LogOut className="w-5 h-5 text-gray-400" />
-          </button>
-        </header>
-
         {/* Gated Content */}
         <main className="p-4 md:p-6 max-w-lg mx-auto">
+          {/* Compact app bar */}
+          <div className="flex items-center justify-between mb-4">
+            <img src={logo} alt="Reliant Support" style={{ height: '24px', width: 'auto' }} />
+            <button
+              onClick={handleLogout}
+              className="p-2 hover:bg-gray-700 rounded-lg"
+              title="Sign out"
+            >
+              <LogOut className="w-5 h-5 text-gray-400" />
+            </button>
+          </div>
           {awaitingSubscription ? (
             <div className="text-center py-12">
               <RefreshCw className="w-8 h-8 animate-spin text-blue-500 mx-auto mb-4" />
@@ -1641,32 +1654,26 @@ const App = () => {
         />
       )}
 
-      {/* Header */}
-      <header className="bg-gray-800 border-b border-gray-700 px-4 sticky top-0 z-50 flex items-center justify-between" style={{ height: '72px' }}>
-        <div className="flex items-center gap-2">
-          {clientData?.is_admin && (
-            <button
-              onClick={() => setShowAdmin(true)}
-              className="p-2 hover:bg-gray-700 rounded-lg"
-              title="Admin Dashboard"
-            >
-              <Settings className="w-5 h-5 text-gray-400" />
-            </button>
-          )}
-        </div>
-        <img src={logo} alt="Reliant Support" style={{ height: '40px', width: 'auto' }} />
-        <button
-          onClick={handleLogout}
-          className="p-2 hover:bg-gray-700 rounded-lg"
-          title="Sign out"
-        >
-          <LogOut className="w-5 h-5 text-gray-400" />
-        </button>
-      </header>
-
       {/* Main Content */}
       <main className="p-4 md:p-6">
-        {activeTab === 'overview' && renderOverview()}
+        {activeTab === 'overview' && (
+          <>
+            <div className="flex items-center justify-between mb-3">
+              <img src={logo} alt="Reliant Support" className="h-5 w-auto" />
+              <div className="flex items-center gap-1">
+                {clientData?.is_admin && (
+                  <button onClick={() => setShowAdmin(true)} className="p-2 hover:bg-gray-700 rounded-lg" title="Admin Dashboard">
+                    <Settings className="w-5 h-5 text-gray-400" />
+                  </button>
+                )}
+                <button onClick={handleLogout} className="p-2 hover:bg-gray-700 rounded-lg" title="Sign out">
+                  <LogOut className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+            </div>
+            {renderOverview()}
+          </>
+        )}
         {activeTab === 'appointments' && (
           <AppointmentCalendar
             appointments={appointments}
@@ -1678,17 +1685,79 @@ const App = () => {
             onRefresh={fetchData}
             loading={loading}
             clientId={effectiveClientData?.id}
+            headerLeft={<img src={logo} alt="Reliant Support" className="h-5 w-auto" />}
+            headerRight={
+              <div className="flex items-center gap-1">
+                {clientData?.is_admin && (
+                  <button onClick={() => setShowAdmin(true)} className="p-2 hover:bg-gray-700 rounded-lg" title="Admin Dashboard">
+                    <Settings className="w-5 h-5 text-gray-400" />
+                  </button>
+                )}
+                <button onClick={handleLogout} className="p-2 hover:bg-gray-700 rounded-lg" title="Sign out">
+                  <LogOut className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+            }
           />
         )}
         {activeTab === 'customers' && (
-          <Customers
-            clientData={effectiveClientData}
-            appointments={appointments}
-            onReminderCountChange={setReminderCount}
-          />
+          <>
+            <div className="flex items-center justify-between mb-3">
+              <img src={logo} alt="Reliant Support" className="h-5 w-auto" />
+              <div className="flex items-center gap-1">
+                {clientData?.is_admin && (
+                  <button onClick={() => setShowAdmin(true)} className="p-2 hover:bg-gray-700 rounded-lg" title="Admin Dashboard">
+                    <Settings className="w-5 h-5 text-gray-400" />
+                  </button>
+                )}
+                <button onClick={handleLogout} className="p-2 hover:bg-gray-700 rounded-lg" title="Sign out">
+                  <LogOut className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+            </div>
+            <Customers
+              clientData={effectiveClientData}
+              appointments={appointments}
+              onReminderCountChange={setReminderCount}
+            />
+          </>
         )}
-        {activeTab === 'calls' && renderCallLogs()}
-        {activeTab === 'billing' && renderBilling()}
+        {activeTab === 'calls' && (
+          <>
+            <div className="flex items-center justify-between mb-3">
+              <img src={logo} alt="Reliant Support" className="h-5 w-auto" />
+              <div className="flex items-center gap-1">
+                {clientData?.is_admin && (
+                  <button onClick={() => setShowAdmin(true)} className="p-2 hover:bg-gray-700 rounded-lg" title="Admin Dashboard">
+                    <Settings className="w-5 h-5 text-gray-400" />
+                  </button>
+                )}
+                <button onClick={handleLogout} className="p-2 hover:bg-gray-700 rounded-lg" title="Sign out">
+                  <LogOut className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+            </div>
+            {renderCallLogs()}
+          </>
+        )}
+        {activeTab === 'billing' && (
+          <>
+            <div className="flex items-center justify-between mb-3">
+              <img src={logo} alt="Reliant Support" className="h-5 w-auto" />
+              <div className="flex items-center gap-1">
+                {clientData?.is_admin && (
+                  <button onClick={() => setShowAdmin(true)} className="p-2 hover:bg-gray-700 rounded-lg" title="Admin Dashboard">
+                    <Settings className="w-5 h-5 text-gray-400" />
+                  </button>
+                )}
+                <button onClick={handleLogout} className="p-2 hover:bg-gray-700 rounded-lg" title="Sign out">
+                  <LogOut className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+            </div>
+            {renderBilling()}
+          </>
+        )}
       </main>
 
       {/* Bottom Navigation */}

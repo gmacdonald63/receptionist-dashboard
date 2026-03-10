@@ -69,6 +69,8 @@ const AppointmentCalendar = ({
   onRefresh,
   loading,
   clientId,
+  headerLeft,
+  headerRight,
 }) => {
   // Internal state
   const [sidePanelMode, setSidePanelMode] = useState(null); // null | 'add' | 'view'
@@ -644,9 +646,10 @@ const AppointmentCalendar = ({
     <div className="flex flex-col h-full">
       {/* Week navigation bar (sticky) */}
       <div className="sticky top-0 z-30 bg-gray-900 pb-2">
-        <div className="flex items-center py-3">
-          {/* Left: Refresh */}
-          <div className="flex-1 flex items-center">
+        <div className="flex items-center py-3 gap-3">
+          {/* Left: Logo slot + Refresh */}
+          <div className="flex-1 flex items-center gap-3">
+            {headerLeft}
             <button
               onClick={onRefresh}
               disabled={loading}
@@ -683,8 +686,10 @@ const AppointmentCalendar = ({
             </button>
           </div>
 
-          {/* Right: spacer */}
-          <div className="flex-1" />
+          {/* Right: action slot */}
+          <div className="flex-1 flex items-center justify-end gap-1">
+            {headerRight}
+          </div>
         </div>
 
         {/* Week label */}
