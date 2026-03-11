@@ -215,14 +215,52 @@ const AppointmentCalendar = ({
     return filtered;
   }, [appointmentsByDate, selectedTechId]);
 
+  // ─── Sub-column (multi-tech) layout computed values ─────────────────────────
+
+  const activeTechs = useMemo(() => {
+    return technicians ? technicians.filter(t => t.is_active !== false) : [];
+  }, [technicians]);
+
+  // Show sub-columns when no filter is active and there are active techs
+  const showSubColumns = !selectedTechId && activeTechs.length > 0;
+
+  // Sub-column definitions: each active tech + Unassigned at end
+  const subColumns = useMemo(() => {
+    if (!showSubColumns) return [];
+    return [
+      ...activeTechs.map(t => ({ id: t.id, name: t.name, color: t.color || '#6b7280' })),
+      { id: null, name: 'Unassigned', color: '#6b7280' },
+    ];
+  }, [activeTechs, showSubColumns]);
+
+  // Bucket appointments by date → tech key for sub-column rendering
+  const appointmentsByDateAndTech = useMemo(() => {
+    if (!showSubColumns) return {};
+    const map = {};
+    for (const [date, apts] of Object.entries(appointmentsByDate)) {
+      map[date] = {};
+      for (const apt of apts) {
+        const key = apt.technician_id != null ? String(apt.technician_id) : 'unassigned';
+        if (!map[date][key]) map[date][key] = [];
+        map[date][key].push(apt);
+      }
+    }
+    return map;
+  }, [appointmentsByDate, showSubColumns]);
+
   // ─── Handlers ───────────────────────────────────────────────────────────────
 
-  const handleSlotClick = useCallback((dateStr, timeStr) => {
-    setSelectedSlot({ date: dateStr, time: timeStr });
+  const handleSlotClick = useCallback((dateStr, timeStr, techId = undefined) => {
+    setSelectedSlot({
+      date: dateStr,
+      time: timeStr,
+      // In sub-col mode: use passed techId; in filter mode: inherit selectedTechId
+      techId: techId !== undefined ? techId : (selectedTechId ?? null),
+    });
     setSelectedAppointment(null);
     setSidePanelMode('add');
     setPreviewDuration(60);
-  }, []);
+  }, [selectedTechId]);
 
   const handleAppointmentClick = useCallback((apt) => {
     setSelectedAppointment(apt);
@@ -364,8 +402,10 @@ const AppointmentCalendar = ({
     );
   };
 
-  const renderPreviewBlock = (dateStr) => {
+  const renderPreviewBlock = (dateStr, subColTechId = undefined) => {
     if (sidePanelMode !== 'add' || !selectedSlot || selectedSlot.date !== dateStr) return null;
+    // In sub-column mode: only show in the matching tech's column
+    if (subColTechId !== undefined && (selectedSlot.techId ?? null) !== subColTechId) return null;
 
     const startMin = toMinutes(selectedSlot.time);
     const top = ((startMin - gridStartMin) / 30) * SLOT_HEIGHT;
@@ -389,13 +429,62 @@ const AppointmentCalendar = ({
     );
   };
 
+  // ─── Tech sub-column (Phase 3: all-tech week view) ──────────────────────────
+
+  const renderTechSubColumn = (date, sc, isLastSubCol, isLastDay) => {
+    const dateStr = formatDateStr(date);
+    const dayOfWeek = date.getDay();
+    const closed = isDayClosed(dayOfWeek);
+    const techKey = sc.id != null ? String(sc.id) : 'unassigned';
+    const subColApts = appointmentsByDateAndTech[dateStr]?.[techKey] || [];
+
+    return (
+      <div key={techKey} className="relative flex-1" style={{ minWidth: '44px' }}>
+        {/* Slot cells */}
+        {timeSlots.map((slotTime) => {
+          const inBiz = isSlotInBusinessHours(dayOfWeek, slotTime);
+          const borderR = !(isLastSubCol && isLastDay);
+          return (
+            <div
+              key={slotTime}
+              className={`border-b ${borderR ? 'border-r border-gray-700/10' : ''} ${
+                closed
+                  ? 'bg-gray-900/50 cursor-not-allowed'
+                  : inBiz
+                  ? 'bg-gray-800/50 hover:bg-blue-900/20 cursor-pointer'
+                  : 'bg-gray-900/30 hover:bg-blue-900/10 cursor-pointer'
+              } border-gray-700/20`}
+              style={{ height: `${SLOT_HEIGHT}px` }}
+              onClick={!closed ? () => handleSlotClick(dateStr, slotTime, sc.id) : undefined}
+            />
+          );
+        })}
+        {/* Appointment blocks */}
+        {subColApts.map((apt) => renderAppointmentBlock(apt, dayOfWeek, dateStr))}
+        {/* Preview block (only for matching sub-column) */}
+        {renderPreviewBlock(dateStr, sc.id)}
+      </div>
+    );
+  };
+
   const renderDayColumn = (date, isLastColumn) => {
     const dateStr = formatDateStr(date);
     const dayOfWeek = date.getDay();
-    const isToday = dateStr === todayStr;
     const closed = isDayClosed(dayOfWeek);
-    const dayAppointments = filteredAppointmentsByDate[dateStr] || [];
 
+    // Sub-column mode: flex row of per-tech columns
+    if (showSubColumns) {
+      return (
+        <div key={dateStr} className="flex" style={{ minWidth: 0 }}>
+          {subColumns.map((sc, scIdx) =>
+            renderTechSubColumn(date, sc, scIdx === subColumns.length - 1, isLastColumn)
+          )}
+        </div>
+      );
+    }
+
+    // Single-column mode (filter active or no techs)
+    const dayAppointments = filteredAppointmentsByDate[dateStr] || [];
     return (
       <div key={dateStr} className="relative" style={{ minWidth: 0 }}>
         {/* Background slot cells */}
@@ -448,17 +537,38 @@ const AppointmentCalendar = ({
           return (
             <div
               key={formatDateStr(date)}
-              className="sticky top-0 z-20 bg-gray-900 border-b border-gray-700 px-2 py-2 text-center"
+              className="sticky top-0 z-20 bg-gray-900 border-b border-gray-700 text-center overflow-hidden"
             >
-              <p className="text-xs font-medium text-gray-400">
-                {formatDayName(date)}
-              </p>
-              <div className="flex items-center justify-center gap-1">
-                <p className={`text-sm font-semibold ${isToday ? 'text-blue-400' : 'text-white'}`}>
-                  {date.getDate()}
+              {/* Day name + date */}
+              <div className="px-2 py-1.5">
+                <p className="text-xs font-medium text-gray-400">
+                  {formatDayName(date)}
                 </p>
-                {isToday && <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />}
+                <div className="flex items-center justify-center gap-1">
+                  <p className={`text-sm font-semibold ${isToday ? 'text-blue-400' : 'text-white'}`}>
+                    {date.getDate()}
+                  </p>
+                  {isToday && <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />}
+                </div>
               </div>
+              {/* Sub-column tech indicators */}
+              {showSubColumns && (
+                <div className="flex border-t border-gray-700/40">
+                  {subColumns.map((sc) => (
+                    <div
+                      key={sc.id ?? 'u'}
+                      className="flex-1 flex items-center justify-center py-1"
+                      style={{ minWidth: '44px' }}
+                      title={sc.name}
+                    >
+                      <span
+                        className="w-2 h-2 rounded-full"
+                        style={{ backgroundColor: sc.color }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           );
         })}
@@ -793,7 +903,7 @@ const AppointmentCalendar = ({
                 selectedSlot={selectedSlot}
                 appointment={selectedAppointment}
                 technicians={technicians}
-                defaultTechnicianId={selectedTechId}
+                defaultTechnicianId={selectedSlot?.techId ?? selectedTechId}
                 onSave={handleSave}
                 onClose={handleCloseSidePanel}
                 isMobile={false}
@@ -820,7 +930,7 @@ const AppointmentCalendar = ({
                   selectedSlot={selectedSlot}
                   appointment={selectedAppointment}
                   technicians={technicians}
-                  defaultTechnicianId={selectedTechId}
+                  defaultTechnicianId={selectedSlot?.techId ?? selectedTechId}
                   onSave={handleSave}
                   onClose={handleCloseSidePanel}
                   isMobile={true}
