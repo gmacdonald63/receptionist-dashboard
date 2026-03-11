@@ -79,9 +79,27 @@ const AppointmentCalendar = ({
   const [previewDuration, setPreviewDuration] = useState(60);
   const [mobileSelectedDay, setMobileSelectedDay] = useState(() => new Date());
 
+  // Tech filter: null = show all, number = show only that tech's appointments
+  const [selectedTechId, setSelectedTechId] = useState(() => {
+    const stored = sessionStorage.getItem('calendarFilterTechId');
+    return stored ? Number(stored) : null;
+  });
+
+  // Day view drill-down: null = week view, Date = day view for that date
+  const [dayViewDate, setDayViewDate] = useState(null);
+
   const scrollContainerRef = useRef(null);
 
   const weekDates = useMemo(() => getWeekDates(currentWeekStart), [currentWeekStart]);
+
+  // Only show columns for days that are configured as open (or all 7 if no config loaded yet)
+  const visibleWeekDates = useMemo(() => {
+    if (!businessHours || businessHours.length === 0) return weekDates;
+    return weekDates.filter(date => {
+      const bh = businessHours.find(h => h.day_of_week === date.getDay());
+      return !bh || bh.is_open; // show if unconfigured (open by default) or explicitly open
+    });
+  }, [weekDates, businessHours]);
 
   const todayStr = useMemo(() => formatDateStr(new Date()), []);
 
@@ -90,6 +108,23 @@ const AppointmentCalendar = ({
     const todaySunday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - today.getDay());
     return formatDateStr(todaySunday) === formatDateStr(currentWeekStart);
   }, [currentWeekStart]);
+
+  // Sync selectedTechId to sessionStorage
+  useEffect(() => {
+    if (selectedTechId) {
+      sessionStorage.setItem('calendarFilterTechId', String(selectedTechId));
+    } else {
+      sessionStorage.removeItem('calendarFilterTechId');
+    }
+  }, [selectedTechId]);
+
+  // Validate stored tech against loaded technicians — clear if no longer valid
+  useEffect(() => {
+    if (selectedTechId && technicians && technicians.length > 0) {
+      const techStillActive = technicians.some(t => t.id === selectedTechId && t.is_active !== false);
+      if (!techStillActive) setSelectedTechId(null);
+    }
+  }, [technicians]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Grid time range calculation ────────────────────────────────────────────
 
@@ -172,14 +207,63 @@ const AppointmentCalendar = ({
     return map;
   }, [appointments]);
 
+  // Filtered view: when a tech is selected, only show that tech's appointments
+  const filteredAppointmentsByDate = useMemo(() => {
+    if (!selectedTechId) return appointmentsByDate;
+    const filtered = {};
+    for (const [date, apts] of Object.entries(appointmentsByDate)) {
+      const techApts = apts.filter(apt => apt.technician_id === selectedTechId);
+      if (techApts.length > 0) filtered[date] = techApts;
+    }
+    return filtered;
+  }, [appointmentsByDate, selectedTechId]);
+
+  // ─── Sub-column (multi-tech) layout computed values ─────────────────────────
+
+  const activeTechs = useMemo(() => {
+    return technicians ? technicians.filter(t => t.is_active !== false) : [];
+  }, [technicians]);
+
+  // Show sub-columns when no filter is active and there are active techs
+  const showSubColumns = !selectedTechId && activeTechs.length > 0;
+
+  // Sub-column definitions: each active tech + Unassigned at end
+  const subColumns = useMemo(() => {
+    if (!showSubColumns) return [];
+    return [
+      ...activeTechs.map(t => ({ id: t.id, name: t.name, color: t.color || '#6b7280' })),
+      { id: null, name: 'Unassigned', color: '#6b7280' },
+    ];
+  }, [activeTechs, showSubColumns]);
+
+  // Bucket appointments by date → tech key for sub-column rendering
+  const appointmentsByDateAndTech = useMemo(() => {
+    if (!showSubColumns) return {};
+    const map = {};
+    for (const [date, apts] of Object.entries(appointmentsByDate)) {
+      map[date] = {};
+      for (const apt of apts) {
+        const key = apt.technician_id != null ? String(apt.technician_id) : 'unassigned';
+        if (!map[date][key]) map[date][key] = [];
+        map[date][key].push(apt);
+      }
+    }
+    return map;
+  }, [appointmentsByDate, showSubColumns]);
+
   // ─── Handlers ───────────────────────────────────────────────────────────────
 
-  const handleSlotClick = useCallback((dateStr, timeStr) => {
-    setSelectedSlot({ date: dateStr, time: timeStr });
+  const handleSlotClick = useCallback((dateStr, timeStr, techId = undefined) => {
+    setSelectedSlot({
+      date: dateStr,
+      time: timeStr,
+      // In sub-col mode: use passed techId; in filter mode: inherit selectedTechId
+      techId: techId !== undefined ? techId : (selectedTechId ?? null),
+    });
     setSelectedAppointment(null);
     setSidePanelMode('add');
     setPreviewDuration(60);
-  }, []);
+  }, [selectedTechId]);
 
   const handleAppointmentClick = useCallback((apt) => {
     setSelectedAppointment(apt);
@@ -251,7 +335,18 @@ const AppointmentCalendar = ({
       const todayInWeek = newWeekDates.some((d) => formatDateStr(d) === formatDateStr(today));
       setMobileSelectedDay(todayInWeek ? today : newWeekDates[0]);
     }
+    // Exit day view when navigating to a different week
+    setDayViewDate(null);
   }, [currentWeekStart]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-scroll to current time when entering day view
+  useEffect(() => {
+    if (!dayViewDate || !scrollContainerRef.current) return;
+    const now = new Date();
+    const currentMin = now.getHours() * 60 + now.getMinutes();
+    const scrollTarget = ((currentMin - gridStartMin) / 30) * SLOT_HEIGHT;
+    scrollContainerRef.current.scrollTop = Math.max(0, scrollTarget - 200);
+  }, [dayViewDate, gridStartMin]);
 
   // ─── Render helpers ─────────────────────────────────────────────────────────
 
@@ -321,8 +416,10 @@ const AppointmentCalendar = ({
     );
   };
 
-  const renderPreviewBlock = (dateStr) => {
+  const renderPreviewBlock = (dateStr, subColTechId = undefined) => {
     if (sidePanelMode !== 'add' || !selectedSlot || selectedSlot.date !== dateStr) return null;
+    // In sub-column mode: only show in the matching tech's column
+    if (subColTechId !== undefined && (selectedSlot.techId ?? null) !== subColTechId) return null;
 
     const startMin = toMinutes(selectedSlot.time);
     const top = ((startMin - gridStartMin) / 30) * SLOT_HEIGHT;
@@ -346,13 +443,62 @@ const AppointmentCalendar = ({
     );
   };
 
-  const renderDayColumn = (date, dayIndex) => {
+  // ─── Tech sub-column (Phase 3: all-tech week view) ──────────────────────────
+
+  const renderTechSubColumn = (date, sc, isLastSubCol, isLastDay) => {
     const dateStr = formatDateStr(date);
     const dayOfWeek = date.getDay();
-    const isToday = dateStr === todayStr;
     const closed = isDayClosed(dayOfWeek);
-    const dayAppointments = appointmentsByDate[dateStr] || [];
+    const techKey = sc.id != null ? String(sc.id) : 'unassigned';
+    const subColApts = appointmentsByDateAndTech[dateStr]?.[techKey] || [];
 
+    return (
+      <div key={techKey} className="relative flex-1" style={{ minWidth: '44px' }}>
+        {/* Slot cells */}
+        {timeSlots.map((slotTime) => {
+          const inBiz = isSlotInBusinessHours(dayOfWeek, slotTime);
+          const borderR = !(isLastSubCol && isLastDay);
+          return (
+            <div
+              key={slotTime}
+              className={`border-b ${borderR ? 'border-r border-gray-700/10' : ''} ${
+                closed
+                  ? 'bg-gray-900/50 cursor-not-allowed'
+                  : inBiz
+                  ? 'bg-gray-800/50 hover:bg-blue-900/20 cursor-pointer'
+                  : 'bg-gray-900/30 hover:bg-blue-900/10 cursor-pointer'
+              } border-gray-700/20`}
+              style={{ height: `${SLOT_HEIGHT}px` }}
+              onClick={!closed ? () => handleSlotClick(dateStr, slotTime, sc.id) : undefined}
+            />
+          );
+        })}
+        {/* Appointment blocks */}
+        {subColApts.map((apt) => renderAppointmentBlock(apt, dayOfWeek, dateStr))}
+        {/* Preview block (only for matching sub-column) */}
+        {renderPreviewBlock(dateStr, sc.id)}
+      </div>
+    );
+  };
+
+  const renderDayColumn = (date, isLastColumn) => {
+    const dateStr = formatDateStr(date);
+    const dayOfWeek = date.getDay();
+    const closed = isDayClosed(dayOfWeek);
+
+    // Sub-column mode: flex row of per-tech columns
+    if (showSubColumns) {
+      return (
+        <div key={dateStr} className="flex" style={{ minWidth: 0 }}>
+          {subColumns.map((sc, scIdx) =>
+            renderTechSubColumn(date, sc, scIdx === subColumns.length - 1, isLastColumn)
+          )}
+        </div>
+      );
+    }
+
+    // Single-column mode (filter active or no techs)
+    const dayAppointments = filteredAppointmentsByDate[dateStr] || [];
     return (
       <div key={dateStr} className="relative" style={{ minWidth: 0 }}>
         {/* Background slot cells */}
@@ -369,7 +515,7 @@ const AppointmentCalendar = ({
                   : inBiz
                   ? 'bg-gray-800/50 border-gray-700/20 hover:bg-blue-900/20 cursor-pointer'
                   : 'bg-gray-900/30 border-gray-700/10 hover:bg-blue-900/10 cursor-pointer'
-              } ${dayIndex === 6 ? 'border-r-0' : 'border-gray-700/20'}`}
+              } ${isLastColumn ? 'border-r-0' : 'border-gray-700/20'}`}
               style={{ height: `${SLOT_HEIGHT}px` }}
               onClick={slotClickable ? () => handleSlotClick(dateStr, slotTime) : undefined}
             />
@@ -395,30 +541,52 @@ const AppointmentCalendar = ({
       <div
         className="grid min-w-0"
         style={{
-          gridTemplateColumns: '60px repeat(7, 1fr)',
+          gridTemplateColumns: `60px repeat(${visibleWeekDates.length}, 1fr)`,
         }}
       >
         {/* Header row */}
         <div className="sticky top-0 z-20 bg-gray-900 border-b border-gray-700" />
-        {weekDates.map((date) => {
+        {visibleWeekDates.map((date) => {
           const isToday = formatDateStr(date) === todayStr;
-          const closed = isDayClosed(date.getDay());
           return (
             <div
               key={formatDateStr(date)}
-              className={`sticky top-0 z-20 bg-gray-900 border-b border-gray-700 px-2 py-2 text-center ${
-                closed ? 'opacity-40' : ''
-              }`}
+              className="sticky top-0 z-20 bg-gray-900 border-b border-gray-700 text-center overflow-hidden"
             >
-              <p className={`text-xs font-medium ${closed ? 'text-gray-600' : 'text-gray-400'}`}>
-                {formatDayName(date)}
-              </p>
-              <div className="flex items-center justify-center gap-1">
-                <p className={`text-sm font-semibold ${isToday ? 'text-blue-400' : 'text-white'}`}>
-                  {date.getDate()}
+              {/* Day name + date — clickable to drill into day view */}
+              <div
+                className="px-2 py-1.5 cursor-pointer hover:bg-gray-800/60 transition-colors group"
+                onClick={() => setDayViewDate(date)}
+                title={`View ${date.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}`}
+              >
+                <p className="text-xs font-medium text-gray-400 group-hover:text-blue-400 transition-colors">
+                  {formatDayName(date)}
                 </p>
-                {isToday && <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />}
+                <div className="flex items-center justify-center gap-1">
+                  <p className={`text-sm font-semibold ${isToday ? 'text-blue-400' : 'text-white'}`}>
+                    {date.getDate()}
+                  </p>
+                  {isToday && <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />}
+                </div>
               </div>
+              {/* Sub-column tech indicators */}
+              {showSubColumns && (
+                <div className="flex border-t border-gray-700/40">
+                  {subColumns.map((sc) => (
+                    <div
+                      key={sc.id ?? 'u'}
+                      className="flex-1 flex items-center justify-center py-1"
+                      style={{ minWidth: '44px' }}
+                      title={sc.name}
+                    >
+                      <span
+                        className="w-2 h-2 rounded-full"
+                        style={{ backgroundColor: sc.color }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           );
         })}
@@ -430,7 +598,7 @@ const AppointmentCalendar = ({
       <div
         className="grid"
         style={{
-          gridTemplateColumns: '60px repeat(7, 1fr)',
+          gridTemplateColumns: `60px repeat(${visibleWeekDates.length}, 1fr)`,
         }}
       >
         {/* Time labels */}
@@ -451,7 +619,7 @@ const AppointmentCalendar = ({
         </div>
 
         {/* Day columns */}
-        {weekDates.map((date, dayIndex) => renderDayColumn(date, dayIndex))}
+        {visibleWeekDates.map((date, idx) => renderDayColumn(date, idx === visibleWeekDates.length - 1))}
       </div>
     </div>
   );
@@ -493,7 +661,7 @@ const AppointmentCalendar = ({
     const dateStr = formatDateStr(mobileDate);
     const dayOfWeek = mobileDate.getDay();
     const closed = isDayClosed(dayOfWeek);
-    const dayAppointments = appointmentsByDate[dateStr] || [];
+    const dayAppointments = filteredAppointmentsByDate[dateStr] || [];
 
     return (
       <div
@@ -613,7 +781,108 @@ const AppointmentCalendar = ({
     );
   };
 
-  // ─── Tech legend ────────────────────────────────────────────────────────────
+  // ─── Day view (drill-down from week header click) ───────────────────────────
+
+  const renderDayView = () => {
+    if (!dayViewDate) return null;
+    const dateStr = formatDateStr(dayViewDate);
+    const dayOfWeek = dayViewDate.getDay();
+    const closed = isDayClosed(dayOfWeek);
+
+    return (
+      <div
+        ref={scrollContainerRef}
+        className="flex-1 overflow-auto border border-gray-700 rounded-lg bg-gray-900"
+      >
+        {/* Sub-column header row */}
+        <div className="sticky top-0 z-20 flex bg-gray-900 border-b border-gray-700">
+          {/* Time label spacer */}
+          <div className="w-[60px] flex-shrink-0" />
+          {/* Sub-column names (or single header in filter mode) */}
+          {showSubColumns ? (
+            subColumns.map((sc) => (
+              <div
+                key={sc.id ?? 'u'}
+                className="flex-1 flex flex-col items-center py-2"
+                style={{ minWidth: '52px' }}
+              >
+                <span
+                  className="w-3 h-3 rounded-full mb-0.5"
+                  style={{ backgroundColor: sc.color }}
+                />
+                <span className="text-[10px] text-gray-400 leading-tight text-center truncate px-1 max-w-full">
+                  {sc.name}
+                </span>
+              </div>
+            ))
+          ) : (
+            <div className="flex-1 py-2 text-center">
+              <p className="text-xs text-gray-400">
+                {selectedTechId
+                  ? activeTechs.find((t) => t.id === selectedTechId)?.name || 'Tech'
+                  : 'All Appointments'}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Body: time labels + content */}
+        <div className="flex">
+          {/* Time labels */}
+          <div className="w-[60px] flex-shrink-0">
+            {timeSlots.map((slotTime, idx) => (
+              <div
+                key={slotTime}
+                className="border-b border-gray-700/20 pr-2 text-right flex items-start justify-end"
+                style={{ height: `${SLOT_HEIGHT}px` }}
+              >
+                {idx % 2 === 0 && (
+                  <span className="text-gray-500 text-[10px] leading-none mt-1">
+                    {formatTime12(slotTime)}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Day content: sub-columns or single column */}
+          {showSubColumns ? (
+            <div className="flex flex-1">
+              {subColumns.map((sc, scIdx) =>
+                renderTechSubColumn(dayViewDate, sc, scIdx === subColumns.length - 1, true)
+              )}
+            </div>
+          ) : (
+            <div className="relative flex-1">
+              {timeSlots.map((slotTime) => {
+                const inBiz = isSlotInBusinessHours(dayOfWeek, slotTime);
+                return (
+                  <div
+                    key={slotTime}
+                    className={`border-b ${
+                      closed
+                        ? 'bg-gray-900/50 cursor-not-allowed'
+                        : inBiz
+                        ? 'bg-gray-800/50 hover:bg-blue-900/20 cursor-pointer'
+                        : 'bg-gray-900/30 hover:bg-blue-900/10 cursor-pointer'
+                    } border-gray-700/20`}
+                    style={{ height: `${SLOT_HEIGHT}px` }}
+                    onClick={!closed ? () => handleSlotClick(dateStr, slotTime) : undefined}
+                  />
+                );
+              })}
+              {(filteredAppointmentsByDate[dateStr] || []).map((apt) =>
+                renderAppointmentBlock(apt, dayOfWeek, dateStr)
+              )}
+              {renderPreviewBlock(dateStr)}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // ─── Tech legend (clickable filter pills) ───────────────────────────────────
 
   const renderTechLegend = () => {
     if (!technicians || technicians.length === 0) return null;
@@ -621,21 +890,45 @@ const AppointmentCalendar = ({
     const activeTechs = technicians.filter((t) => t.is_active !== false);
     if (activeTechs.length === 0) return null;
 
+    const handleTechClick = (techId) => {
+      setSelectedTechId(prev => prev === techId ? null : techId);
+    };
+
     return (
-      <div className="flex items-center gap-3 flex-wrap">
-        {activeTechs.map((tech) => (
-          <div key={tech.id} className="flex items-center gap-1.5">
-            <span
-              className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-              style={{ backgroundColor: tech.color || '#6b7280' }}
-            />
-            <span className="text-gray-300 text-xs">{tech.name}</span>
-          </div>
-        ))}
-        <div className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-full flex-shrink-0 bg-gray-500" />
-          <span className="text-gray-400 text-xs">Unassigned</span>
-        </div>
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {/* "All" reset pill — only visible when a filter is active */}
+        {selectedTechId && (
+          <button
+            onClick={() => setSelectedTechId(null)}
+            className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-gray-700 text-gray-200 hover:bg-gray-600 border border-gray-500 transition-colors"
+          >
+            All
+          </button>
+        )}
+        {activeTechs.map((tech) => {
+          const isActive = selectedTechId === tech.id;
+          return (
+            <button
+              key={tech.id}
+              onClick={() => handleTechClick(tech.id)}
+              title={isActive ? `Clear filter` : `View only ${tech.name}`}
+              className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium transition-colors ${
+                isActive
+                  ? 'bg-gray-700 text-white border-2'
+                  : selectedTechId
+                  ? 'bg-gray-800/60 text-gray-500 border border-gray-700 hover:bg-gray-700 hover:text-gray-300'
+                  : 'bg-gray-800 text-gray-300 border border-gray-700 hover:bg-gray-700 hover:text-white'
+              }`}
+              style={isActive ? { borderColor: tech.color || '#6b7280' } : {}}
+            >
+              <span
+                className="w-2 h-2 rounded-full flex-shrink-0"
+                style={{ backgroundColor: tech.color || '#6b7280' }}
+              />
+              {tech.name}
+            </button>
+          );
+        })}
       </div>
     );
   };
@@ -660,31 +953,46 @@ const AppointmentCalendar = ({
             </button>
           </div>
 
-          {/* Center: Week navigation */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={goPreviousWeek}
-              className="px-2.5 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 border border-gray-700 text-sm font-medium"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <button
-              onClick={goToToday}
-              className={`px-3 py-2 rounded-lg text-sm font-medium ${
-                isCurrentWeek
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-800 text-white hover:bg-gray-700 border border-gray-700'
-              }`}
-            >
-              Current
-            </button>
-            <button
-              onClick={goNextWeek}
-              className="px-2.5 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 border border-gray-700 text-sm font-medium"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
+          {/* Center: Week navigation (or day view title + back) */}
+          {dayViewDate ? (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setDayViewDate(null)}
+                className="flex items-center gap-1.5 px-3 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 border border-gray-700 text-sm font-medium"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                Week
+              </button>
+              <span className="text-white font-semibold text-sm">
+                {dayViewDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={goPreviousWeek}
+                className="px-2.5 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 border border-gray-700 text-sm font-medium"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                onClick={goToToday}
+                className={`px-3 py-2 rounded-lg text-sm font-medium ${
+                  isCurrentWeek
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-800 text-white hover:bg-gray-700 border border-gray-700'
+                }`}
+              >
+                Current
+              </button>
+              <button
+                onClick={goNextWeek}
+                className="px-2.5 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 border border-gray-700 text-sm font-medium"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
 
           {/* Right: legend + action slot */}
           <div className="flex-1 flex items-center justify-end gap-3">
@@ -710,9 +1018,9 @@ const AppointmentCalendar = ({
         <div className="flex flex-1 min-h-0 gap-0">
           {/* Calendar grid */}
           <div className="flex-1 min-w-0 flex flex-col">
-            {/* Desktop: 7-column grid */}
+            {/* Desktop: week grid OR day view */}
             <div className="hidden md:flex flex-col flex-1 min-h-0">
-              {renderDesktopGrid()}
+              {dayViewDate ? renderDayView() : renderDesktopGrid()}
             </div>
 
             {/* Mobile: single day grid */}
@@ -729,6 +1037,7 @@ const AppointmentCalendar = ({
                 selectedSlot={selectedSlot}
                 appointment={selectedAppointment}
                 technicians={technicians}
+                defaultTechnicianId={selectedSlot?.techId ?? selectedTechId}
                 onSave={handleSave}
                 onClose={handleCloseSidePanel}
                 isMobile={false}
@@ -755,6 +1064,7 @@ const AppointmentCalendar = ({
                   selectedSlot={selectedSlot}
                   appointment={selectedAppointment}
                   technicians={technicians}
+                  defaultTechnicianId={selectedSlot?.techId ?? selectedTechId}
                   onSave={handleSave}
                   onClose={handleCloseSidePanel}
                   isMobile={true}

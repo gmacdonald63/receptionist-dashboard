@@ -65,6 +65,10 @@ const App = () => {
   const [techForm, setTechForm] = useState({ name: '', phone: '', color: '#3B82F6' });
   const [savingTech, setSavingTech] = useState(false);
 
+  // Business hours settings form state
+  const [settingsHoursForm, setSettingsHoursForm] = useState([]);
+  const [savingHours, setSavingHours] = useState(false);
+
   // Demo mode state
   const [demoMode, setDemoMode] = useState(false);
   const [demoClientData, setDemoClientData] = useState(null);
@@ -256,6 +260,22 @@ const App = () => {
   }, [user, clientData, demoMode, demoClientData]);
 
 
+  // Sync business hours settings form whenever businessHours data loads
+  useEffect(() => {
+    const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const form = DAY_NAMES.map((name, dow) => {
+      const bh = businessHours.find(h => h.day_of_week === dow);
+      return {
+        day_of_week: dow,
+        name,
+        is_open: bh ? bh.is_open : (dow >= 1 && dow <= 5),
+        open_time: bh ? (bh.open_time || '').slice(0, 5) : '08:00',
+        close_time: bh ? (bh.close_time || '').slice(0, 5) : '18:00',
+      };
+    });
+    setSettingsHoursForm(form);
+  }, [businessHours]);
+
   const handleLogin = (user, clientData) => {
     setUser(user);
     setClientData(clientData);
@@ -343,6 +363,31 @@ const App = () => {
       if (!error && data) setBusinessHours(data);
     } catch (err) {
       console.error('Could not load business hours:', err);
+    }
+  };
+
+  const handleSaveBusinessHours = async () => {
+    const cid = effectiveClientData?.id;
+    if (!cid) return;
+    setSavingHours(true);
+    try {
+      const rows = settingsHoursForm.map(h => ({
+        client_id: cid,
+        day_of_week: h.day_of_week,
+        is_open: h.is_open,
+        open_time: h.open_time,
+        close_time: h.close_time,
+      }));
+      const { error } = await supabase
+        .from('business_hours')
+        .upsert(rows, { onConflict: 'client_id,day_of_week' });
+      if (error) throw error;
+      await fetchBusinessHours();
+    } catch (err) {
+      console.error('Failed to save business hours:', err);
+      alert('Failed to save hours. Please try again.');
+    } finally {
+      setSavingHours(false);
     }
   };
 
@@ -1062,25 +1107,46 @@ const App = () => {
       <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
         <h3 className="text-lg font-semibold mb-4 text-white">Business Hours</h3>
         <div className="space-y-3">
-          {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].map(day => (
-            <div key={day} className="space-y-2">
+          {settingsHoursForm.map((dayRow, idx) => (
+            <div key={dayRow.day_of_week} className="space-y-2">
               <div className="flex items-center justify-between">
-                <p className="text-white font-medium">{day}</p>
-                <label className="flex items-center gap-2">
-                  <input type="checkbox" className="w-4 h-4" defaultChecked />
+                <p className={`font-medium ${dayRow.is_open ? 'text-white' : 'text-gray-500'}`}>{dayRow.name}</p>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4 accent-blue-500"
+                    checked={dayRow.is_open}
+                    onChange={e => setSettingsHoursForm(f => f.map((d, i) => i === idx ? { ...d, is_open: e.target.checked } : d))}
+                  />
                   <span className="text-sm text-gray-400">Open</span>
                 </label>
               </div>
-              <div className="flex gap-2 items-center">
-                <input type="time" className="flex-1 px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white text-sm" defaultValue="09:00" />
-                <span className="text-gray-400 text-sm">to</span>
-                <input type="time" className="flex-1 px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white text-sm" defaultValue="17:00" />
-              </div>
+              {dayRow.is_open && (
+                <div className="flex gap-2 items-center">
+                  <input
+                    type="time"
+                    className="flex-1 px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white text-sm"
+                    value={dayRow.open_time}
+                    onChange={e => setSettingsHoursForm(f => f.map((d, i) => i === idx ? { ...d, open_time: e.target.value } : d))}
+                  />
+                  <span className="text-gray-400 text-sm">to</span>
+                  <input
+                    type="time"
+                    className="flex-1 px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white text-sm"
+                    value={dayRow.close_time}
+                    onChange={e => setSettingsHoursForm(f => f.map((d, i) => i === idx ? { ...d, close_time: e.target.value } : d))}
+                  />
+                </div>
+              )}
             </div>
           ))}
         </div>
-        <button className="mt-4 w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-          Save Hours
+        <button
+          onClick={handleSaveBusinessHours}
+          disabled={savingHours}
+          className="mt-4 w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+        >
+          {savingHours ? 'Saving...' : 'Save Hours'}
         </button>
       </div>
 
