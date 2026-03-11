@@ -646,7 +646,7 @@ const AppointmentCalendar = ({
     <div className="flex flex-col h-full">
       {/* Week navigation bar (sticky) */}
       <div className="sticky top-0 z-30 bg-gray-900 pb-2">
-        <div className="flex items-center py-3 gap-3">
+        <div className="flex items-center pb-3 gap-3">
           {/* Left: Logo slot + Refresh */}
           <div className="flex-1 flex items-center gap-3">
             {headerLeft}
