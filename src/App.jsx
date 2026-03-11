@@ -1449,7 +1449,8 @@ const App = () => {
     { id: 'appointments', label: 'Appointments', icon: Calendar },
     { id: 'customers', label: 'Customers', icon: Users },
     { id: 'calls', label: 'Calls', icon: Phone },
-    { id: 'billing', label: 'Billing', icon: DollarSign }
+    { id: 'billing', label: 'Billing', icon: DollarSign },
+    { id: 'settings', label: 'Settings', icon: Settings }
   ];
 
   // Show loading while checking auth or demo token
@@ -1509,11 +1510,19 @@ const App = () => {
               {renderBilling()}
             </>
           )}
+          {activeTab === 'settings' && (
+            <>
+              <div className="flex items-center mb-3">
+                <img src={logo} alt="Reliant Support" style={{ height: '26px', width: 'auto' }} />
+              </div>
+              {renderSettings()}
+            </>
+          )}
         </main>
 
         {/* Bottom Navigation */}
         <nav className="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 z-30">
-          <div className="grid grid-cols-4 gap-1">
+          <div className="grid grid-cols-5 gap-1">
             {navItems.map(item => (
               <button
                 key={item.id}
@@ -1744,11 +1753,29 @@ const App = () => {
             {renderBilling()}
           </>
         )}
+        {activeTab === 'settings' && (
+          <>
+            <div className="flex items-center justify-between mb-3">
+              <img src={logo} alt="Reliant Support" style={{ height: '26px', width: 'auto' }} />
+              <div className="flex items-center gap-1">
+                {clientData?.is_admin && (
+                  <button onClick={() => setShowAdmin(true)} className="p-2 hover:bg-gray-700 rounded-lg" title="Admin Dashboard">
+                    <Settings className="w-5 h-5 text-gray-400" />
+                  </button>
+                )}
+                <button onClick={handleLogout} className="p-2 hover:bg-gray-700 rounded-lg" title="Sign out">
+                  <LogOut className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+            </div>
+            {renderSettings()}
+          </>
+        )}
       </main>
 
       {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 z-30">
-        <div className="grid grid-cols-4 gap-1">
+        <div className="grid grid-cols-5 gap-1">
           {navItems.map(item => (
             <button
               key={item.id}
