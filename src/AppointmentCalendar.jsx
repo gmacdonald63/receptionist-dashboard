@@ -449,7 +449,8 @@ const AppointmentCalendar = ({
     const dateStr = formatDateStr(date);
     const dayOfWeek = date.getDay();
     const closed = isDayClosed(dayOfWeek);
-    const techKey = sc.id != null ? String(sc.id) : 'unassigned';
+    const isUnassigned = sc.id == null;
+    const techKey = isUnassigned ? 'unassigned' : String(sc.id);
     const subColApts = appointmentsByDateAndTech[dateStr]?.[techKey] || [];
 
     return (
@@ -464,11 +465,16 @@ const AppointmentCalendar = ({
               className={`border-b ${borderR ? 'border-r border-gray-700/10' : ''} ${
                 closed
                   ? 'bg-gray-900/50 cursor-not-allowed'
+                  : isUnassigned
+                  ? inBiz
+                    ? 'bg-gray-800/20 hover:bg-gray-700/30 cursor-pointer'
+                    : 'bg-gray-900/20 hover:bg-gray-800/20 cursor-pointer'
                   : inBiz
                   ? 'bg-gray-800/50 hover:bg-blue-900/20 cursor-pointer'
                   : 'bg-gray-900/30 hover:bg-blue-900/10 cursor-pointer'
               } border-gray-700/20`}
               style={{ height: `${SLOT_HEIGHT}px` }}
+              title={isUnassigned && !closed ? 'Unassigned — tech TBD. Assign before day of service.' : undefined}
               onClick={!closed ? () => handleSlotClick(dateStr, slotTime, sc.id) : undefined}
             />
           );
@@ -1003,6 +1009,28 @@ const AppointmentCalendar = ({
 
         {/* Mobile day picker (hidden on desktop) */}
         <div className="md:hidden">{renderMobileDayPicker()}</div>
+
+        {/* Active filter badge — persistent amber banner when a tech filter is active */}
+        {selectedTechId && (() => {
+          const tech = technicians ? technicians.find(t => t.id === selectedTechId) : null;
+          if (!tech) return null;
+          return (
+            <div className="flex items-center justify-between px-3 py-1.5 bg-amber-900/30 border border-amber-600/40 rounded-lg mt-1">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: tech.color || '#f59e0b' }} />
+                <span className="text-amber-300 text-xs font-medium">
+                  Viewing {tech.name} only — other appointments hidden
+                </span>
+              </div>
+              <button
+                onClick={() => setSelectedTechId(null)}
+                className="text-amber-400 hover:text-amber-200 text-xs underline ml-3 flex-shrink-0"
+              >
+                Show all
+              </button>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Loading state */}
