@@ -340,7 +340,10 @@ const App = () => {
           state: apt.state || '',
           zip: apt.zip || '',
           phone: apt.caller_number || '',
-          summary: apt.notes || '',
+          notes: apt.notes || '',
+          summary: apt.notes || '', // kept for backward compat (call log uses this)
+          status: apt.status,
+          duration: apt.duration || null,
           source: apt.source, // 'ai' or 'manual'
           technician_id: apt.technician_id || null,
           service_type: apt.service_type || null,
