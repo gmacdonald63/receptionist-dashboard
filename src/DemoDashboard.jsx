@@ -246,6 +246,17 @@ const DemoDashboard = ({ demoClientData, expiresAt, isPublicDemo, demoToken, onE
           </span>
         )}
 
+        {/* Call Receptionist button — shown in banner when idle */}
+        {callStatus === 'idle' && (
+          <button
+            onClick={startCall}
+            className="flex items-center gap-1.5 px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-medium transition-colors"
+          >
+            <Phone className="w-3 h-3" />
+            Call Receptionist
+          </button>
+        )}
+
         {/* Sales rep controls */}
         {!isPublicDemo && (
           <>
@@ -285,17 +296,6 @@ const DemoDashboard = ({ demoClientData, expiresAt, isPublicDemo, demoToken, onE
             <X className="w-3 h-3" />
           </button>
         </div>
-      )}
-
-      {/* Call Receptionist Floating Button */}
-      {callStatus === 'idle' && (
-        <button
-          onClick={startCall}
-          className="fixed bottom-24 right-4 z-[55] flex items-center gap-2 px-5 py-3.5 bg-green-600 hover:bg-green-700 text-white rounded-full shadow-lg shadow-green-900/50 font-medium text-sm transition-all hover:scale-105"
-        >
-          <Phone className="w-5 h-5" />
-          Call Receptionist
-        </button>
       )}
 
       {/* Active Call UI */}
