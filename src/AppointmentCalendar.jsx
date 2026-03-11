@@ -83,6 +83,15 @@ const AppointmentCalendar = ({
 
   const weekDates = useMemo(() => getWeekDates(currentWeekStart), [currentWeekStart]);
 
+  // Only show columns for days that are configured as open (or all 7 if no config loaded yet)
+  const visibleWeekDates = useMemo(() => {
+    if (!businessHours || businessHours.length === 0) return weekDates;
+    return weekDates.filter(date => {
+      const bh = businessHours.find(h => h.day_of_week === date.getDay());
+      return !bh || bh.is_open; // show if unconfigured (open by default) or explicitly open
+    });
+  }, [weekDates, businessHours]);
+
   const todayStr = useMemo(() => formatDateStr(new Date()), []);
 
   const isCurrentWeek = useMemo(() => {
@@ -346,7 +355,7 @@ const AppointmentCalendar = ({
     );
   };
 
-  const renderDayColumn = (date, dayIndex) => {
+  const renderDayColumn = (date, isLastColumn) => {
     const dateStr = formatDateStr(date);
     const dayOfWeek = date.getDay();
     const isToday = dateStr === todayStr;
@@ -369,7 +378,7 @@ const AppointmentCalendar = ({
                   : inBiz
                   ? 'bg-gray-800/50 border-gray-700/20 hover:bg-blue-900/20 cursor-pointer'
                   : 'bg-gray-900/30 border-gray-700/10 hover:bg-blue-900/10 cursor-pointer'
-              } ${dayIndex === 6 ? 'border-r-0' : 'border-gray-700/20'}`}
+              } ${isLastColumn ? 'border-r-0' : 'border-gray-700/20'}`}
               style={{ height: `${SLOT_HEIGHT}px` }}
               onClick={slotClickable ? () => handleSlotClick(dateStr, slotTime) : undefined}
             />
@@ -395,22 +404,19 @@ const AppointmentCalendar = ({
       <div
         className="grid min-w-0"
         style={{
-          gridTemplateColumns: '60px repeat(7, 1fr)',
+          gridTemplateColumns: `60px repeat(${visibleWeekDates.length}, 1fr)`,
         }}
       >
         {/* Header row */}
         <div className="sticky top-0 z-20 bg-gray-900 border-b border-gray-700" />
-        {weekDates.map((date) => {
+        {visibleWeekDates.map((date) => {
           const isToday = formatDateStr(date) === todayStr;
-          const closed = isDayClosed(date.getDay());
           return (
             <div
               key={formatDateStr(date)}
-              className={`sticky top-0 z-20 bg-gray-900 border-b border-gray-700 px-2 py-2 text-center ${
-                closed ? 'opacity-40' : ''
-              }`}
+              className="sticky top-0 z-20 bg-gray-900 border-b border-gray-700 px-2 py-2 text-center"
             >
-              <p className={`text-xs font-medium ${closed ? 'text-gray-600' : 'text-gray-400'}`}>
+              <p className="text-xs font-medium text-gray-400">
                 {formatDayName(date)}
               </p>
               <div className="flex items-center justify-center gap-1">
@@ -430,7 +436,7 @@ const AppointmentCalendar = ({
       <div
         className="grid"
         style={{
-          gridTemplateColumns: '60px repeat(7, 1fr)',
+          gridTemplateColumns: `60px repeat(${visibleWeekDates.length}, 1fr)`,
         }}
       >
         {/* Time labels */}
@@ -451,7 +457,7 @@ const AppointmentCalendar = ({
         </div>
 
         {/* Day columns */}
-        {weekDates.map((date, dayIndex) => renderDayColumn(date, dayIndex))}
+        {visibleWeekDates.map((date, idx) => renderDayColumn(date, idx === visibleWeekDates.length - 1))}
       </div>
     </div>
   );
