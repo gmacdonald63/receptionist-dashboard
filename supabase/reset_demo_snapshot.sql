@@ -102,7 +102,7 @@ BEGIN
      'manual', 'confirmed', NULL, NULL,
      (SELECT id FROM technicians WHERE client_id = demo_cid AND name = 'Mike Rodriguez')),
 
-    -- 2. Derek Wright — tomorrow (Sarah)
+    -- 2. Derek Wright — tomorrow (Scott)
     (demo_cid, 'Derek Wright', '(503) 555-0253',
      CURRENT_DATE + 1, '09:30', '10:30',
      '8914 Juniper Ct', 'Wilsonville', 'OR', '97070',
@@ -126,7 +126,7 @@ BEGIN
      'manual', 'confirmed', NULL, NULL,
      (SELECT id FROM technicians WHERE client_id = demo_cid AND name = 'Mike Rodriguez')),
 
-    -- 5. James Mitchell — +2 days (AI call) (Sarah)
+    -- 5. James Mitchell — +2 days (AI call) (Scott)
     (demo_cid, 'James Mitchell', '5035550132',
      CURRENT_DATE + 2, '16:00', '17:00',
      '1842 Maple Creek Drive', 'Portland', 'OR', '97201',
@@ -142,7 +142,7 @@ BEGIN
      'ai', 'confirmed', 'Air Conditioning Repair', 'call_cd492b208b2dff19e53c25dcad2',
      (SELECT id FROM technicians WHERE client_id = demo_cid AND name = 'Mike Rodriguez')),
 
-    -- 7. Courtney Bell — +3 days (AI call) (Sarah)
+    -- 7. Courtney Bell — +3 days (AI call) (Scott)
     (demo_cid, 'Courtney Bell', '503-555-0396',
      CURRENT_DATE + 3, '10:00', '11:00',
      '642 Silverleaf Drive', 'Hillsborough', 'OR', '97123',
@@ -166,7 +166,7 @@ BEGIN
      'ai', 'confirmed', 'Heating Repair', 'call_57da93e096cbc58ca5a5392fb17',
      (SELECT id FROM technicians WHERE client_id = demo_cid AND name = 'Mike Rodriguez')),
 
-    -- 10. Greg Barnes — +6 days (Sarah)
+    -- 10. Greg Barnes — +6 days (Scott)
     (demo_cid, 'Greg Barnes', '(503) 555-0935',
      CURRENT_DATE + 6, '13:00', '14:00',
      '4102 Stone Bridge Dr', 'Gresham', 'OR', '97030',
