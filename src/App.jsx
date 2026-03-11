@@ -672,7 +672,7 @@ const App = () => {
       {/* Header row: logo, search, actions, app controls — all one line */}
       <div className="flex items-center gap-6">
         <div className="flex-shrink-0">{headerLeft}</div>
-        <div className="relative w-64 flex-shrink-0">
+        <div className="relative w-96 flex-shrink-0">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
             type="text"
