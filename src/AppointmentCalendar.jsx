@@ -80,15 +80,19 @@ const AppointmentCalendar = ({
   const [mobileSelectedDay, setMobileSelectedDay] = useState(() => new Date());
 
   // Tech filter: null = show all, number = show only that tech's appointments
+  // localStorage so the filter survives tab close / session reload
   const [selectedTechId, setSelectedTechId] = useState(() => {
-    const stored = sessionStorage.getItem('calendarFilterTechId');
-    return stored ? Number(stored) : null;
+    try {
+      const stored = localStorage.getItem('calendarFilterTechId');
+      return stored ? Number(stored) : null;
+    } catch { return null; }
   });
 
   // Day view drill-down: null = week view, Date = day view for that date
   const [dayViewDate, setDayViewDate] = useState(null);
 
   const scrollContainerRef = useRef(null);
+  const touchStartXRef = useRef(null);
 
   const weekDates = useMemo(() => getWeekDates(currentWeekStart), [currentWeekStart]);
 
@@ -109,13 +113,15 @@ const AppointmentCalendar = ({
     return formatDateStr(todaySunday) === formatDateStr(currentWeekStart);
   }, [currentWeekStart]);
 
-  // Sync selectedTechId to sessionStorage
+  // Sync selectedTechId to localStorage (persists across sessions)
   useEffect(() => {
-    if (selectedTechId) {
-      sessionStorage.setItem('calendarFilterTechId', String(selectedTechId));
-    } else {
-      sessionStorage.removeItem('calendarFilterTechId');
-    }
+    try {
+      if (selectedTechId) {
+        localStorage.setItem('calendarFilterTechId', String(selectedTechId));
+      } else {
+        localStorage.removeItem('calendarFilterTechId');
+      }
+    } catch {}
   }, [selectedTechId]);
 
   // Validate stored tech against loaded technicians — clear if no longer valid
@@ -644,7 +650,7 @@ const AppointmentCalendar = ({
           <button
             key={dateStr}
             onClick={() => setMobileSelectedDay(date)}
-            className={`flex-shrink-0 flex flex-col items-center px-3 py-2 rounded-xl transition-colors ${
+            className={`flex-shrink-0 flex flex-col items-center px-3 py-2 min-h-[44px] rounded-xl transition-colors ${
               isSelected
                 ? 'bg-blue-600 text-white'
                 : isToday
@@ -669,7 +675,34 @@ const AppointmentCalendar = ({
     const closed = isDayClosed(dayOfWeek);
     const dayAppointments = filteredAppointmentsByDate[dateStr] || [];
 
+    const handleSwipeStart = (e) => {
+      touchStartXRef.current = e.touches[0].clientX;
+    };
+    const handleSwipeEnd = (e) => {
+      if (touchStartXRef.current === null) return;
+      const delta = e.changedTouches[0].clientX - touchStartXRef.current;
+      touchStartXRef.current = null;
+      if (Math.abs(delta) < 50) return; // ignore incidental swipes
+      const direction = delta < 0 ? 1 : -1; // left swipe = next day, right = prev
+      const newDay = new Date(mobileSelectedDay);
+      newDay.setDate(newDay.getDate() + direction);
+      setMobileSelectedDay(newDay);
+      // Advance week if the new day falls outside the current week
+      const newWeekDates = getWeekDates(currentWeekStart);
+      const inWeek = newWeekDates.some((d) => formatDateStr(d) === formatDateStr(newDay));
+      if (!inWeek) {
+        const newWeek = new Date(currentWeekStart);
+        newWeek.setDate(newWeek.getDate() + direction * 7);
+        onWeekChange(newWeek);
+      }
+    };
+
     return (
+      <div
+        className="flex-1 flex flex-col min-h-0"
+        onTouchStart={handleSwipeStart}
+        onTouchEnd={handleSwipeEnd}
+      >
       <div
         ref={scrollContainerRef}
         className="flex-1 overflow-auto border border-gray-700 rounded-lg bg-gray-900"
@@ -715,7 +748,8 @@ const AppointmentCalendar = ({
                   : startMin + 60;
 
               const top = ((startMin - gridStartMin) / 30) * SLOT_HEIGHT;
-              const height = Math.max(((endMin - startMin) / 30) * SLOT_HEIGHT, 24);
+              // Mobile touch target minimum: 44px (WCAG 2.5.5) — desktop uses 24px
+              const height = Math.max(((endMin - startMin) / 30) * SLOT_HEIGHT, 44);
 
               const tech = technicians ? technicians.find((t) => t.id === apt.technician_id) : null;
 
@@ -783,6 +817,7 @@ const AppointmentCalendar = ({
             )}
           </div>
         </div>
+      </div>
       </div>
     );
   };
