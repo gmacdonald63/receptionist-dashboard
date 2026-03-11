@@ -1174,7 +1174,6 @@ const App = () => {
 
       return (
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold text-white">Your Plan</h3>
           <div className="bg-gray-800 rounded-lg p-4 border border-blue-500">
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-lg font-semibold text-white">Standard Plan</h4>
@@ -1337,8 +1336,7 @@ const App = () => {
         {/* Plan Selection or Current Plan */}
         {isActive || isPastDue ? (
           <>
-            <h3 className="text-lg font-semibold text-white">Your Plan</h3>
-            {currentPlanInfo ? (
+              {currentPlanInfo ? (
               renderPlanCard(currentPlan, currentPlanInfo, true)
             ) : (
               /* Fallback if price ID doesn't match known plans (e.g., legacy subscriber) */
