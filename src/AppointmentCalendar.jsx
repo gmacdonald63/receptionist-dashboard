@@ -79,6 +79,12 @@ const AppointmentCalendar = ({
   const [previewDuration, setPreviewDuration] = useState(60);
   const [mobileSelectedDay, setMobileSelectedDay] = useState(() => new Date());
 
+  // Tech filter: null = show all, number = show only that tech's appointments
+  const [selectedTechId, setSelectedTechId] = useState(() => {
+    const stored = sessionStorage.getItem('calendarFilterTechId');
+    return stored ? Number(stored) : null;
+  });
+
   const scrollContainerRef = useRef(null);
 
   const weekDates = useMemo(() => getWeekDates(currentWeekStart), [currentWeekStart]);
@@ -99,6 +105,23 @@ const AppointmentCalendar = ({
     const todaySunday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - today.getDay());
     return formatDateStr(todaySunday) === formatDateStr(currentWeekStart);
   }, [currentWeekStart]);
+
+  // Sync selectedTechId to sessionStorage
+  useEffect(() => {
+    if (selectedTechId) {
+      sessionStorage.setItem('calendarFilterTechId', String(selectedTechId));
+    } else {
+      sessionStorage.removeItem('calendarFilterTechId');
+    }
+  }, [selectedTechId]);
+
+  // Validate stored tech against loaded technicians — clear if no longer valid
+  useEffect(() => {
+    if (selectedTechId && technicians && technicians.length > 0) {
+      const techStillActive = technicians.some(t => t.id === selectedTechId && t.is_active !== false);
+      if (!techStillActive) setSelectedTechId(null);
+    }
+  }, [technicians]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Grid time range calculation ────────────────────────────────────────────
 
@@ -180,6 +203,17 @@ const AppointmentCalendar = ({
     }
     return map;
   }, [appointments]);
+
+  // Filtered view: when a tech is selected, only show that tech's appointments
+  const filteredAppointmentsByDate = useMemo(() => {
+    if (!selectedTechId) return appointmentsByDate;
+    const filtered = {};
+    for (const [date, apts] of Object.entries(appointmentsByDate)) {
+      const techApts = apts.filter(apt => apt.technician_id === selectedTechId);
+      if (techApts.length > 0) filtered[date] = techApts;
+    }
+    return filtered;
+  }, [appointmentsByDate, selectedTechId]);
 
   // ─── Handlers ───────────────────────────────────────────────────────────────
 
@@ -360,7 +394,7 @@ const AppointmentCalendar = ({
     const dayOfWeek = date.getDay();
     const isToday = dateStr === todayStr;
     const closed = isDayClosed(dayOfWeek);
-    const dayAppointments = appointmentsByDate[dateStr] || [];
+    const dayAppointments = filteredAppointmentsByDate[dateStr] || [];
 
     return (
       <div key={dateStr} className="relative" style={{ minWidth: 0 }}>
@@ -499,7 +533,7 @@ const AppointmentCalendar = ({
     const dateStr = formatDateStr(mobileDate);
     const dayOfWeek = mobileDate.getDay();
     const closed = isDayClosed(dayOfWeek);
-    const dayAppointments = appointmentsByDate[dateStr] || [];
+    const dayAppointments = filteredAppointmentsByDate[dateStr] || [];
 
     return (
       <div
@@ -619,7 +653,7 @@ const AppointmentCalendar = ({
     );
   };
 
-  // ─── Tech legend ────────────────────────────────────────────────────────────
+  // ─── Tech legend (clickable filter pills) ───────────────────────────────────
 
   const renderTechLegend = () => {
     if (!technicians || technicians.length === 0) return null;
@@ -627,21 +661,45 @@ const AppointmentCalendar = ({
     const activeTechs = technicians.filter((t) => t.is_active !== false);
     if (activeTechs.length === 0) return null;
 
+    const handleTechClick = (techId) => {
+      setSelectedTechId(prev => prev === techId ? null : techId);
+    };
+
     return (
-      <div className="flex items-center gap-3 flex-wrap">
-        {activeTechs.map((tech) => (
-          <div key={tech.id} className="flex items-center gap-1.5">
-            <span
-              className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-              style={{ backgroundColor: tech.color || '#6b7280' }}
-            />
-            <span className="text-gray-300 text-xs">{tech.name}</span>
-          </div>
-        ))}
-        <div className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-full flex-shrink-0 bg-gray-500" />
-          <span className="text-gray-400 text-xs">Unassigned</span>
-        </div>
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {/* "All" reset pill — only visible when a filter is active */}
+        {selectedTechId && (
+          <button
+            onClick={() => setSelectedTechId(null)}
+            className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-gray-700 text-gray-200 hover:bg-gray-600 border border-gray-500 transition-colors"
+          >
+            All
+          </button>
+        )}
+        {activeTechs.map((tech) => {
+          const isActive = selectedTechId === tech.id;
+          return (
+            <button
+              key={tech.id}
+              onClick={() => handleTechClick(tech.id)}
+              title={isActive ? `Clear filter` : `View only ${tech.name}`}
+              className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium transition-colors ${
+                isActive
+                  ? 'bg-gray-700 text-white border-2'
+                  : selectedTechId
+                  ? 'bg-gray-800/60 text-gray-500 border border-gray-700 hover:bg-gray-700 hover:text-gray-300'
+                  : 'bg-gray-800 text-gray-300 border border-gray-700 hover:bg-gray-700 hover:text-white'
+              }`}
+              style={isActive ? { borderColor: tech.color || '#6b7280' } : {}}
+            >
+              <span
+                className="w-2 h-2 rounded-full flex-shrink-0"
+                style={{ backgroundColor: tech.color || '#6b7280' }}
+              />
+              {tech.name}
+            </button>
+          );
+        })}
       </div>
     );
   };
@@ -735,6 +793,7 @@ const AppointmentCalendar = ({
                 selectedSlot={selectedSlot}
                 appointment={selectedAppointment}
                 technicians={technicians}
+                defaultTechnicianId={selectedTechId}
                 onSave={handleSave}
                 onClose={handleCloseSidePanel}
                 isMobile={false}
@@ -761,6 +820,7 @@ const AppointmentCalendar = ({
                   selectedSlot={selectedSlot}
                   appointment={selectedAppointment}
                   technicians={technicians}
+                  defaultTechnicianId={selectedTechId}
                   onSave={handleSave}
                   onClose={handleCloseSidePanel}
                   isMobile={true}

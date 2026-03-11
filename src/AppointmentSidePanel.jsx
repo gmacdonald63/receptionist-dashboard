@@ -36,6 +36,7 @@ export default function AppointmentSidePanel({
   selectedSlot,
   appointment,
   technicians,
+  defaultTechnicianId,
   onSave,
   onClose,
   isMobile,
@@ -73,6 +74,25 @@ export default function AppointmentSidePanel({
     // Reset edit mode when switching away from view
     if (mode === 'add') setIsEditing(false);
   }, [mode]);
+
+  // When a new slot is clicked (add mode), reset form and pre-fill tech filter
+  useEffect(() => {
+    if (mode === 'add' && selectedSlot) {
+      setFirstName('');
+      setLastName('');
+      setPhone('');
+      setAddress('');
+      setCity('');
+      setState('');
+      setZip('');
+      setNotes('');
+      setErrors({});
+      setShowCustomTime(false);
+      setCustomTime(selectedSlot.time || '');
+      setTechnicianId(defaultTechnicianId ? String(defaultTechnicianId) : '');
+      setDuration(60);
+    }
+  }, [selectedSlot]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleClose = useCallback(() => {
     setIsEditing(false);
