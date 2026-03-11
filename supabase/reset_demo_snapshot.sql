@@ -82,7 +82,7 @@ BEGIN
 
   INSERT INTO technicians (client_id, name, phone, color, is_active) VALUES
     (demo_cid, 'Mike Rodriguez',  '(503) 555-0901', '#3B82F6', true),
-    (demo_cid, 'Sarah Chen',      '(503) 555-0902', '#10B981', true),
+    (demo_cid, 'Scott Russell',      '(503) 555-0902', '#10B981', true),
     (demo_cid, 'Jake Thompson',   '(503) 555-0903', '#F59E0B', true);
 
   -- ============================================================
@@ -108,7 +108,7 @@ BEGIN
      '8914 Juniper Ct', 'Wilsonville', 'OR', '97070',
      $n$The furnace sells like something is burning or melting.  It currently turned off at the breaker so it won't come on.$n$,
      'manual', 'confirmed', NULL, NULL,
-     (SELECT id FROM technicians WHERE client_id = demo_cid AND name = 'Sarah Chen')),
+     (SELECT id FROM technicians WHERE client_id = demo_cid AND name = 'Scott Russell')),
 
     -- 3. Megan Stewart — tomorrow (Jake)
     (demo_cid, 'Megan Stewart', '(503) 555-0549',
@@ -132,7 +132,7 @@ BEGIN
      '1842 Maple Creek Drive', 'Portland', 'OR', '97201',
      $s$Furnace not turning on; thermostat says it's on but nothing happens.$s$,
      'ai', 'confirmed', 'Heating Repair', 'call_d0464b90542de2ac010d5c8b6d1',
-     (SELECT id FROM technicians WHERE client_id = demo_cid AND name = 'Sarah Chen')),
+     (SELECT id FROM technicians WHERE client_id = demo_cid AND name = 'Scott Russell')),
 
     -- 6. Steven Cooper — +3 days (AI call) (Mike)
     (demo_cid, 'Steven Cooper', '5035550683',
@@ -148,7 +148,7 @@ BEGIN
      '642 Silverleaf Drive', 'Hillsborough', 'OR', '97123',
      'Customer requests filter change and system checkup.',
      'ai', 'confirmed', 'Preventative Maintenance and Filter Change', 'call_2dd4de63ad36bb8d0a695bdfc31',
-     (SELECT id FROM technicians WHERE client_id = demo_cid AND name = 'Sarah Chen')),
+     (SELECT id FROM technicians WHERE client_id = demo_cid AND name = 'Scott Russell')),
 
     -- 8. Tiffany Diaz — +3 days (Jake)
     (demo_cid, 'Tiffany Diaz', '(503) 555-0358',
@@ -172,7 +172,7 @@ BEGIN
      '4102 Stone Bridge Dr', 'Gresham', 'OR', '97030',
      'The furnace won''t turn off and it is just blowing cold air.',
      'manual', 'confirmed', NULL, NULL,
-     (SELECT id FROM technicians WHERE client_id = demo_cid AND name = 'Sarah Chen')),
+     (SELECT id FROM technicians WHERE client_id = demo_cid AND name = 'Scott Russell')),
 
     -- 11. Tim Powell — +6 days (Jake)
     (demo_cid, 'Tim Powell', '(503) 555-0142',
