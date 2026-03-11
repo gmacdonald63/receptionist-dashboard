@@ -454,36 +454,59 @@ const App = () => {
     const fullName = `${formData.firstName.trim()} ${formData.lastName.trim()}`.trim();
     const endTime = calculateEndTime(formData.time, formData.duration || 60);
 
-    const { data, error } = await supabase
-      .from('appointments')
-      .insert({
-        client_id: effectiveClientData.id,
-        caller_name: fullName,
-        caller_number: formData.phone,
-        date: formData.date,
-        start_time: formData.time,
-        end_time: endTime,
-        address: formData.address,
-        city: formData.city,
-        state: formData.state,
-        zip: formData.zip,
-        notes: formData.notes || null,
-        source: 'manual',
-        status: 'confirmed',
-        technician_id: formData.technicianId || null,
-      })
-      .select()
-      .single();
+    if (formData.appointmentId) {
+      // UPDATE existing appointment
+      const { error } = await supabase
+        .from('appointments')
+        .update({
+          caller_name: fullName,
+          caller_number: formData.phone,
+          date: formData.date,
+          start_time: formData.time,
+          end_time: endTime,
+          address: formData.address,
+          city: formData.city,
+          state: formData.state,
+          zip: formData.zip,
+          notes: formData.notes || null,
+          technician_id: formData.technicianId || null,
+          duration: formData.duration || 60,
+        })
+        .eq('id', formData.appointmentId);
 
-    if (error) throw error;
+      if (error) throw error;
+    } else {
+      // INSERT new appointment
+      const { error } = await supabase
+        .from('appointments')
+        .insert({
+          client_id: effectiveClientData.id,
+          caller_name: fullName,
+          caller_number: formData.phone,
+          date: formData.date,
+          start_time: formData.time,
+          end_time: endTime,
+          address: formData.address,
+          city: formData.city,
+          state: formData.state,
+          zip: formData.zip,
+          notes: formData.notes || null,
+          source: 'manual',
+          status: 'confirmed',
+          technician_id: formData.technicianId || null,
+          duration: formData.duration || 60,
+        });
 
-    // Navigate to the week of the new appointment
+      if (error) throw error;
+    }
+
+    // Navigate to the week of the appointment
     const [year, month, day] = formData.date.split('-');
     const aptDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
     const first = aptDate.getDate() - aptDate.getDay();
     setCurrentWeekStart(new Date(aptDate.getFullYear(), aptDate.getMonth(), first));
 
-    // Re-fetch to show the new appointment
+    // Re-fetch to show updated appointments
     await fetchAppointments();
   };
 

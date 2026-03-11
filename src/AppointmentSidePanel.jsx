@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { X, Clock, MapPin, User, Phone, Wrench, FileText } from 'lucide-react';
+import { X, Clock, MapPin, User, Phone, Wrench, FileText, Pencil } from 'lucide-react';
 
 function formatPhone(value) {
   const digits = value.replace(/\D/g, '').slice(0, 10);
@@ -54,31 +54,58 @@ export default function AppointmentSidePanel({
   const [customTime, setCustomTime] = useState(selectedSlot?.time || '');
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({});
+  const [isEditing, setIsEditing] = useState(false);
 
   const panelRef = useRef(null);
   const firstInputRef = useRef(null);
 
-  const effectiveTime = showCustomTime && customTime ? customTime : selectedSlot?.time;
+  // When in edit mode, derive the slot from the appointment being edited
+  const editSlot = isEditing && appointment
+    ? { date: appointment.date, time: appointment.start_time || appointment.time }
+    : null;
+  const effectiveSlot = isEditing ? editSlot : selectedSlot;
+  const effectiveTime = showCustomTime && customTime ? customTime : effectiveSlot?.time;
 
   useEffect(() => {
     if (mode === 'add' && firstInputRef.current) {
       firstInputRef.current.focus();
     }
+    // Reset edit mode when switching away from view
+    if (mode === 'add') setIsEditing(false);
   }, [mode]);
 
   const handleClose = useCallback(() => {
+    setIsEditing(false);
     onClose();
   }, [onClose]);
 
   useEffect(() => {
     function handleKeyDown(e) {
-      if (e.key === 'Escape') {
-        handleClose();
-      }
+      if (e.key === 'Escape') handleClose();
     }
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [handleClose]);
+
+  function startEditing() {
+    if (!appointment) return;
+    const nameParts = (appointment.caller_name || appointment.customer_name || appointment.name || '').trim().split(' ');
+    setFirstName(nameParts[0] || '');
+    setLastName(nameParts.slice(1).join(' ') || '');
+    setPhone(formatPhone(appointment.caller_number || appointment.phone || appointment.customer_phone || ''));
+    setAddress(appointment.address || '');
+    setCity(appointment.city || '');
+    setState(appointment.state || '');
+    setZip(appointment.zip || '');
+    setTechnicianId(appointment.technician_id ? String(appointment.technician_id) : '');
+    setDuration(appointment.duration || 60);
+    setNotes(appointment.notes || '');
+    setShowCustomTime(false);
+    setCustomTime((appointment.start_time || appointment.time) || '');
+    setErrors({});
+    setIsEditing(true);
+    setTimeout(() => firstInputRef.current?.focus(), 50);
+  }
 
   function handlePhoneChange(e) {
     setPhone(formatPhone(e.target.value));
@@ -116,11 +143,12 @@ export default function AppointmentSidePanel({
         city: city.trim(),
         state: state.trim(),
         zip: zip.trim(),
-        date: selectedSlot?.date,
+        date: effectiveSlot?.date,
         time: effectiveTime,
         duration,
         technicianId: technicianId || null,
         notes: notes.trim(),
+        appointmentId: isEditing ? appointment?.id : undefined,
       });
     } catch (err) {
       console.error('Failed to save appointment:', err);
@@ -131,12 +159,14 @@ export default function AppointmentSidePanel({
 
   const activeTechnicians = (technicians || []).filter((t) => t.is_active);
 
-  function renderAddMode() {
+  function renderForm(isEditMode) {
     return (
       <form onSubmit={handleSave} className="flex flex-col h-full">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700 flex-shrink-0">
-          <h2 className="text-lg font-semibold text-white">New Appointment</h2>
+        <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-700 flex-shrink-0">
+          <h2 className="text-base font-semibold text-white">
+            {isEditMode ? 'Edit Appointment' : 'New Appointment'}
+          </h2>
           <button
             type="button"
             onClick={handleClose}
@@ -147,22 +177,22 @@ export default function AppointmentSidePanel({
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        <div className="flex-1 overflow-y-auto px-4 py-2 space-y-3">
           {/* Date & Time Badges */}
-          {selectedSlot && (
+          {effectiveSlot && (
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/15 text-blue-400 rounded-lg text-sm font-medium">
-                <Clock size={14} />
-                {formatDateDisplay(selectedSlot.date)}
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-500/15 text-blue-400 rounded-lg text-sm font-medium">
+                <Clock size={13} />
+                {formatDateDisplay(effectiveSlot.date)}
               </span>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/15 text-blue-400 rounded-lg text-sm font-medium">
-                {formatTime12(effectiveTime)}
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-500/15 text-blue-400 rounded-lg text-sm font-medium">
+                {effectiveTime ? formatTime12(effectiveTime) : '—'}
               </span>
             </div>
           )}
 
           {/* First Name + Last Name */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="block text-xs font-medium text-gray-400 mb-1">
                 First Name <span className="text-red-400">*</span>
@@ -173,7 +203,7 @@ export default function AppointmentSidePanel({
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
                 placeholder="John"
-                className={`w-full px-3 py-2 bg-gray-750 border ${
+                className={`w-full px-3 py-1.5 bg-gray-750 border ${
                   errors.firstName ? 'border-red-500' : 'border-gray-600'
                 } rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm`}
               />
@@ -187,7 +217,7 @@ export default function AppointmentSidePanel({
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
                 placeholder="Smith"
-                className={`w-full px-3 py-2 bg-gray-750 border ${
+                className={`w-full px-3 py-1.5 bg-gray-750 border ${
                   errors.lastName ? 'border-red-500' : 'border-gray-600'
                 } rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm`}
               />
@@ -197,7 +227,6 @@ export default function AppointmentSidePanel({
           {/* Phone */}
           <div>
             <label className="block text-xs font-medium text-gray-400 mb-1">
-              <Phone size={12} className="inline mr-1" />
               Phone <span className="text-red-400">*</span>
             </label>
             <input
@@ -205,7 +234,7 @@ export default function AppointmentSidePanel({
               value={phone}
               onChange={handlePhoneChange}
               placeholder="(503) 555-0123"
-              className={`w-full px-3 py-2 bg-gray-750 border ${
+              className={`w-full px-3 py-1.5 bg-gray-750 border ${
                 errors.phone ? 'border-red-500' : 'border-gray-600'
               } rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm`}
             />
@@ -213,21 +242,18 @@ export default function AppointmentSidePanel({
 
           {/* Address */}
           <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1">
-              <MapPin size={12} className="inline mr-1" />
-              Address
-            </label>
+            <label className="block text-xs font-medium text-gray-400 mb-1">Address</label>
             <input
               type="text"
               value={address}
               onChange={(e) => setAddress(e.target.value)}
               placeholder="123 Main Street"
-              className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
+              className="w-full px-3 py-1.5 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
             />
           </div>
 
           {/* City / State / ZIP */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 gap-2">
             <div className="col-span-1">
               <label className="block text-xs font-medium text-gray-400 mb-1">City</label>
               <input
@@ -235,7 +261,7 @@ export default function AppointmentSidePanel({
                 value={city}
                 onChange={(e) => setCity(e.target.value)}
                 placeholder="Portland"
-                className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
+                className="w-full px-3 py-1.5 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
               />
             </div>
             <div className="col-span-1">
@@ -246,7 +272,7 @@ export default function AppointmentSidePanel({
                 onChange={handleStateChange}
                 placeholder="OR"
                 maxLength={2}
-                className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm uppercase"
+                className="w-full px-3 py-1.5 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm uppercase"
               />
             </div>
             <div className="col-span-1">
@@ -257,75 +283,52 @@ export default function AppointmentSidePanel({
                 onChange={handleZipChange}
                 placeholder="97201"
                 maxLength={5}
-                className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
+                className="w-full px-3 py-1.5 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
               />
             </div>
           </div>
 
-          {/* Technician */}
-          <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1">
-              <Wrench size={12} className="inline mr-1" />
-              Technician
-            </label>
-            <select
-              value={technicianId}
-              onChange={(e) => setTechnicianId(e.target.value)}
-              className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 text-sm appearance-none"
-            >
-              <option value="">Unassigned</option>
-              {activeTechnicians.map((tech) => (
-                <option key={tech.id} value={tech.id}>
-                  {tech.name}
-                </option>
-              ))}
-            </select>
-            {/* Color dot preview for selected tech */}
-            {technicianId && (
-              <div className="mt-1.5 flex items-center gap-2 text-xs text-gray-400">
-                <span
-                  className="w-3 h-3 rounded-full inline-block flex-shrink-0"
-                  style={{
-                    backgroundColor:
-                      activeTechnicians.find((t) => String(t.id) === String(technicianId))?.color ||
-                      '#6b7280',
-                  }}
-                />
-                {activeTechnicians.find((t) => String(t.id) === String(technicianId))?.name}
-              </div>
-            )}
-          </div>
-
-          {/* Duration */}
-          <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1">
-              <Clock size={12} className="inline mr-1" />
-              Duration
-            </label>
-            <select
-              value={duration}
-              onChange={(e) => setDuration(parseInt(e.target.value))}
-              className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 text-sm appearance-none"
-            >
-              <option value={30}>30 min</option>
-              <option value={60}>1 hour</option>
-              <option value={90}>1.5 hours</option>
-              <option value={120}>2 hours</option>
-            </select>
+          {/* Technician + Duration side by side */}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs font-medium text-gray-400 mb-1">Technician</label>
+              <select
+                value={technicianId}
+                onChange={(e) => setTechnicianId(e.target.value)}
+                className="w-full px-3 py-1.5 bg-gray-750 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 text-sm appearance-none"
+              >
+                <option value="">Unassigned</option>
+                {activeTechnicians.map((tech) => (
+                  <option key={tech.id} value={tech.id}>
+                    {tech.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-400 mb-1">Duration</label>
+              <select
+                value={duration}
+                onChange={(e) => setDuration(parseInt(e.target.value))}
+                className="w-full px-3 py-1.5 bg-gray-750 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 text-sm appearance-none"
+              >
+                <option value={30}>30 min</option>
+                <option value={60}>1 hour</option>
+                <option value={90}>1.5 hours</option>
+                <option value={120}>2 hours</option>
+              </select>
+            </div>
           </div>
 
           {/* Notes */}
           <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1">
-              <FileText size={12} className="inline mr-1" />
-              Notes
-            </label>
+            <label className="block text-xs font-medium text-gray-400 mb-1">Notes</label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Service details, special instructions..."
-              rows={3}
-              className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm resize-none"
+              rows={2}
+              className="w-full px-3 py-1.5 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm resize-none"
             />
           </div>
 
@@ -340,21 +343,16 @@ export default function AppointmentSidePanel({
             </button>
           ) : (
             <div>
-              <label className="block text-xs font-medium text-gray-400 mb-1">
-                Custom Time
-              </label>
+              <label className="block text-xs font-medium text-gray-400 mb-1">Custom Time</label>
               <input
                 type="time"
                 value={customTime}
                 onChange={(e) => setCustomTime(e.target.value)}
-                className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 text-sm"
+                className="w-full px-3 py-1.5 bg-gray-750 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 text-sm"
               />
               <button
                 type="button"
-                onClick={() => {
-                  setShowCustomTime(false);
-                  setCustomTime(selectedSlot?.time || '');
-                }}
+                onClick={() => { setShowCustomTime(false); setCustomTime(effectiveSlot?.time || ''); }}
                 className="mt-1 text-xs text-gray-500 hover:text-gray-400 transition-colors"
               >
                 Use original time
@@ -364,10 +362,10 @@ export default function AppointmentSidePanel({
         </div>
 
         {/* Footer buttons */}
-        <div className="flex items-center gap-3 px-4 py-3 border-t border-gray-700 flex-shrink-0">
+        <div className="flex items-center gap-3 px-4 py-2.5 border-t border-gray-700 flex-shrink-0">
           <button
             type="button"
-            onClick={handleClose}
+            onClick={isEditMode ? () => setIsEditing(false) : handleClose}
             disabled={saving}
             className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
           >
@@ -378,7 +376,7 @@ export default function AppointmentSidePanel({
             disabled={saving}
             className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
           >
-            {saving ? 'Saving...' : 'Save'}
+            {saving ? 'Saving...' : isEditMode ? 'Save Changes' : 'Save'}
           </button>
         </div>
       </form>
@@ -389,7 +387,7 @@ export default function AppointmentSidePanel({
     if (!appointment) return null;
 
     const apptName =
-      [appointment.customer_name, appointment.first_name, appointment.name]
+      [appointment.caller_name, appointment.customer_name, appointment.first_name, appointment.name]
         .filter(Boolean)
         .find((n) => n.trim()) || 'Appointment';
 
@@ -408,7 +406,7 @@ export default function AppointmentSidePanel({
     const apptTime = appointment.start_time || appointment.time;
     const apptDuration = appointment.duration;
     const apptPhone =
-      appointment.phone || appointment.customer_phone || appointment.caller_phone;
+      appointment.caller_number || appointment.phone || appointment.customer_phone || appointment.caller_phone;
     const apptAddress = [
       appointment.address,
       appointment.city,
@@ -422,8 +420,8 @@ export default function AppointmentSidePanel({
     return (
       <div className="flex flex-col h-full">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700 flex-shrink-0">
-          <h2 className="text-lg font-semibold text-white truncate pr-2">{apptName}</h2>
+        <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-700 flex-shrink-0">
+          <h2 className="text-base font-semibold text-white truncate pr-2">{apptName}</h2>
           <button
             type="button"
             onClick={handleClose}
@@ -434,12 +432,10 @@ export default function AppointmentSidePanel({
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
           {/* Source badge + tech */}
           <div className="flex items-center gap-2 flex-wrap">
-            <span
-              className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium ${sourceBadgeClass}`}
-            >
+            <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium ${sourceBadgeClass}`}>
               {sourceLabel}
             </span>
             {matchedTech ? (
@@ -458,12 +454,12 @@ export default function AppointmentSidePanel({
           {/* Date & Time */}
           {apptDate && (
             <div className="flex items-start gap-3">
-              <Clock size={16} className="text-gray-500 mt-0.5 flex-shrink-0" />
+              <Clock size={15} className="text-gray-500 mt-0.5 flex-shrink-0" />
               <div>
                 <p className="text-sm text-white">{formatDateDisplay(apptDate)}</p>
                 <p className="text-sm text-gray-400">
                   {apptTime ? formatTime12(apptTime) : ''}
-                  {apptDuration ? ` - ${formatDuration(apptDuration)}` : ''}
+                  {apptDuration ? ` · ${formatDuration(apptDuration)}` : ''}
                 </p>
               </div>
             </div>
@@ -472,7 +468,7 @@ export default function AppointmentSidePanel({
           {/* Phone */}
           {apptPhone && (
             <div className="flex items-start gap-3">
-              <Phone size={16} className="text-gray-500 mt-0.5 flex-shrink-0" />
+              <Phone size={15} className="text-gray-500 mt-0.5 flex-shrink-0" />
               <p className="text-sm text-white">{apptPhone}</p>
             </div>
           )}
@@ -480,7 +476,7 @@ export default function AppointmentSidePanel({
           {/* Address */}
           {apptAddress && (
             <div className="flex items-start gap-3">
-              <MapPin size={16} className="text-gray-500 mt-0.5 flex-shrink-0" />
+              <MapPin size={15} className="text-gray-500 mt-0.5 flex-shrink-0" />
               <p className="text-sm text-white">{apptAddress}</p>
             </div>
           )}
@@ -488,7 +484,7 @@ export default function AppointmentSidePanel({
           {/* Service Type */}
           {apptServiceType && (
             <div className="flex items-start gap-3">
-              <Wrench size={16} className="text-gray-500 mt-0.5 flex-shrink-0" />
+              <Wrench size={15} className="text-gray-500 mt-0.5 flex-shrink-0" />
               <p className="text-sm text-white">{apptServiceType}</p>
             </div>
           )}
@@ -496,10 +492,21 @@ export default function AppointmentSidePanel({
           {/* Notes */}
           {apptNotes && (
             <div className="flex items-start gap-3">
-              <FileText size={16} className="text-gray-500 mt-0.5 flex-shrink-0" />
+              <FileText size={15} className="text-gray-500 mt-0.5 flex-shrink-0" />
               <p className="text-sm text-gray-300 whitespace-pre-wrap">{apptNotes}</p>
             </div>
           )}
+        </div>
+
+        {/* Footer with Edit button */}
+        <div className="px-4 py-2.5 border-t border-gray-700 flex-shrink-0">
+          <button
+            onClick={startEditing}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+          >
+            <Pencil size={14} />
+            Edit Appointment
+          </button>
         </div>
       </div>
     );
@@ -514,7 +521,7 @@ export default function AppointmentSidePanel({
           : 'w-[380px] border-l border-gray-700 bg-gray-800 overflow-y-auto h-full'
       }
     >
-      {mode === 'add' ? renderAddMode() : renderViewMode()}
+      {mode === 'add' || isEditing ? renderForm(isEditing) : renderViewMode()}
     </div>
   );
 
