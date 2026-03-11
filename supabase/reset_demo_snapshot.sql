@@ -57,36 +57,39 @@ BEGIN
   WHERE id = demo_cid;
 
   -- ============================================================
-  -- 3. SEED CUSTOMERS (13)
+  -- 3. SEED CUSTOMERS (16)
   -- ============================================================
 
   INSERT INTO customers (client_id, first_name, last_name, name, phone, email, address, tags)
   VALUES
-    (demo_cid, 'Dan',      'Morales',  'Dan Morales',      '(503) 555-0634', NULL, '745 Pine Crest Way',       ARRAY[]::text[]),
-    (demo_cid, 'James',    'Mitchell', 'James Mitchell',   '5035550132',     NULL, '1842 Maple Creek Drive',   ARRAY[]::text[]),
-    (demo_cid, 'Megan',    'Stewart',  'Megan Stewart',    '(503) 555-0549', NULL, '1534 Rolling Hills Rd',    ARRAY[]::text[]),
-    (demo_cid, 'Nicole',   'Reed',     'Nicole Reed',      '(503) 555-0356', NULL, '4412 Foxglove Terr',       ARRAY[]::text[]),
-    (demo_cid, 'Steven',   'Cooper',   'Steven Cooper',    '5035550683',     NULL, '978 Walnut Grove Avenue',  ARRAY[]::text[]),
-    (demo_cid, 'Derek',    'Wright',   'Derek Wright',     '(503) 555-0253', NULL, '8914 Juniper Ct',          ARRAY[]::text[]),
-    (demo_cid, 'Courtney', 'Bell',     'Courtney Bell',    '503-555-0396',   NULL, '642 Silverleaf Drive',     ARRAY[]::text[]),
-    (demo_cid, 'Tiffany',  'Diaz',     'Tiffany Diaz',     '(503) 555-0358', NULL, '3087 Fern Valley Rd',      ARRAY[]::text[]),
-    (demo_cid, 'Monica',   'Jenkins',  'Monica Jenkins',   '503-555-0568',   NULL, '1785 Evergreen Boulevard', ARRAY[]::text[]),
-    (demo_cid, 'Greg',     'Barnes',   'Greg Barnes',      '(503) 555-0935', NULL, '4102 Stone Bridge Dr',     ARRAY[]::text[]),
-    (demo_cid, 'Tim',      'Powell',   'Tim Powell',       '(503) 555-0142', NULL, '3570 Ridgewood Dr',        ARRAY[]::text[]),
-    (demo_cid, 'Travis',   'Long',     'Travis Long',      '503-555-0821',   NULL, '2578 Brentwood Avenue',    ARRAY[]::text[]),
-    (demo_cid, 'Patrick',  'Coleman',  'Patrick Coleman',  '(503) 555-0648', NULL, '5783 Riverbend Way',       ARRAY[]::text[]);
+    (demo_cid, 'Courtney', 'Bell',       'Courtney Bell',    '503-555-0396',   NULL, '642 Silverleaf Drive',     ARRAY[]::text[]),
+    (demo_cid, 'Dan',      'Morales',    'Dan Morales',      '(503) 555-0634', NULL, '745 Pine Crest Way',       ARRAY[]::text[]),
+    (demo_cid, 'Derek',    'Wright',     'Derek Wright',     '(503) 555-0253', NULL, '8914 Juniper Ct',          ARRAY[]::text[]),
+    (demo_cid, 'Greg',     'Barnes',     'Greg Barnes',      '(503) 555-0935', NULL, '4102 Stone Bridge Dr',     ARRAY[]::text[]),
+    (demo_cid, 'Jackh',    'Hansen',     'Jackh Hansen',     '(503) 555-2222', NULL, '2267 Shade Tree Ln',       ARRAY[]::text[]),
+    (demo_cid, 'James',    'Mitchell',   'James Mitchell',   '5035550132',     NULL, '1842 Maple Creek Drive',   ARRAY[]::text[]),
+    (demo_cid, 'Megan',    'Chamberlin', 'Megan Chamberlin', '(503) 555-4444', NULL, '6532 Bumpy Rd',            ARRAY[]::text[]),
+    (demo_cid, 'Megan',    'Stewart',    'Megan Stewart',    '(503) 555-0549', NULL, '1534 Rolling Hills Rd',    ARRAY[]::text[]),
+    (demo_cid, 'Monica',   'Jenkins',    'Monica Jenkins',   '503-555-0568',   NULL, '1785 Evergreen Boulevard', ARRAY[]::text[]),
+    (demo_cid, 'Nicole',   'Reed',       'Nicole Reed',      '(503) 555-0356', NULL, '4412 Foxglove Terr',       ARRAY[]::text[]),
+    (demo_cid, 'Patrick',  'Coleman',    'Patrick Coleman',  '(503) 555-0648', NULL, '5783 Riverbend Way',       ARRAY[]::text[]),
+    (demo_cid, 'Steven',   'Cooper',     'Steven Cooper',    '5035550683',     NULL, '978 Walnut Grove Avenue',  ARRAY[]::text[]),
+    (demo_cid, 'Tiffany',  'Diaz',       'Tiffany Diaz',     '(503) 555-0358', NULL, '3087 Fern Valley Rd',      ARRAY[]::text[]),
+    (demo_cid, 'Tim',      'Powell',     'Tim Powell',       '(503) 555-0142', NULL, '3570 Ridgewood Dr',        ARRAY[]::text[]),
+    (demo_cid, 'Travis',   'Long',       'Travis Long',      '503-555-0821',   NULL, '2578 Brentwood Avenue',    ARRAY[]::text[]),
+    (demo_cid, 'Travis',   'Long',       'Travis Long',      '(503) 555-9999', NULL, '4934 Steep Hill Rd',       ARRAY[]::text[]);
 
   -- ============================================================
   -- 4. SEED TECHNICIANS (3)
   -- ============================================================
 
   INSERT INTO technicians (client_id, name, phone, color, is_active) VALUES
-    (demo_cid, 'Mike Rodriguez',  '(503) 555-0901', '#3B82F6', true),
-    (demo_cid, 'Scott Russell',      '(503) 555-0902', '#10B981', true),
-    (demo_cid, 'Jake Thompson',   '(503) 555-0903', '#F59E0B', true);
+    (demo_cid, 'Mike Rodriguez', '(503) 555-0901', '#3B82F6', true),
+    (demo_cid, 'Scott Russell',  '(503) 555-0902', '#10B981', true),
+    (demo_cid, 'Jake Thompson',  '(503) 555-0903', '#F59E0B', true);
 
   -- ============================================================
-  -- 5. SEED APPOINTMENTS (13)
+  -- 5. SEED APPOINTMENTS (16)
   -- ============================================================
 
   INSERT INTO appointments (
@@ -94,6 +97,7 @@ BEGIN
     address, city, state, zip, notes, source, status, service_type, call_id,
     technician_id
   ) VALUES
+
     -- 1. Dan Morales — today (Mike)
     (demo_cid, 'Dan Morales', '(503) 555-0634',
      CURRENT_DATE + 0, '11:00', '12:00',
@@ -102,15 +106,39 @@ BEGIN
      'manual', 'confirmed', NULL, NULL,
      (SELECT id FROM technicians WHERE client_id = demo_cid AND name = 'Mike Rodriguez')),
 
-    -- 2. Derek Wright — tomorrow (Scott)
-    (demo_cid, 'Derek Wright', '(503) 555-0253',
-     CURRENT_DATE + 1, '09:30', '10:30',
-     '8914 Juniper Ct', 'Wilsonville', 'OR', '97070',
-     $n$The furnace sells like something is burning or melting.  It currently turned off at the breaker so it won't come on.$n$,
+    -- 2. Travis Long — today (Scott)
+    (demo_cid, 'Travis Long', '(503) 555-9999',
+     CURRENT_DATE + 0, '11:30', '12:30',
+     '4934 Steep Hill Rd', 'Beaverton', 'OR', '97002',
+     $n$Condensate pump isn't working$n$,
      'manual', 'confirmed', NULL, NULL,
      (SELECT id FROM technicians WHERE client_id = demo_cid AND name = 'Scott Russell')),
 
-    -- 3. Megan Stewart — tomorrow (Jake)
+    -- 3. Megan Chamberlin — tomorrow (Mike)
+    (demo_cid, 'Megan Chamberlin', '(503) 555-4444',
+     CURRENT_DATE + 1, '09:00', '10:00',
+     '6532 Bumpy Rd', 'Hillsboro', 'OR', '97006',
+     $n$System isn't working. Thermostat screen is blank.$n$,
+     'manual', 'confirmed', NULL, NULL,
+     (SELECT id FROM technicians WHERE client_id = demo_cid AND name = 'Mike Rodriguez')),
+
+    -- 4. Derek Wright — tomorrow (Scott)
+    (demo_cid, 'Derek Wright', '(503) 555-0253',
+     CURRENT_DATE + 1, '09:30', '10:30',
+     '8914 Juniper Ct', 'Wilsonville', 'OR', '97070',
+     $n$The furnace smells like something is burning or melting. It is currently turned off at the breaker so it won't come on.$n$,
+     'manual', 'confirmed', NULL, NULL,
+     (SELECT id FROM technicians WHERE client_id = demo_cid AND name = 'Scott Russell')),
+
+    -- 5. Jackh Hansen — tomorrow (Jake)
+    (demo_cid, 'Jackh Hansen', '(503) 555-2222',
+     CURRENT_DATE + 1, '09:30', '10:30',
+     '2267 Shade Tree Ln', 'Tigard', 'OR', '97223',
+     'Filter change and maintenance',
+     'manual', 'confirmed', NULL, NULL,
+     (SELECT id FROM technicians WHERE client_id = demo_cid AND name = 'Jake Thompson')),
+
+    -- 6. Megan Stewart — tomorrow (Jake)
     (demo_cid, 'Megan Stewart', '(503) 555-0549',
      CURRENT_DATE + 1, '13:30', '14:30',
      '1534 Rolling Hills Rd', 'Oregon City', 'OR', '97045',
@@ -118,7 +146,7 @@ BEGIN
      'manual', 'confirmed', NULL, NULL,
      (SELECT id FROM technicians WHERE client_id = demo_cid AND name = 'Jake Thompson')),
 
-    -- 4. Nicole Reed — +2 days (Mike)
+    -- 7. Nicole Reed — +2 days (Mike)
     (demo_cid, 'Nicole Reed', '(503) 555-0356',
      CURRENT_DATE + 2, '08:00', '09:00',
      '4412 Foxglove Terr', 'Portland', 'OR', '97215',
@@ -126,7 +154,7 @@ BEGIN
      'manual', 'confirmed', NULL, NULL,
      (SELECT id FROM technicians WHERE client_id = demo_cid AND name = 'Mike Rodriguez')),
 
-    -- 5. James Mitchell — +2 days (AI call) (Scott)
+    -- 8. James Mitchell — +2 days (AI call) (Scott)
     (demo_cid, 'James Mitchell', '5035550132',
      CURRENT_DATE + 2, '16:00', '17:00',
      '1842 Maple Creek Drive', 'Portland', 'OR', '97201',
@@ -134,7 +162,7 @@ BEGIN
      'ai', 'confirmed', 'Heating Repair', 'call_d0464b90542de2ac010d5c8b6d1',
      (SELECT id FROM technicians WHERE client_id = demo_cid AND name = 'Scott Russell')),
 
-    -- 6. Steven Cooper — +3 days (AI call) (Mike)
+    -- 9. Steven Cooper — +3 days (AI call) (Mike)
     (demo_cid, 'Steven Cooper', '5035550683',
      CURRENT_DATE + 3, '08:00', '09:00',
      '978 Walnut Grove Avenue', 'Gresham', 'OR', '97030',
@@ -142,7 +170,7 @@ BEGIN
      'ai', 'confirmed', 'Air Conditioning Repair', 'call_cd492b208b2dff19e53c25dcad2',
      (SELECT id FROM technicians WHERE client_id = demo_cid AND name = 'Mike Rodriguez')),
 
-    -- 7. Courtney Bell — +3 days (AI call) (Scott)
+    -- 10. Courtney Bell — +3 days (AI call) (Scott)
     (demo_cid, 'Courtney Bell', '503-555-0396',
      CURRENT_DATE + 3, '10:00', '11:00',
      '642 Silverleaf Drive', 'Hillsborough', 'OR', '97123',
@@ -150,7 +178,7 @@ BEGIN
      'ai', 'confirmed', 'Preventative Maintenance and Filter Change', 'call_2dd4de63ad36bb8d0a695bdfc31',
      (SELECT id FROM technicians WHERE client_id = demo_cid AND name = 'Scott Russell')),
 
-    -- 8. Tiffany Diaz — +3 days (Jake)
+    -- 11. Tiffany Diaz — +3 days (Jake)
     (demo_cid, 'Tiffany Diaz', '(503) 555-0358',
      CURRENT_DATE + 3, '13:30', '14:30',
      '3087 Fern Valley Rd', 'Tigard', 'OR', '97223',
@@ -158,7 +186,7 @@ BEGIN
      'manual', 'confirmed', NULL, NULL,
      (SELECT id FROM technicians WHERE client_id = demo_cid AND name = 'Jake Thompson')),
 
-    -- 9. Monica Jenkins — +6 days (AI call) (Mike)
+    -- 12. Monica Jenkins — +6 days (AI call) (Mike)
     (demo_cid, 'Monica Jenkins', '503-555-0568',
      CURRENT_DATE + 6, '08:00', '09:00',
      '1785 Evergreen Boulevard', 'Portland', 'OR', '97211',
@@ -166,7 +194,7 @@ BEGIN
      'ai', 'confirmed', 'Heating Repair', 'call_57da93e096cbc58ca5a5392fb17',
      (SELECT id FROM technicians WHERE client_id = demo_cid AND name = 'Mike Rodriguez')),
 
-    -- 10. Greg Barnes — +6 days (Scott)
+    -- 13. Greg Barnes — +6 days (Scott)
     (demo_cid, 'Greg Barnes', '(503) 555-0935',
      CURRENT_DATE + 6, '13:00', '14:00',
      '4102 Stone Bridge Dr', 'Gresham', 'OR', '97030',
@@ -174,7 +202,7 @@ BEGIN
      'manual', 'confirmed', NULL, NULL,
      (SELECT id FROM technicians WHERE client_id = demo_cid AND name = 'Scott Russell')),
 
-    -- 11. Tim Powell — +6 days (Jake)
+    -- 14. Tim Powell — +6 days (Jake)
     (demo_cid, 'Tim Powell', '(503) 555-0142',
      CURRENT_DATE + 6, '14:30', '15:30',
      '3570 Ridgewood Dr', 'Beaverton', 'OR', '97006',
@@ -182,7 +210,7 @@ BEGIN
      'manual', 'confirmed', NULL, NULL,
      (SELECT id FROM technicians WHERE client_id = demo_cid AND name = 'Jake Thompson')),
 
-    -- 12. Travis Long — +7 days (AI call) (Jake)
+    -- 15. Travis Long — +7 days (AI call) (Jake)
     (demo_cid, 'Travis Long', '503-555-0821',
      CURRENT_DATE + 7, '10:00', '11:00',
      '2578 Brentwood Avenue', 'Tigard', 'OR', '97224',
@@ -190,11 +218,11 @@ BEGIN
      'ai', 'confirmed', 'Seasonal tune-up and filter service', 'call_a1e21951b2240c142a3be8fa6d9',
      (SELECT id FROM technicians WHERE client_id = demo_cid AND name = 'Jake Thompson')),
 
-    -- 13. Patrick Coleman — +8 days (Mike)
+    -- 16. Patrick Coleman — +8 days (Mike)
     (demo_cid, 'Patrick Coleman', '(503) 555-0648',
      CURRENT_DATE + 8, '09:30', '10:30',
      '5783 Riverbend Way', 'Oregon City', 'OR', '97045',
-     'regular 6 month maintenance.',
+     'Regular 6 month maintenance.',
      'manual', 'confirmed', NULL, NULL,
      (SELECT id FROM technicians WHERE client_id = demo_cid AND name = 'Mike Rodriguez'));
 
@@ -211,7 +239,7 @@ BEGIN
     'call_d0464b90542de2ac010d5c8b6d1',
     demo_agent,
     'James Mitchell', '5035550132',
-    $tx$The user, James Mitchell, reported that his furnace was not turning on despite the thermostat indicating it was on. The agent scheduled a heating repair appointment for Thursday, March 12, 2026, at 4:00 PM at 1842 Maple Creek Drive, Portland, OR 97201. The user confirmed the appointment and was satisfied with the service.$tx$,
+    $tx$The user, James Mitchell, reported that his furnace was not turning on despite the thermostat indicating it was on. The agent scheduled a heating repair appointment.$tx$,
     $tx$Agent: Hi, thank you for calling Reliant Support Heating & Air, how can I help you today?
 User: Yeah. Hi. My furnace isn't turning on.
 User: and I don't know if there's a problem with the with the furnace or with the thermostat.
@@ -227,13 +255,13 @@ User: Portland nine seven two zero one.
 Agent: Perfect.
 Agent:  Let me check what's available
 Agent: for our next appointments.
-Agent: Let me check what's available.I have Thursday, March 12 at 4:00 PM or Friday, March 13 at 8:00 AM— which works better for you?
+Agent: Let me check what's available.I have Thursday at 4:00 PM or Friday at 8:00 AM— which works better for you?
 User: Thursday at twelve.
 Agent: Let
 Agent: me check that for you.Thursday at 12:00 PM is already booked, but I do have Thursday at 4:00 PM available. Would you like to take that slot?
 User: Uh, yes. Four PM would be good.
 Agent: Let
-Agent: me book that for you right now.Great, you're all set! I have you scheduled for Thursday, March 12 at 4:00 PM at 1842 Maple Creek Drive. Our technician will call you about 30 minutes before arrival.
+Agent: me book that for you right now.Great, you're all set! I have you scheduled for Thursday at 4:00 PM at 1842 Maple Creek Drive. Our technician will call you about 30 minutes before arrival.
 
 Is there anything else I can help you with?
 User: No. That'll be good. Thank you.
@@ -253,7 +281,7 @@ Agent: Thank you, James. Have a great day!$tx$,
     'call_cd492b208b2dff19e53c25dcad2',
     demo_agent,
     'Steven Cooper', '5035550683',
-    $tx$The user, Steven Cooper, called to report that his air conditioning is not turning on despite the thermostat display working and the circuit breaker being checked. The agent scheduled a service appointment for air conditioning repair on March 13, 2026, at 8:00 AM at 978 Walnut Grove Avenue, Gresham, OR 97030. The call concluded successfully with the appointment booked and no further assistance requested.$tx$,
+    $tx$The user, Steven Cooper, called to report that his air conditioning is not turning on. The agent scheduled a service appointment for air conditioning repair.$tx$,
     $tx$Agent: Hi, thank you for calling Reliant Support Heating & Air, how can I help you today?
 User: Yeah. Hi. I was calling because my air conditioning is not turning on at all.
 Agent: I'm sorry to hear that — let's get someone out to help. Is your thermostat showing anything on the display, or is it completely blank?
@@ -271,10 +299,10 @@ Agent: Got it.
 Agent: And what's the zip code there?
 User: Nine seven zero three zero.
 Agent: Let me check what's available.
-Agent: I have Thursday the 12th at 4:00 PM or Friday the 13th at 8:00 AM — which works better for you?
+Agent: I have Thursday at 4:00 PM or Friday at 8:00 AM — which works better for you?
 User: Friday at eight AM.
 Agent: Let
-Agent: me book that for you right now.Great, you're all set! I have you scheduled for Friday the 13th at 8:00 AM at 978 Walnut Grove Avenue. Our technician will call you about 30 minutes before arrival.
+Agent: me book that for you right now.Great, you're all set! I have you scheduled for Friday at 8:00 AM at 978 Walnut Grove Avenue. Our technician will call you about 30 minutes before arrival.
 
 Is there anything else I can help you with?
 User: No. That's it. Thank you.
@@ -294,7 +322,7 @@ Agent: Thank you, Steven. Have a great day!$tx$,
     'call_2dd4de63ad36bb8d0a695bdfc31',
     demo_agent,
     'Courtney Bell', '503-555-0396',
-    $tx$The user, Courtney Bell, called to schedule a preventative maintenance and filter change service for their heating and air system. After checking availability, the appointment was successfully booked for March 13, 2026, at 10:00 AM at 642 Silverleaf Drive, Hillsborough, OR 97123. The agent confirmed the appointment and provided details about the technician's arrival call.$tx$,
+    $tx$The user, Courtney Bell, called to schedule a preventative maintenance and filter change service. The appointment was successfully booked.$tx$,
     $tx$Agent: Hi, thank you for calling Reliant Support Heating & Air, how can I help you today?
 User: Hi. I need to have my filters changed.
 User: and my system checked out.
@@ -309,22 +337,22 @@ User: nine seven one two three
 Agent: Perfect.
 Agent:  Let me check what's available for your appointment.Let me check what's available.
 User: Thank you.
-Agent: I have Thursday the 12th at 4:00
+Agent: I have Thursday at 4:00
 User: Okay. That works.
 Agent: Let
-Agent: me book that for you right now.It looks like that time slot just got booked. Would you like me to check for other available times on Thursday the 12th, or would you prefer Friday the 13th at 8:00 AM?
+Agent: me book that for you right now.It looks like that time slot just got booked. Would you like me to check for other available times on Thursday, or would you prefer Friday at 8:00 AM?
 User: Check for Thursday if possible.
 Agent: Let
-Agent: me check for other available times on Thursday.The next available options are still Friday the 13th at 8:00 AM. Would you like to book that, or should I check
+Agent: me check for other available times on Thursday.The next available options are Friday at 8:00 AM. Would you like to book that, or should I check
 User: Yes,
 Agent: for other days?
 User: please. Yes, please. That works.
-Agent: Let me book that for you right now.It looks like Friday the 13th at 8:00 AM is no longer available. Would you like me to check for other times on Friday, or should I look for the next available appointment after that?
+Agent: Let me book that for you right now.It looks like Friday at 8:00 AM is no longer available. Would you like me to check for other times on Friday, or should I look for the next available appointment after that?
 User: Other times on Friday would be great.
 Agent: Let me
-Agent: check for other available times on Friday.I have Friday the 13th at 10:00 AM available. Would you like to book that time?
+Agent: check for other available times on Friday.I have Friday at 10:00 AM available. Would you like to book that time?
 User: Yes, please.
-Agent: Let me book that for you right now.Great, you're all set! I have you scheduled for Friday the 13th at 10:00 AM at 642 Silverleaf Drive in Hillsborough. Our technician will call you about 30 minutes before arrival.
+Agent: Let me book that for you right now.Great, you're all set! I have you scheduled for Friday at 10:00 AM at 642 Silverleaf Drive in Hillsborough. Our technician will call you about 30 minutes before arrival.
 
 Is there anything else I can help you with?
 User: I don't think so.
@@ -343,7 +371,7 @@ Agent: Thank you, Courtney. Have a great day!$tx$,
     'call_57da93e096cbc58ca5a5392fb17',
     demo_agent,
     'Monica Jenkins', '503-555-0568',
-    $tx$The user, Monica Jenkins, called to report that her furnace was not turning on. The agent attempted to book an appointment for heating repair but initial slots on March 12 and 13 were unavailable. They successfully scheduled an appointment for March 16 at 8:00 AM at 1785 Evergreen Boulevard, Portland, OR 97211.$tx$,
+    $tx$The user, Monica Jenkins, called to report that her furnace was not turning on. The agent successfully scheduled an appointment for heating repair.$tx$,
     $tx$Agent: Hi, thank you for calling Reliant Support Heating & Air, how can I help you today?
 User: Hi. I'm having problem with my furnace. It's not turning on.
 Agent: I'm sorry to hear that your furnace isn't turning on — let's get someone out to help. Can you tell me a little more about what's happening? For example, is the thermostat set to heat mode, and do you hear the system trying to start at all?
@@ -359,7 +387,7 @@ User: Nine seven two one one.
 Agent: Perfect.
 Agent:  Let me check what's available
 Agent: for our next
-Agent: appointments.Let me check what's available.I have Thursday the 12th at 4:00 PM or Friday the 13th at 8:00 AM — which works better for you?
+Agent: appointments.Let me check what's available.I have Thursday at 4:00 PM or Friday at 8:00 AM — which works better for you?
 User: Thursday is great.
 Agent: Let me book
 Agent: that for you right now.It looks like Thursday at 4:00 PM just got booked. Would you like me to check for other available times on Thursday, or would you prefer the Friday morning slot?
@@ -368,10 +396,10 @@ Agent: Let
 Agent: me book that for you right now.It looks like the Friday morning slot is also no longer available. Would you like me to check for other available times on Thursday or Friday?
 User: Can we just go to Monday?
 Agent: Let me
-Agent: check Monday's availability for you.I have Monday the 16th at 8:00 AM or 10:00 AM — which works better for you?
+Agent: check Monday's availability for you.I have Monday at 8:00 AM or 10:00 AM — which works better for you?
 User: Eight AM.
 Agent: Let
-Agent: me book that for you right now.Great, you're all set! I have you scheduled for Monday the 16th at 8:00 AM at 1785 Evergreen Boulevard. Our technician will call you about 30 minutes before arrival.
+Agent: me book that for you right now.Great, you're all set! I have you scheduled for Monday at 8:00 AM at 1785 Evergreen Boulevard. Our technician will call you about 30 minutes before arrival.
 
 Is there anything else I can help you with?
 User: No. Thanks.
@@ -390,7 +418,7 @@ Agent: Thank you, Monica. Have a great day!$tx$,
     'call_a1e21951b2240c142a3be8fa6d9',
     demo_agent,
     'Travis Long', '503-555-0821',
-    $tx$The user, Travis Long, scheduled a seasonal tune-up and filter service appointment for his heating and air system. The appointment was successfully booked for March 17, 2026, at 10:00 AM at 2578 Brentwood Avenue, Tigard, OR 97224. The call concluded with confirmation and no further requests from the user.$tx$,
+    $tx$The user, Travis Long, scheduled a seasonal tune-up and filter service appointment. The appointment was successfully booked.$tx$,
     $tx$Agent: Hi, thank you for calling Reliant Support Heating & Air, how can I help you today?
 User: Yeah. I just need to schedule some maintenance on my system.
 Agent: Absolutely, we can help with that. May I have your full name to get started?
@@ -407,12 +435,12 @@ Agent: Perfect. Let
 Agent: me check
 Agent: what's available for
 Agent: your seasonal
-Agent: tune-up and filter service.Let me check what's available.I have Thursday the 12th at 4:00 PM or Friday the 13th at 8:00 AM— which works better for you?
-User: Do you happen to have anything available Tuesday, the seventeenth?
-Agent: Let me check that for you.We do! I have Tuesday the 17th at 8:00 AM or 10:00 AM available. Would either of those times work for you?
+Agent: tune-up and filter service.Let me check what's available.I have Thursday at 4:00 PM or Friday at 8:00 AM— which works better for you?
+User: Do you happen to have anything available Tuesday?
+Agent: Let me check that for you.We do! I have Tuesday at 8:00 AM or 10:00 AM available. Would either of those times work for you?
 User: Ten AM would be perfect.
 Agent: Let
-Agent: me book that for you right now.Great, you're all set! I have you scheduled for Tuesday, March 17th at 10:00 AM at 2578 Brentwood Avenue in Tigard. Our technician will call you about 30 minutes before arrival.
+Agent: me book that for you right now.Great, you're all set! I have you scheduled for Tuesday at 10:00 AM at 2578 Brentwood Avenue in Tigard. Our technician will call you about 30 minutes before arrival.
 
 Is there anything else I can help you with?
 User: No. That'll be all.
