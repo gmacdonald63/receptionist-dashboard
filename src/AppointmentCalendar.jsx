@@ -692,12 +692,6 @@ const AppointmentCalendar = ({
           </div>
         </div>
 
-        {/* Week label */}
-        <div className="text-center mb-2">
-          <p className="text-gray-400 text-sm">
-            Week of {formatDateForDisplay(weekDates[0])} - {formatDateForDisplay(weekDates[6])}
-          </p>
-        </div>
 
         {/* Tech legend */}
         <div className="flex justify-center mb-2">{renderTechLegend()}</div>
