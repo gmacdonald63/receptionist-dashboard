@@ -85,6 +85,9 @@ const AppointmentCalendar = ({
     return stored ? Number(stored) : null;
   });
 
+  // Day view drill-down: null = week view, Date = day view for that date
+  const [dayViewDate, setDayViewDate] = useState(null);
+
   const scrollContainerRef = useRef(null);
 
   const weekDates = useMemo(() => getWeekDates(currentWeekStart), [currentWeekStart]);
@@ -332,7 +335,18 @@ const AppointmentCalendar = ({
       const todayInWeek = newWeekDates.some((d) => formatDateStr(d) === formatDateStr(today));
       setMobileSelectedDay(todayInWeek ? today : newWeekDates[0]);
     }
+    // Exit day view when navigating to a different week
+    setDayViewDate(null);
   }, [currentWeekStart]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-scroll to current time when entering day view
+  useEffect(() => {
+    if (!dayViewDate || !scrollContainerRef.current) return;
+    const now = new Date();
+    const currentMin = now.getHours() * 60 + now.getMinutes();
+    const scrollTarget = ((currentMin - gridStartMin) / 30) * SLOT_HEIGHT;
+    scrollContainerRef.current.scrollTop = Math.max(0, scrollTarget - 200);
+  }, [dayViewDate, gridStartMin]);
 
   // ─── Render helpers ─────────────────────────────────────────────────────────
 
@@ -539,9 +553,13 @@ const AppointmentCalendar = ({
               key={formatDateStr(date)}
               className="sticky top-0 z-20 bg-gray-900 border-b border-gray-700 text-center overflow-hidden"
             >
-              {/* Day name + date */}
-              <div className="px-2 py-1.5">
-                <p className="text-xs font-medium text-gray-400">
+              {/* Day name + date — clickable to drill into day view */}
+              <div
+                className="px-2 py-1.5 cursor-pointer hover:bg-gray-800/60 transition-colors group"
+                onClick={() => setDayViewDate(date)}
+                title={`View ${date.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}`}
+              >
+                <p className="text-xs font-medium text-gray-400 group-hover:text-blue-400 transition-colors">
                   {formatDayName(date)}
                 </p>
                 <div className="flex items-center justify-center gap-1">
@@ -763,6 +781,107 @@ const AppointmentCalendar = ({
     );
   };
 
+  // ─── Day view (drill-down from week header click) ───────────────────────────
+
+  const renderDayView = () => {
+    if (!dayViewDate) return null;
+    const dateStr = formatDateStr(dayViewDate);
+    const dayOfWeek = dayViewDate.getDay();
+    const closed = isDayClosed(dayOfWeek);
+
+    return (
+      <div
+        ref={scrollContainerRef}
+        className="flex-1 overflow-auto border border-gray-700 rounded-lg bg-gray-900"
+      >
+        {/* Sub-column header row */}
+        <div className="sticky top-0 z-20 flex bg-gray-900 border-b border-gray-700">
+          {/* Time label spacer */}
+          <div className="w-[60px] flex-shrink-0" />
+          {/* Sub-column names (or single header in filter mode) */}
+          {showSubColumns ? (
+            subColumns.map((sc) => (
+              <div
+                key={sc.id ?? 'u'}
+                className="flex-1 flex flex-col items-center py-2"
+                style={{ minWidth: '52px' }}
+              >
+                <span
+                  className="w-3 h-3 rounded-full mb-0.5"
+                  style={{ backgroundColor: sc.color }}
+                />
+                <span className="text-[10px] text-gray-400 leading-tight text-center truncate px-1 max-w-full">
+                  {sc.name}
+                </span>
+              </div>
+            ))
+          ) : (
+            <div className="flex-1 py-2 text-center">
+              <p className="text-xs text-gray-400">
+                {selectedTechId
+                  ? activeTechs.find((t) => t.id === selectedTechId)?.name || 'Tech'
+                  : 'All Appointments'}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Body: time labels + content */}
+        <div className="flex">
+          {/* Time labels */}
+          <div className="w-[60px] flex-shrink-0">
+            {timeSlots.map((slotTime, idx) => (
+              <div
+                key={slotTime}
+                className="border-b border-gray-700/20 pr-2 text-right flex items-start justify-end"
+                style={{ height: `${SLOT_HEIGHT}px` }}
+              >
+                {idx % 2 === 0 && (
+                  <span className="text-gray-500 text-[10px] leading-none mt-1">
+                    {formatTime12(slotTime)}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Day content: sub-columns or single column */}
+          {showSubColumns ? (
+            <div className="flex flex-1">
+              {subColumns.map((sc, scIdx) =>
+                renderTechSubColumn(dayViewDate, sc, scIdx === subColumns.length - 1, true)
+              )}
+            </div>
+          ) : (
+            <div className="relative flex-1">
+              {timeSlots.map((slotTime) => {
+                const inBiz = isSlotInBusinessHours(dayOfWeek, slotTime);
+                return (
+                  <div
+                    key={slotTime}
+                    className={`border-b ${
+                      closed
+                        ? 'bg-gray-900/50 cursor-not-allowed'
+                        : inBiz
+                        ? 'bg-gray-800/50 hover:bg-blue-900/20 cursor-pointer'
+                        : 'bg-gray-900/30 hover:bg-blue-900/10 cursor-pointer'
+                    } border-gray-700/20`}
+                    style={{ height: `${SLOT_HEIGHT}px` }}
+                    onClick={!closed ? () => handleSlotClick(dateStr, slotTime) : undefined}
+                  />
+                );
+              })}
+              {(filteredAppointmentsByDate[dateStr] || []).map((apt) =>
+                renderAppointmentBlock(apt, dayOfWeek, dateStr)
+              )}
+              {renderPreviewBlock(dateStr)}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   // ─── Tech legend (clickable filter pills) ───────────────────────────────────
 
   const renderTechLegend = () => {
@@ -834,31 +953,46 @@ const AppointmentCalendar = ({
             </button>
           </div>
 
-          {/* Center: Week navigation */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={goPreviousWeek}
-              className="px-2.5 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 border border-gray-700 text-sm font-medium"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <button
-              onClick={goToToday}
-              className={`px-3 py-2 rounded-lg text-sm font-medium ${
-                isCurrentWeek
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-800 text-white hover:bg-gray-700 border border-gray-700'
-              }`}
-            >
-              Current
-            </button>
-            <button
-              onClick={goNextWeek}
-              className="px-2.5 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 border border-gray-700 text-sm font-medium"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
+          {/* Center: Week navigation (or day view title + back) */}
+          {dayViewDate ? (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setDayViewDate(null)}
+                className="flex items-center gap-1.5 px-3 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 border border-gray-700 text-sm font-medium"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                Week
+              </button>
+              <span className="text-white font-semibold text-sm">
+                {dayViewDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={goPreviousWeek}
+                className="px-2.5 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 border border-gray-700 text-sm font-medium"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                onClick={goToToday}
+                className={`px-3 py-2 rounded-lg text-sm font-medium ${
+                  isCurrentWeek
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-800 text-white hover:bg-gray-700 border border-gray-700'
+                }`}
+              >
+                Current
+              </button>
+              <button
+                onClick={goNextWeek}
+                className="px-2.5 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 border border-gray-700 text-sm font-medium"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
 
           {/* Right: legend + action slot */}
           <div className="flex-1 flex items-center justify-end gap-3">
@@ -884,9 +1018,9 @@ const AppointmentCalendar = ({
         <div className="flex flex-1 min-h-0 gap-0">
           {/* Calendar grid */}
           <div className="flex-1 min-w-0 flex flex-col">
-            {/* Desktop: 7-column grid */}
+            {/* Desktop: week grid OR day view */}
             <div className="hidden md:flex flex-col flex-1 min-h-0">
-              {renderDesktopGrid()}
+              {dayViewDate ? renderDayView() : renderDesktopGrid()}
             </div>
 
             {/* Mobile: single day grid */}
