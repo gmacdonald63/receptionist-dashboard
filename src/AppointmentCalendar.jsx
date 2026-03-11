@@ -686,15 +686,12 @@ const AppointmentCalendar = ({
             </button>
           </div>
 
-          {/* Right: action slot */}
-          <div className="flex-1 flex items-center justify-end gap-1">
+          {/* Right: legend + action slot */}
+          <div className="flex-1 flex items-center justify-end gap-3">
+            <div className="hidden sm:flex">{renderTechLegend()}</div>
             {headerRight}
           </div>
         </div>
-
-
-        {/* Tech legend */}
-        <div className="flex justify-center mb-2">{renderTechLegend()}</div>
 
         {/* Mobile day picker (hidden on desktop) */}
         <div className="md:hidden">{renderMobileDayPicker()}</div>
