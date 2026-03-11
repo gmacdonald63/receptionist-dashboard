@@ -1124,7 +1124,7 @@ const Customers = ({ clientData, appointments, onReminderCountChange, headerLeft
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-3 flex-shrink-0">
           {headerLeft}
-          <div className="relative w-32">
+          <div className="relative w-96">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text"
