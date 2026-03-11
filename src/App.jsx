@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Phone, Calendar, FileText, Clock, DollarSign, Download, Play, Pause, Search, Filter, RefreshCw, ChevronRight, ChevronDown, LogOut, Settings, Plus, X, Users } from 'lucide-react';
+import { Phone, Calendar, FileText, Clock, DollarSign, Download, Play, Pause, Search, RefreshCw, ChevronRight, LogOut, Settings, Plus, X, Users } from 'lucide-react';
 import { retellService } from './retellService';
 import { supabase } from './supabaseClient';
 import Login from './Login';
@@ -10,7 +10,7 @@ import DemoDashboard from './DemoDashboard';
 
 import InstallPrompt from './InstallPrompt';
 import UpdatePrompt from './UpdatePrompt';
-import ClockPicker from './ClockPicker';
+import AppointmentCalendar from './AppointmentCalendar';
 
 const SUPABASE_URL = 'https://zmppdmfdhknnwzwdfhwf.supabase.co';
 
@@ -35,14 +35,12 @@ const App = () => {
   const [selectedCall, setSelectedCall] = useState(null);
   const [playingRecording, setPlayingRecording] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [expandedAppointment, setExpandedAppointment] = useState(null);
   const [currentWeekStart, setCurrentWeekStart] = useState(() => {
     const today = new Date();
     const first = today.getDate() - today.getDay();
     return new Date(today.getFullYear(), today.getMonth(), first);
   });
   const audioRef = useRef(null);
-  const todayRef = useRef(null);
   
   // Real data from Retell API
   const [callLogs, setCallLogs] = useState([]);
@@ -56,14 +54,16 @@ const App = () => {
     monthlyBill: 0
   });
 
-  // Add appointment modal state
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [addForm, setAddForm] = useState({
-    firstName: '', lastName: '', phone: '', date: '', time: '',
-    address: '', city: '', state: '', zip: '', notes: ''
-  });
-  const [savingAppointment, setSavingAppointment] = useState(false);
+  // Business hours and technicians
+  const [businessHours, setBusinessHours] = useState([]);
+  const [technicians, setTechnicians] = useState([]);
   const [reminderCount, setReminderCount] = useState(0);
+
+  // Tech management state
+  const [showAddTech, setShowAddTech] = useState(false);
+  const [editingTechId, setEditingTechId] = useState(null);
+  const [techForm, setTechForm] = useState({ name: '', phone: '', color: '#3B82F6' });
+  const [savingTech, setSavingTech] = useState(false);
 
   // Demo mode state
   const [demoMode, setDemoMode] = useState(false);
@@ -255,17 +255,6 @@ const App = () => {
     }
   }, [user, clientData, demoMode, demoClientData]);
 
-  // Scroll to today when appointments tab is active
-  useEffect(() => {
-    if (activeTab === 'appointments' && todayRef.current && !loading) {
-      setTimeout(() => {
-        const element = todayRef.current;
-        const yOffset = -120;
-        const y = element.getBoundingClientRect().top + window.pageYOffset + yOffset;
-        window.scrollTo({ top: y, behavior: 'smooth' });
-      }, 100);
-    }
-  }, [activeTab, loading]);
 
   const handleLogin = (user, clientData) => {
     setUser(user);
@@ -321,6 +310,8 @@ const App = () => {
           id: apt.id,
           name: apt.caller_name,
           date: apt.date,
+          start_time: apt.start_time,
+          end_time: apt.end_time || null,
           time: apt.end_time
             ? `${apt.start_time} to ${apt.end_time}`
             : apt.start_time,
@@ -331,10 +322,42 @@ const App = () => {
           phone: apt.caller_number || '',
           summary: apt.notes || '',
           source: apt.source, // 'ai' or 'manual'
+          technician_id: apt.technician_id || null,
+          service_type: apt.service_type || null,
         })));
       }
     } catch (err) {
       console.error('Could not load appointments:', err);
+    }
+  };
+
+  const fetchBusinessHours = async () => {
+    const cid = effectiveClientData?.id;
+    if (!cid) return;
+    try {
+      const { data, error } = await supabase
+        .from('business_hours')
+        .select('day_of_week, is_open, open_time, close_time')
+        .eq('client_id', cid)
+        .order('day_of_week', { ascending: true });
+      if (!error && data) setBusinessHours(data);
+    } catch (err) {
+      console.error('Could not load business hours:', err);
+    }
+  };
+
+  const fetchTechnicians = async () => {
+    const cid = effectiveClientData?.id;
+    if (!cid) return;
+    try {
+      const { data, error } = await supabase
+        .from('technicians')
+        .select('*')
+        .eq('client_id', cid)
+        .order('name', { ascending: true });
+      if (!error && data) setTechnicians(data);
+    } catch (err) {
+      console.error('Could not load technicians:', err);
     }
   };
 
@@ -391,8 +414,8 @@ const App = () => {
 
       setCallLogs(transformedCalls);
 
-      // Fetch all appointments from Supabase (single source of truth)
-      await fetchAppointments();
+      // Fetch all appointments, business hours, and technicians from Supabase
+      await Promise.all([fetchAppointments(), fetchBusinessHours(), fetchTechnicians()]);
 
       // Calculate stats — filter to current billing period
       let periodStart = null;
@@ -418,97 +441,52 @@ const App = () => {
     }
   };
 
-  const handleAddAppointment = async (e) => {
-    e.preventDefault();
-    if (!addForm.firstName || !addForm.lastName || !addForm.phone || !addForm.date || !addForm.time || !addForm.address || !addForm.city || !addForm.state || !addForm.zip || !addForm.notes) return;
+  // Calculate end time from start time + duration in minutes
+  const calculateEndTime = (startTime, durationMinutes) => {
+    const [hours, minutes] = startTime.split(':').map(Number);
+    const totalMinutes = hours * 60 + minutes + durationMinutes;
+    const endHours = Math.floor(totalMinutes / 60);
+    const endMinutes = totalMinutes % 60;
+    return `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`;
+  };
 
-    setSavingAppointment(true);
-    const fullName = `${addForm.firstName.trim()} ${addForm.lastName.trim()}`.trim();
-    try {
-      const { data, error } = await supabase
-        .from('appointments')
-        .insert({
-          client_id: effectiveClientData.id,
-          caller_name: fullName,
-          caller_number: addForm.phone,
-          date: addForm.date,
-          start_time: addForm.time,
-          end_time: addForm.time,
-          address: addForm.address,
-          city: addForm.city,
-          state: addForm.state,
-          zip: addForm.zip,
-          notes: addForm.notes || null,
-          source: 'manual',
-          status: 'confirmed'
-        })
-        .select()
-        .single();
+  const handleAddAppointment = async (formData) => {
+    const fullName = `${formData.firstName.trim()} ${formData.lastName.trim()}`.trim();
+    const endTime = calculateEndTime(formData.time, formData.duration || 60);
 
-      if (error) throw error;
-
-      const newApt = {
-        id: data.id,
-        name: data.caller_name,
-        date: data.date,
-        time: data.end_time
-          ? `${data.start_time} to ${data.end_time}`
-          : data.start_time,
-        address: data.address || '',
-        phone: data.caller_number || '',
-        summary: data.notes || '',
+    const { data, error } = await supabase
+      .from('appointments')
+      .insert({
+        client_id: effectiveClientData.id,
+        caller_name: fullName,
+        caller_number: formData.phone,
+        date: formData.date,
+        start_time: formData.time,
+        end_time: endTime,
+        address: formData.address,
+        city: formData.city,
+        state: formData.state,
+        zip: formData.zip,
+        notes: formData.notes || null,
         source: 'manual',
-      };
+        status: 'confirmed',
+        technician_id: formData.technicianId || null,
+      })
+      .select()
+      .single();
 
-      setAppointments(prev => [...prev, newApt]);
+    if (error) throw error;
 
+    // Navigate to the week of the new appointment
+    const [year, month, day] = formData.date.split('-');
+    const aptDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+    const first = aptDate.getDate() - aptDate.getDay();
+    setCurrentWeekStart(new Date(aptDate.getFullYear(), aptDate.getMonth(), first));
 
-      // Navigate to the week of the new appointment
-      const [year, month, day] = addForm.date.split('-');
-      const aptDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-      const first = aptDate.getDate() - aptDate.getDay();
-      setCurrentWeekStart(new Date(aptDate.getFullYear(), aptDate.getMonth(), first));
-
-      setAddForm({ firstName: '', lastName: '', phone: '', date: '', time: '', address: '', city: '', state: '', zip: '', notes: '' });
-      setShowAddModal(false);
-
-      // Re-fetch to show the new appointment
-      await fetchAppointments();
-    } catch (err) {
-      console.error('Error saving appointment:', err);
-      alert(`Failed to save: ${err?.message || JSON.stringify(err)}`);
-    } finally {
-      setSavingAppointment(false);
-    }
+    // Re-fetch to show the new appointment
+    await fetchAppointments();
   };
 
-  // Calendar helper functions
-  const getWeekDates = (weekStart) => {
-    const dates = [];
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(weekStart);
-      date.setDate(date.getDate() + i);
-      dates.push(date);
-    }
-    return dates;
-  };
-
-  const getAppointmentsForDate = (date) => {
-    return appointments.filter(apt => {
-      if (!apt.date) return false;
-      const [year, month, day] = apt.date.split('-');
-      const aptDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-      return aptDate.toDateString() === date.toDateString();
-    });
-  };
-
-  const formatDateForDisplay = (date) => {
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  };
-
-  const formatDayOfWeek = (date) => {
-    return date.toLocaleDateString('en-US', { weekday: 'short' });
-  };
 
   const formatCallTime = (timeString) => {
     if (!timeString) return '';
@@ -551,23 +529,6 @@ const App = () => {
     return convert24to12(timeString);
   };
 
-  const goToToday = () => {
-    const today = new Date();
-    const first = today.getDate() - today.getDay();
-    setCurrentWeekStart(new Date(today.getFullYear(), today.getMonth(), first));
-  };
-
-  const goPreviousWeek = () => {
-    const newDate = new Date(currentWeekStart);
-    newDate.setDate(newDate.getDate() - 7);
-    setCurrentWeekStart(newDate);
-  };
-
-  const goNextWeek = () => {
-    const newDate = new Date(currentWeekStart);
-    newDate.setDate(newDate.getDate() + 7);
-    setCurrentWeekStart(newDate);
-  };
 
   const StatCard = ({ icon: Icon, label, value, color }) => (
     <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
@@ -700,204 +661,41 @@ const App = () => {
     </div>
   );
 
-  const renderAppointments = () => {
-    const weekDates = getWeekDates(currentWeekStart);
-    const isCurrentWeek = getWeekDates(new Date())[0].toDateString() === weekDates[0].toDateString();
-
-    return (
-      <div className="space-y-4">
-        {/* Week Navigation */}
-        <div className="flex items-center sticky top-[72px] z-40 bg-gray-900 py-3 mb-2">
-          {/* Left: Refresh */}
-          <div className="flex-1 flex items-center">
-            <button
-              onClick={fetchData}
-              className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
-            >
-              <RefreshCw className="w-4 h-4" />
-              <span className="hidden sm:inline">Refresh</span>
-            </button>
-          </div>
-          {/* Center: Week navigation */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={goPreviousWeek}
-              className="px-2.5 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 border border-gray-700 text-sm font-medium"
-            >
-              ←
-            </button>
-            <button
-              onClick={goToToday}
-              className={`px-3 py-2 rounded-lg text-sm font-medium ${
-                isCurrentWeek
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-800 text-white hover:bg-gray-700 border border-gray-700'
-              }`}
-            >
-              Current
-            </button>
-            <button
-              onClick={goNextWeek}
-              className="px-2.5 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 border border-gray-700 text-sm font-medium"
-            >
-              →
-            </button>
-          </div>
-          {/* Right: Add */}
-          <div className="flex-1 flex items-center justify-end">
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm"
-            >
-              <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">Add</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Week Display */}
-        <div className="text-center mb-4">
-          <p className="text-gray-400 text-sm">
-            Week of {formatDateForDisplay(weekDates[0])} - {formatDateForDisplay(weekDates[6])}
-          </p>
-        </div>
-
-        {loading ? (
-          <div className="text-center py-12">
-            <RefreshCw className="w-8 h-8 animate-spin text-blue-500 mx-auto mb-4" />
-            <p className="text-gray-400">Loading appointments...</p>
-          </div>
-        ) : appointments.length === 0 ? (
-          <div className="bg-gray-800 rounded-lg p-8 border border-gray-700 text-center">
-            <Calendar className="w-12 h-12 text-gray-600 mx-auto mb-4" />
-            <p className="text-gray-400 mb-4">No appointments booked yet</p>
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm mx-auto"
-            >
-              <Plus className="w-4 h-4" />
-              Add Appointment
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-7 gap-3">
-            {weekDates.map((date) => {
-              const dayAppointments = getAppointmentsForDate(date);
-              const isToday = date.toDateString() === new Date().toDateString();
-
-              return (
-                <div 
-                  key={date.toDateString()}
-                  ref={isToday ? todayRef : null}
-                  className={`p-3 rounded-lg border min-h-[300px] ${
-                    isToday 
-                      ? 'border-blue-500 bg-blue-900/20' 
-                      : 'border-gray-700 bg-gray-800'
-                  }`}
-                >
-                  {/* Day Header */}
-                  <div className="mb-3 pb-3 border-b border-gray-700">
-                    <p className="text-gray-400 text-xs font-medium">{formatDayOfWeek(date)}</p>
-                    <p className={`text-lg font-semibold ${isToday ? 'text-blue-400' : 'text-white'}`}>
-                      {date.getDate()}
-                    </p>
-                  </div>
-
-                  {/* Appointments for the day */}
-                  {dayAppointments.length === 0 ? (
-                    <p className="text-gray-500 text-xs text-center py-4">No appointments</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {dayAppointments.map(apt => (
-                        <div
-                          key={apt.id}
-                          className={`p-2 rounded-lg cursor-pointer transition-colors ${
-                            expandedAppointment === apt.id
-                              ? 'bg-blue-600'
-                              : 'bg-gray-750 hover:bg-gray-700'
-                          }`}
-                          onClick={() => setExpandedAppointment(expandedAppointment === apt.id ? null : apt.id)}
-                        >
-                          <div className="flex items-start justify-between gap-1">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-1">
-                                <p className="text-white text-xs font-medium truncate">{apt.name}</p>
-                                {apt.source === 'manual' ? (
-                                  <span className="flex-shrink-0 px-1 py-0.5 bg-green-700 text-green-200 rounded text-[10px] leading-none">Manual</span>
-                                ) : (
-                                  <span className="flex-shrink-0 px-1 py-0.5 bg-blue-700 text-blue-200 rounded text-[10px] leading-none">AI</span>
-                                )}
-                              </div>
-                              <p className="text-gray-300 text-xs mt-1">{formatAppointmentTime(apt.time)}</p>
-                              {apt.address && (
-                                <p className="text-gray-400 text-xs mt-1 truncate">{apt.address}</p>
-                              )}
-                            </div>
-                            {expandedAppointment === apt.id && (
-                              <ChevronDown className="w-4 h-4 text-white flex-shrink-0" />
-                            )}
-                          </div>
-
-                          {/* Expanded Details */}
-                          {expandedAppointment === apt.id && (
-                            <div className="mt-3 pt-3 border-t border-blue-500/30 space-y-2">
-                              {apt.phone && (
-                                <div>
-                                  <p className="text-xs text-gray-300">Phone</p>
-                                  <p className="text-white text-xs font-medium">{apt.phone}</p>
-                                </div>
-                              )}
-                              {apt.summary && (
-                                <div>
-                                  <p className="text-xs text-gray-300">Notes</p>
-                                  <p className="text-white text-xs">{apt.summary}</p>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    );
-  };
 
   const filteredCalls = callLogs.filter(call => 
     call.caller.toLowerCase().includes(searchTerm.toLowerCase()) ||
     call.number.includes(searchTerm)
   );
 
-  const renderCallLogs = () => (
+  const renderCallLogs = (headerLeft, headerRight) => (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+      {/* Header row: logo, search, actions, app controls — all one line */}
+      <div className="flex items-center gap-6">
+        <div className="flex-shrink-0">{headerLeft}</div>
+        <div className="relative w-96 flex-shrink-0">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
             type="text"
-            placeholder="Search calls..."
-            className="w-full pl-10 pr-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
+            placeholder="Search calls…"
+            className="w-full pl-9 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 text-sm"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-        <div className="flex gap-2">
-          <button 
+        <div className="flex-1" />
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button
             onClick={fetchData}
-            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-800 border border-gray-700 text-white rounded-lg hover:bg-gray-750"
+            className="flex items-center gap-2 px-3 py-2 bg-gray-800 border border-gray-700 text-white rounded-lg hover:bg-gray-750 text-sm"
           >
             <RefreshCw className="w-4 h-4" />
             <span className="hidden sm:inline">Refresh</span>
           </button>
-          <button className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+          <button className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
             <Download className="w-4 h-4" />
             <span className="hidden sm:inline">Export</span>
           </button>
+          {headerRight}
         </div>
       </div>
 
@@ -1066,8 +864,166 @@ const App = () => {
     );
   };
 
+  // ─── Tech Management CRUD ─────────────────────────────────────────────────────
+  const TECH_COLORS = [
+    { name: 'Blue', hex: '#3B82F6' },
+    { name: 'Green', hex: '#10B981' },
+    { name: 'Amber', hex: '#F59E0B' },
+    { name: 'Purple', hex: '#8B5CF6' },
+    { name: 'Red', hex: '#EF4444' },
+    { name: 'Teal', hex: '#14B8A6' },
+    { name: 'Pink', hex: '#EC4899' },
+    { name: 'Orange', hex: '#F97316' },
+  ];
+
+  const resetTechForm = () => {
+    setTechForm({ name: '', phone: '', color: '#3B82F6' });
+    setShowAddTech(false);
+    setEditingTechId(null);
+  };
+
+  const handleSaveTech = async () => {
+    if (!techForm.name.trim()) return;
+    setSavingTech(true);
+    try {
+      if (editingTechId) {
+        const { error } = await supabase
+          .from('technicians')
+          .update({ name: techForm.name.trim(), phone: techForm.phone.trim() || null, color: techForm.color })
+          .eq('id', editingTechId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('technicians')
+          .insert({ client_id: effectiveClientData.id, name: techForm.name.trim(), phone: techForm.phone.trim() || null, color: techForm.color });
+        if (error) throw error;
+      }
+      await fetchTechnicians();
+      resetTechForm();
+    } catch (err) {
+      console.error('Save tech error:', err);
+      alert('Failed to save technician.');
+    } finally {
+      setSavingTech(false);
+    }
+  };
+
+  const handleToggleTechActive = async (tech) => {
+    try {
+      const { error } = await supabase
+        .from('technicians')
+        .update({ is_active: !tech.is_active })
+        .eq('id', tech.id);
+      if (error) throw error;
+      await fetchTechnicians();
+    } catch (err) {
+      console.error('Toggle tech error:', err);
+    }
+  };
+
+  const handleEditTech = (tech) => {
+    setTechForm({ name: tech.name, phone: tech.phone || '', color: tech.color || '#3B82F6' });
+    setEditingTechId(tech.id);
+    setShowAddTech(true);
+  };
+
   const renderSettings = () => (
     <div className="space-y-4">
+      {/* Technicians Section */}
+      <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-white">Technicians</h3>
+          {!showAddTech && (
+            <button
+              onClick={() => { resetTechForm(); setShowAddTech(true); }}
+              className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm"
+            >
+              <Plus className="w-4 h-4" /> Add
+            </button>
+          )}
+        </div>
+
+        {/* Add/Edit Form */}
+        {showAddTech && (
+          <div className="mb-4 p-3 bg-gray-750 rounded-lg border border-gray-600 space-y-3">
+            <p className="text-sm font-medium text-gray-300">{editingTechId ? 'Edit Technician' : 'New Technician'}</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-gray-400 text-xs mb-1">Name <span className="text-red-400">*</span></label>
+                <input
+                  type="text"
+                  value={techForm.name}
+                  onChange={e => setTechForm(f => ({ ...f, name: e.target.value }))}
+                  placeholder="Tech name"
+                  className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-gray-400 text-xs mb-1">Phone</label>
+                <input
+                  type="tel"
+                  value={techForm.phone}
+                  onChange={e => setTechForm(f => ({ ...f, phone: formatPhone(e.target.value) }))}
+                  placeholder="(555) 123-4567"
+                  className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-gray-400 text-xs mb-1">Calendar Color</label>
+              <div className="flex gap-2 flex-wrap">
+                {TECH_COLORS.map(c => (
+                  <button
+                    key={c.hex}
+                    onClick={() => setTechForm(f => ({ ...f, color: c.hex }))}
+                    className={`w-8 h-8 rounded-full border-2 transition-all ${techForm.color === c.hex ? 'border-white scale-110' : 'border-transparent hover:border-gray-500'}`}
+                    style={{ backgroundColor: c.hex }}
+                    title={c.name}
+                  />
+                ))}
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={resetTechForm} className="flex-1 px-3 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 text-sm">Cancel</button>
+              <button onClick={handleSaveTech} disabled={savingTech || !techForm.name.trim()} className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm disabled:opacity-50">
+                {savingTech ? 'Saving...' : editingTechId ? 'Update' : 'Add'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Tech List */}
+        {technicians.length === 0 ? (
+          <p className="text-gray-500 text-sm text-center py-4">No technicians added yet</p>
+        ) : (
+          <div className="space-y-2">
+            {technicians.map(tech => (
+              <div key={tech.id} className={`flex items-center gap-3 p-3 rounded-lg ${tech.is_active ? 'bg-gray-750' : 'bg-gray-750/50'}`}>
+                <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: tech.color || '#3B82F6' }} />
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm font-medium ${tech.is_active ? 'text-white' : 'text-gray-500 line-through'}`}>{tech.name}</p>
+                  {tech.phone && <p className="text-xs text-gray-400">{tech.phone}</p>}
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <button
+                    onClick={() => handleEditTech(tech)}
+                    className="px-2 py-1 text-xs text-gray-400 hover:text-white hover:bg-gray-700 rounded"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => handleToggleTechActive(tech)}
+                    className={`px-2 py-1 text-xs rounded ${tech.is_active ? 'text-amber-400 hover:bg-amber-900/30' : 'text-green-400 hover:bg-green-900/30'}`}
+                  >
+                    {tech.is_active ? 'Deactivate' : 'Activate'}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
         <h3 className="text-lg font-semibold mb-4 text-white">Greeting Message</h3>
         <textarea
@@ -1218,7 +1174,6 @@ const App = () => {
 
       return (
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold text-white">Your Plan</h3>
           <div className="bg-gray-800 rounded-lg p-4 border border-blue-500">
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-lg font-semibold text-white">Standard Plan</h4>
@@ -1381,8 +1336,7 @@ const App = () => {
         {/* Plan Selection or Current Plan */}
         {isActive || isPastDue ? (
           <>
-            <h3 className="text-lg font-semibold text-white">Your Plan</h3>
-            {currentPlanInfo ? (
+              {currentPlanInfo ? (
               renderPlanCard(currentPlan, currentPlanInfo, true)
             ) : (
               /* Fallback if price ID doesn't match known plans (e.g., legacy subscriber) */
@@ -1490,71 +1444,13 @@ const App = () => {
     );
   };
 
-  const renderAddAppointmentModal = () => (
-    <div className="fixed inset-0 bg-black/70 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="bg-gray-800 border border-gray-700 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg max-h-[92vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-4 border-b border-gray-700 sticky top-0 bg-gray-800 rounded-t-2xl sm:rounded-t-2xl">
-          <h2 className="text-lg font-semibold text-white">Add Appointment</h2>
-          <button onClick={() => setShowAddModal(false)} className="p-2 hover:bg-gray-700 rounded-lg">
-            <X className="w-5 h-5 text-gray-400" />
-          </button>
-        </div>
-        <form onSubmit={handleAddAppointment} className="p-4 space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-gray-400 text-sm mb-1">First Name <span className="text-red-400">*</span></label>
-              <input type="text" required value={addForm.firstName} onChange={e => setAddForm(f => ({ ...f, firstName: e.target.value }))} placeholder="First name" className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm" />
-            </div>
-            <div>
-              <label className="block text-gray-400 text-sm mb-1">Last Name <span className="text-red-400">*</span></label>
-              <input type="text" required value={addForm.lastName} onChange={e => setAddForm(f => ({ ...f, lastName: e.target.value }))} placeholder="Last name" className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm" />
-            </div>
-          </div>
-          <div>
-            <label className="block text-gray-400 text-sm mb-1">Phone <span className="text-red-400">*</span></label>
-            <input type="tel" required value={addForm.phone} onChange={e => setAddForm(f => ({ ...f, phone: formatPhone(e.target.value) }))} placeholder="(555) 123-4567" className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm" />
-          </div>
-          <div>
-            <label className="block text-gray-400 text-sm mb-1">Address <span className="text-red-400">*</span></label>
-            <input type="text" required value={addForm.address} onChange={e => setAddForm(f => ({ ...f, address: e.target.value }))} placeholder="123 Main St" className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm" />
-          </div>
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label className="block text-gray-400 text-sm mb-1">City <span className="text-red-400">*</span></label>
-              <input type="text" required value={addForm.city} onChange={e => setAddForm(f => ({ ...f, city: e.target.value }))} placeholder="City" className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm" />
-            </div>
-            <div>
-              <label className="block text-gray-400 text-sm mb-1">State <span className="text-red-400">*</span></label>
-              <input type="text" required value={addForm.state} onChange={e => setAddForm(f => ({ ...f, state: e.target.value.toUpperCase().slice(0, 2) }))} placeholder="IL" maxLength={2} className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm" />
-            </div>
-            <div>
-              <label className="block text-gray-400 text-sm mb-1">ZIP <span className="text-red-400">*</span></label>
-              <input type="text" required value={addForm.zip} onChange={e => setAddForm(f => ({ ...f, zip: e.target.value.replace(/\D/g, '').slice(0, 5) }))} placeholder="12345" className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm" />
-            </div>
-          </div>
-          <div>
-            <label className="block text-gray-400 text-sm mb-1">Date <span className="text-red-400">*</span></label>
-            <input type="date" required value={addForm.date} onChange={e => setAddForm(f => ({ ...f, date: e.target.value }))} className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 text-sm" style={{ colorScheme: 'dark' }} />
-          </div>
-          <ClockPicker label="Time" required value={addForm.time} onChange={val => setAddForm(f => ({ ...f, time: val }))} placeholder="Select appointment time" />
-          <div>
-            <label className="block text-gray-400 text-sm mb-1">Details <span className="text-red-400">*</span></label>
-            <textarea required value={addForm.notes} onChange={e => setAddForm(f => ({ ...f, notes: e.target.value }))} placeholder="Appointment details..." rows={3} className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm resize-none" />
-          </div>
-          <div className="flex gap-3 pt-2">
-            <button type="button" onClick={() => setShowAddModal(false)} className="flex-1 px-4 py-3 bg-gray-700 text-white rounded-lg hover:bg-gray-600 text-sm font-medium">Cancel</button>
-            <button type="submit" disabled={savingAppointment} className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium disabled:opacity-50">{savingAppointment ? 'Saving...' : 'Add Appointment'}</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
 
   const navItems = [
     { id: 'appointments', label: 'Appointments', icon: Calendar },
     { id: 'customers', label: 'Customers', icon: Users },
     { id: 'calls', label: 'Calls', icon: Phone },
-    { id: 'billing', label: 'Billing', icon: DollarSign }
+    { id: 'billing', label: 'Billing', icon: DollarSign },
+    { id: 'settings', label: 'Settings', icon: Settings }
   ];
 
   // Show loading while checking auth or demo token
@@ -1579,31 +1475,54 @@ const App = () => {
           onDataRefresh={handleDemoDataRefresh}
         />
 
-        {/* Header */}
-        <header className="bg-gray-800 border-b border-gray-700 px-4 sticky top-0 z-50 flex items-center justify-center" style={{ height: '72px' }}>
-          <img src={logo} alt="Reliant Support" style={{ height: '40px', width: 'auto' }} />
-        </header>
-
         {/* Main Content */}
         <main className="p-4 md:p-6">
-          {activeTab === 'appointments' && renderAppointments()}
+          {activeTab === 'appointments' && (
+            <AppointmentCalendar
+              appointments={appointments}
+              businessHours={businessHours}
+              technicians={technicians}
+              currentWeekStart={currentWeekStart}
+              onWeekChange={setCurrentWeekStart}
+              onSaveAppointment={handleAddAppointment}
+              onRefresh={fetchData}
+              loading={loading}
+              clientId={effectiveClientData?.id}
+              headerLeft={<img src={logo} alt="Reliant Support" style={{ height: '26px', width: 'auto' }} />}
+            />
+          )}
           {activeTab === 'customers' && (
             <Customers
               clientData={effectiveClientData}
               appointments={appointments}
               onReminderCountChange={setReminderCount}
+              headerLeft={<img src={logo} alt="Reliant Support" style={{ height: '26px', width: 'auto' }} />}
             />
           )}
-          {activeTab === 'calls' && renderCallLogs()}
-          {activeTab === 'billing' && renderBilling()}
+          {activeTab === 'calls' && renderCallLogs(
+            <img src={logo} alt="Reliant Support" style={{ height: '26px', width: 'auto' }} />
+          )}
+          {activeTab === 'billing' && (
+            <>
+              <div className="flex items-center mb-3">
+                <img src={logo} alt="Reliant Support" style={{ height: '26px', width: 'auto' }} />
+              </div>
+              {renderBilling()}
+            </>
+          )}
+          {activeTab === 'settings' && (
+            <>
+              <div className="flex items-center mb-3">
+                <img src={logo} alt="Reliant Support" style={{ height: '26px', width: 'auto' }} />
+              </div>
+              {renderSettings()}
+            </>
+          )}
         </main>
-
-        {/* Add Appointment Modal */}
-        {showAddModal && renderAddAppointmentModal()}
 
         {/* Bottom Navigation */}
         <nav className="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 z-30">
-          <div className="grid grid-cols-4 gap-1">
+          <div className="grid grid-cols-5 gap-1">
             {navItems.map(item => (
               <button
                 key={item.id}
@@ -1680,21 +1599,19 @@ const App = () => {
         <InstallPrompt />
         <UpdatePrompt />
 
-        {/* Header */}
-        <header className="bg-gray-800 border-b border-gray-700 px-4 sticky top-0 z-50 flex items-center justify-between" style={{ height: '72px' }}>
-          <div />
-          <img src={logo} alt="Reliant Support" style={{ height: '40px', width: 'auto' }} />
-          <button
-            onClick={handleLogout}
-            className="p-2 hover:bg-gray-700 rounded-lg"
-            title="Sign out"
-          >
-            <LogOut className="w-5 h-5 text-gray-400" />
-          </button>
-        </header>
-
         {/* Gated Content */}
         <main className="p-4 md:p-6 max-w-lg mx-auto">
+          {/* Compact app bar */}
+          <div className="flex items-center justify-between mb-4">
+            <img src={logo} alt="Reliant Support" style={{ height: '26px', width: 'auto' }} />
+            <button
+              onClick={handleLogout}
+              className="p-2 hover:bg-gray-700 rounded-lg"
+              title="Sign out"
+            >
+              <LogOut className="w-5 h-5 text-gray-400" />
+            </button>
+          </div>
           {awaitingSubscription ? (
             <div className="text-center py-12">
               <RefreshCw className="w-8 h-8 animate-spin text-blue-500 mx-auto mb-4" />
@@ -1739,50 +1656,126 @@ const App = () => {
         />
       )}
 
-      {/* Header */}
-      <header className="bg-gray-800 border-b border-gray-700 px-4 sticky top-0 z-50 flex items-center justify-between" style={{ height: '72px' }}>
-        <div className="flex items-center gap-2">
-          {clientData?.is_admin && (
-            <button
-              onClick={() => setShowAdmin(true)}
-              className="p-2 hover:bg-gray-700 rounded-lg"
-              title="Admin Dashboard"
-            >
-              <Settings className="w-5 h-5 text-gray-400" />
-            </button>
-          )}
-        </div>
-        <img src={logo} alt="Reliant Support" style={{ height: '40px', width: 'auto' }} />
-        <button
-          onClick={handleLogout}
-          className="p-2 hover:bg-gray-700 rounded-lg"
-          title="Sign out"
-        >
-          <LogOut className="w-5 h-5 text-gray-400" />
-        </button>
-      </header>
-
       {/* Main Content */}
       <main className="p-4 md:p-6">
-        {activeTab === 'overview' && renderOverview()}
-        {activeTab === 'appointments' && renderAppointments()}
+        {activeTab === 'overview' && (
+          <>
+            <div className="flex items-center justify-between mb-3">
+              <img src={logo} alt="Reliant Support" style={{ height: '26px', width: 'auto' }} />
+              <div className="flex items-center gap-1">
+                {clientData?.is_admin && (
+                  <button onClick={() => setShowAdmin(true)} className="p-2 hover:bg-gray-700 rounded-lg" title="Admin Dashboard">
+                    <Settings className="w-5 h-5 text-gray-400" />
+                  </button>
+                )}
+                <button onClick={handleLogout} className="p-2 hover:bg-gray-700 rounded-lg" title="Sign out">
+                  <LogOut className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+            </div>
+            {renderOverview()}
+          </>
+        )}
+        {activeTab === 'appointments' && (
+          <AppointmentCalendar
+            appointments={appointments}
+            businessHours={businessHours}
+            technicians={technicians}
+            currentWeekStart={currentWeekStart}
+            onWeekChange={setCurrentWeekStart}
+            onSaveAppointment={handleAddAppointment}
+            onRefresh={fetchData}
+            loading={loading}
+            clientId={effectiveClientData?.id}
+            headerLeft={<img src={logo} alt="Reliant Support" style={{ height: '26px', width: 'auto' }} />}
+            headerRight={
+              <div className="flex items-center gap-1">
+                {clientData?.is_admin && (
+                  <button onClick={() => setShowAdmin(true)} className="p-2 hover:bg-gray-700 rounded-lg" title="Admin Dashboard">
+                    <Settings className="w-5 h-5 text-gray-400" />
+                  </button>
+                )}
+                <button onClick={handleLogout} className="p-2 hover:bg-gray-700 rounded-lg" title="Sign out">
+                  <LogOut className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+            }
+          />
+        )}
         {activeTab === 'customers' && (
           <Customers
             clientData={effectiveClientData}
             appointments={appointments}
             onReminderCountChange={setReminderCount}
+            headerLeft={<img src={logo} alt="Reliant Support" style={{ height: '26px', width: 'auto' }} />}
+            headerRight={
+              <div className="flex items-center gap-1">
+                {clientData?.is_admin && (
+                  <button onClick={() => setShowAdmin(true)} className="p-2 hover:bg-gray-700 rounded-lg" title="Admin Dashboard">
+                    <Settings className="w-5 h-5 text-gray-400" />
+                  </button>
+                )}
+                <button onClick={handleLogout} className="p-2 hover:bg-gray-700 rounded-lg" title="Sign out">
+                  <LogOut className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+            }
           />
         )}
-        {activeTab === 'calls' && renderCallLogs()}
-        {activeTab === 'billing' && renderBilling()}
+        {activeTab === 'calls' && renderCallLogs(
+          <img src={logo} alt="Reliant Support" style={{ height: '26px', width: 'auto' }} />,
+          <div className="flex items-center gap-1">
+            {clientData?.is_admin && (
+              <button onClick={() => setShowAdmin(true)} className="p-2 hover:bg-gray-700 rounded-lg" title="Admin Dashboard">
+                <Settings className="w-5 h-5 text-gray-400" />
+              </button>
+            )}
+            <button onClick={handleLogout} className="p-2 hover:bg-gray-700 rounded-lg" title="Sign out">
+              <LogOut className="w-5 h-5 text-gray-400" />
+            </button>
+          </div>
+        )}
+        {activeTab === 'billing' && (
+          <>
+            <div className="flex items-center justify-between mb-3">
+              <img src={logo} alt="Reliant Support" style={{ height: '26px', width: 'auto' }} />
+              <div className="flex items-center gap-1">
+                {clientData?.is_admin && (
+                  <button onClick={() => setShowAdmin(true)} className="p-2 hover:bg-gray-700 rounded-lg" title="Admin Dashboard">
+                    <Settings className="w-5 h-5 text-gray-400" />
+                  </button>
+                )}
+                <button onClick={handleLogout} className="p-2 hover:bg-gray-700 rounded-lg" title="Sign out">
+                  <LogOut className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+            </div>
+            {renderBilling()}
+          </>
+        )}
+        {activeTab === 'settings' && (
+          <>
+            <div className="flex items-center justify-between mb-3">
+              <img src={logo} alt="Reliant Support" style={{ height: '26px', width: 'auto' }} />
+              <div className="flex items-center gap-1">
+                {clientData?.is_admin && (
+                  <button onClick={() => setShowAdmin(true)} className="p-2 hover:bg-gray-700 rounded-lg" title="Admin Dashboard">
+                    <Settings className="w-5 h-5 text-gray-400" />
+                  </button>
+                )}
+                <button onClick={handleLogout} className="p-2 hover:bg-gray-700 rounded-lg" title="Sign out">
+                  <LogOut className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+            </div>
+            {renderSettings()}
+          </>
+        )}
       </main>
-
-      {/* Add Appointment Modal */}
-      {showAddModal && renderAddAppointmentModal()}
 
       {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 z-30">
-        <div className="grid grid-cols-4 gap-1">
+        <div className="grid grid-cols-5 gap-1">
           {navItems.map(item => (
             <button
               key={item.id}

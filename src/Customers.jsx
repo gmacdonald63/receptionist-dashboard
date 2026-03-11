@@ -35,7 +35,7 @@ const getTagColor = (tag) => {
   return TAG_COLORS[Math.abs(hash) % TAG_COLORS.length];
 };
 
-const Customers = ({ clientData, appointments, onReminderCountChange }) => {
+const Customers = ({ clientData, appointments, onReminderCountChange, headerLeft, headerRight }) => {
   const [customers, setCustomers] = useState([]);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -1120,10 +1120,36 @@ const Customers = ({ clientData, appointments, onReminderCountChange }) => {
   // ============ RENDER: Customer List ============
   const renderCustomerList = () => (
     <div className="space-y-4">
-      {/* Header with Reminders button */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-white">Customers</h2>
-        <div className="flex items-center gap-2">
+      {/* Header row: logo, search, actions, app controls — all one line */}
+      <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 flex-shrink-0">
+          {headerLeft}
+          <div className="relative w-96">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search…"
+              className="w-full pl-9 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 text-sm"
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+            />
+          </div>
+        </div>
+        {getAllTags().length > 0 && (
+          <select
+            value={filterTag}
+            onChange={e => setFilterTag(e.target.value)}
+            className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500 flex-shrink-0"
+            style={{ colorScheme: 'dark' }}
+          >
+            <option value="">All Tags</option>
+            {getAllTags().map(tag => (
+              <option key={tag} value={tag}>{tag}</option>
+            ))}
+          </select>
+        )}
+        <div className="flex-1" />
+        <div className="flex items-center gap-2 flex-shrink-0">
           <button
             onClick={() => setShowRemindersPanel(true)}
             className="relative flex items-center gap-1.5 px-3 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 border border-gray-700 text-sm"
@@ -1150,6 +1176,7 @@ const Customers = ({ clientData, appointments, onReminderCountChange }) => {
             <Plus className="w-4 h-4" />
             <span className="hidden sm:inline">Add</span>
           </button>
+          {headerRight}
         </div>
       </div>
 
@@ -1181,32 +1208,6 @@ const Customers = ({ clientData, appointments, onReminderCountChange }) => {
         </div>
       )}
 
-      {/* Search and Tag Filter */}
-      <div className="flex gap-2">
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search by last name, first name, or phone…"
-            className="w-full pl-9 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 text-sm"
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-          />
-        </div>
-        {getAllTags().length > 0 && (
-          <select
-            value={filterTag}
-            onChange={e => setFilterTag(e.target.value)}
-            className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
-            style={{ colorScheme: 'dark' }}
-          >
-            <option value="">All Tags</option>
-            {getAllTags().map(tag => (
-              <option key={tag} value={tag}>{tag}</option>
-            ))}
-          </select>
-        )}
-      </div>
 
       {/* Customer Count */}
       <p className="text-gray-500 text-xs">{filteredCustomers.length} customer{filteredCustomers.length !== 1 ? 's' : ''}</p>

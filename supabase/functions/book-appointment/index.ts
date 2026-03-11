@@ -4,11 +4,44 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+const TECH_BUFFER_MINS = 30; // 30-min travel buffer between a tech's appointments
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, x-retell-signature",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
+
+function toMinutes(timeStr: string): number {
+  const parts = timeStr.split(":");
+  return parseInt(parts[0]) * 60 + parseInt(parts[1]);
+}
+
+// Check if a specific tech is free at a given slot
+function isTechFreeAtSlot(
+  techId: number,
+  slotStartMins: number,
+  slotDurationMins: number,
+  appointments: { start_time: string; end_time: string | null; technician_id: number | null }[]
+): boolean {
+  const slotEndMins = slotStartMins + slotDurationMins;
+
+  for (const apt of appointments) {
+    if (apt.technician_id !== techId) continue;
+
+    const aptStart = toMinutes(apt.start_time);
+    const aptEnd = apt.end_time && apt.end_time !== apt.start_time
+      ? toMinutes(apt.end_time)
+      : aptStart + 60;
+
+    const aptEndWithBuffer = aptEnd + TECH_BUFFER_MINS;
+
+    if (slotStartMins < aptEndWithBuffer && slotEndMins + TECH_BUFFER_MINS > aptStart) {
+      return false;
+    }
+  }
+  return true;
+}
 
 Deno.serve(async (req) => {
   // Handle CORS preflight
@@ -75,7 +108,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const appointmentDuration = client.appointment_duration || 120;
+    const appointmentDuration = client.appointment_duration || 60;
     const bufferTime = client.buffer_time || 0;
 
     // Calculate end time from start time + duration
@@ -127,7 +160,7 @@ Deno.serve(async (req) => {
     }
 
     // Convert time string to minutes
-    const timeToMinutes = (timeStr) => {
+    const timeToMinutes = (timeStr: string) => {
       const parts = timeStr.split(":");
       return parseInt(parts[0]) * 60 + parseInt(parts[1]);
     };
@@ -137,7 +170,7 @@ Deno.serve(async (req) => {
 
     // Verify the slot is within business hours
     if (startTotalMinutes < openMinutes || endTotalMinutes > closeMinutes) {
-      const formatTime = (mins) => {
+      const formatTime = (mins: number) => {
         const h = Math.floor(mins / 60);
         const m = mins % 60;
         const ampm = h >= 12 ? "PM" : "AM";
@@ -153,13 +186,23 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Check for conflicts with existing appointments
+    // Fetch active technicians for this client
+    const { data: techs } = await supabase
+      .from("technicians")
+      .select("id, name")
+      .eq("client_id", client.id)
+      .eq("is_active", true)
+      .order("name");
+
+    const activeTechs = techs || [];
+
+    // Check for conflicts with existing appointments (now per-tech)
     const { data: existingAppointments, error: apptError } = await supabase
       .from("appointments")
-      .select("start_time, end_time")
+      .select("start_time, end_time, technician_id")
       .eq("client_id", client.id)
       .eq("date", date)
-      .eq("status", "confirmed");
+      .neq("status", "cancelled");
 
     if (apptError) {
       console.error("Appointment check failed:", apptError);
@@ -172,21 +215,51 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Check for overlap (including buffer time)
-    const hasConflict = (existingAppointments || []).some((apt) => {
-      const existingStart = timeToMinutes(apt.start_time);
-      const existingEnd = timeToMinutes(apt.end_time) + bufferTime;
-      return startTotalMinutes < existingEnd && endTotalMinutes > existingStart;
-    });
+    const dayAppts = existingAppointments || [];
 
-    if (hasConflict) {
-      return new Response(
-        JSON.stringify({
-          message: "That time slot is already booked. Would you like me to check for other available times on that day?",
-          success: false,
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    // Find the first available technician for this slot
+    let assignedTechId: number | null = null;
+    let assignedTechName: string | null = null;
+
+    if (activeTechs.length > 0) {
+      // Multi-tech mode: find first free tech
+      for (const tech of activeTechs) {
+        if (isTechFreeAtSlot(tech.id, startTotalMinutes, appointmentDuration, dayAppts)) {
+          assignedTechId = tech.id;
+          assignedTechName = tech.name;
+          break;
+        }
+      }
+
+      if (!assignedTechId) {
+        // All techs are busy at this time
+        return new Response(
+          JSON.stringify({
+            message: "All of our technicians are booked at that time. Would you like me to check for other available times on that day?",
+            success: false,
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    } else {
+      // No techs configured — fall back to legacy global conflict check
+      const hasConflict = dayAppts.some((apt) => {
+        const existingStart = timeToMinutes(apt.start_time);
+        const existingEnd = apt.end_time && apt.end_time !== apt.start_time
+          ? timeToMinutes(apt.end_time) + (bufferTime || TECH_BUFFER_MINS)
+          : existingStart + appointmentDuration + (bufferTime || TECH_BUFFER_MINS);
+        return startTotalMinutes < existingEnd && endTotalMinutes > existingStart;
+      });
+
+      if (hasConflict) {
+        return new Response(
+          JSON.stringify({
+            message: "That time slot is already booked. Would you like me to check for other available times on that day?",
+            success: false,
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
     // All checks passed — book the appointment
@@ -208,6 +281,7 @@ Deno.serve(async (req) => {
         source: "ai",
         call_id: callId,
         status: "confirmed",
+        technician_id: assignedTechId,
       })
       .select()
       .single();
@@ -236,7 +310,7 @@ Deno.serve(async (req) => {
     }
 
     // Format confirmation message
-    const formatTime12 = (time24) => {
+    const formatTime12 = (time24: string) => {
       const [h, m] = time24.split(":");
       const hour = parseInt(h);
       const ampm = hour >= 12 ? "PM" : "AM";
@@ -246,9 +320,12 @@ Deno.serve(async (req) => {
 
     const formattedDate = `${parseInt(dateParts[1])}/${parseInt(dateParts[2])}/${dateParts[0]}`;
 
+    // Include tech name in the confirmation if assigned
+    const techNote = assignedTechName ? ` Our technician ${assignedTechName} will be handling your appointment.` : "";
+
     return new Response(
       JSON.stringify({
-        message: `Your appointment has been booked for ${formattedDate} from ${formatTime12(startTime)} to ${formatTime12(endTime)}. Is there anything else I can help you with?`,
+        message: `Your appointment has been booked for ${formattedDate} from ${formatTime12(startTime)} to ${formatTime12(endTime)}.${techNote} Is there anything else I can help you with?`,
         success: true,
         appointment: {
           id: newAppointment.id,
@@ -258,6 +335,8 @@ Deno.serve(async (req) => {
           caller_name: callerName,
           service_type: serviceType,
           address: address,
+          technician_id: assignedTechId,
+          technician_name: assignedTechName,
         },
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
