@@ -76,6 +76,7 @@ const App = () => {
   const [demoToken, setDemoToken] = useState(null);
   const [demoExpiresAt, setDemoExpiresAt] = useState(null);
   const [demoLoading, setDemoLoading] = useState(false);
+  const [showBillingPortal, setShowBillingPortal] = useState(false);
 
   // Billing / Stripe state
   const [billingLoading, setBillingLoading] = useState(false);
@@ -1282,7 +1283,7 @@ const App = () => {
               </div>
             </div>
             <button
-              onClick={() => alert('Billing portal is not available in demo mode.')}
+              onClick={() => setShowBillingPortal(true)}
               className="w-full py-3 bg-gray-700 text-white rounded-lg hover:bg-gray-600 font-medium text-sm"
             >
               Manage Subscription
@@ -1336,7 +1337,7 @@ const App = () => {
               Update your payment method, view invoices, or cancel your subscription through the Stripe billing portal.
             </p>
             <button
-              onClick={() => alert('Billing portal is not available in demo mode.')}
+              onClick={() => setShowBillingPortal(true)}
               className="w-full py-3 bg-gray-700 text-white rounded-lg hover:bg-gray-600 font-medium text-sm"
             >
               Open Billing Portal
@@ -1611,6 +1612,133 @@ const App = () => {
             </>
           )}
         </main>
+
+        {/* Stripe Billing Portal Demo Modal */}
+        {showBillingPortal && (() => {
+          const now = new Date();
+          const renewsDate = new Date(now);
+          renewsDate.setMonth(renewsDate.getMonth() + 1);
+          const renewsStr = renewsDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+          const invoices = [0, 1, 2].map(i => {
+            const d = new Date(now);
+            d.setMonth(d.getMonth() - i);
+            return {
+              label: d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+              date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            };
+          });
+          return (
+            <div
+              className="fixed inset-0 bg-black/70 z-[90] flex items-center justify-center p-4"
+              onClick={() => setShowBillingPortal(false)}
+            >
+              <div
+                className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto text-gray-900"
+                onClick={e => e.stopPropagation()}
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+                  <div>
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold">RS</div>
+                      <span className="font-semibold text-gray-900 text-sm">{effectiveClientData?.company_name || 'Reliant Support Heating & Air'}</span>
+                    </div>
+                    <p className="text-xs text-gray-400 ml-9">Powered by <span className="font-semibold text-indigo-500">stripe</span></p>
+                  </div>
+                  <button
+                    onClick={() => setShowBillingPortal(false)}
+                    className="text-gray-400 hover:text-gray-600 transition-colors p-1"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* Subscription */}
+                <div className="px-6 py-5 border-b border-gray-100">
+                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Current Plan</h3>
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="font-semibold text-gray-900">Standard Plan</p>
+                      <p className="text-sm text-gray-500 mt-0.5">$495.00 / month</p>
+                      <p className="text-xs text-gray-400 mt-1">Renews {renewsStr}</p>
+                    </div>
+                    <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded-full">Active</span>
+                  </div>
+                  <button
+                    onClick={() => alert('To cancel your subscription, please contact your account representative.')}
+                    className="mt-3 text-xs text-red-500 hover:text-red-700 underline"
+                  >
+                    Cancel plan
+                  </button>
+                </div>
+
+                {/* Payment Method */}
+                <div className="px-6 py-5 border-b border-gray-100">
+                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Payment Method</h3>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-7 bg-gray-100 border border-gray-200 rounded flex items-center justify-center">
+                        <svg viewBox="0 0 38 24" className="w-8 h-5">
+                          <rect width="38" height="24" rx="4" fill="#1A1F71"/>
+                          <path d="M15.8 15.5H13.9L15.1 8.5H17L15.8 15.5ZM12 8.5L10.2 13.1L9.98 12L9.3 9.1C9.3 9.1 9.21 8.5 8.47 8.5H5.5L5.47 8.65C5.47 8.65 6.38 8.85 7.44 9.5L9.08 15.5H11.1L14.1 8.5H12ZM27 15.5H28.8L27.3 8.5H25.7C25.07 8.5 24.91 8.97 24.91 8.97L22.1 15.5H24.12L24.52 14.4H26.97L27 15.5ZM25.09 12.9L26.1 10.2L26.67 12.9H25.09ZM22.1 10.1L22.4 8.72C22.4 8.72 21.55 8.4 20.66 8.4C19.7 8.4 17.4 8.84 17.4 10.89C17.4 12.82 20.05 12.85 20.05 13.87C20.05 14.89 17.68 14.68 16.87 14.02L16.55 15.44C16.55 15.44 17.41 15.82 18.7 15.82C19.99 15.82 22.09 15.17 22.09 13.29C22.09 11.33 19.42 11.16 19.42 10.28C19.42 9.4 21.28 9.52 22.1 10.1Z" fill="white"/>
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">Visa ending in 4242</p>
+                        <p className="text-xs text-gray-400">Expires 12/26</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => alert('To update your payment method, please contact your account representative.')}
+                      className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                    >
+                      Update
+                    </button>
+                  </div>
+                </div>
+
+                {/* Invoice History */}
+                <div className="px-6 py-5 border-b border-gray-100">
+                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Invoice History</h3>
+                  <div className="space-y-3">
+                    {invoices.map((inv, i) => (
+                      <div key={i} className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{inv.label}</p>
+                          <p className="text-xs text-gray-400">{inv.date}</p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm text-gray-700">$495.00</span>
+                          <button
+                            onClick={() => alert('Invoice download is not available in the demo environment.')}
+                            className="text-xs text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-1"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                            </svg>
+                            PDF
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Footer */}
+                <div className="px-6 py-4 text-center">
+                  <p className="text-xs text-gray-400">
+                    <svg className="w-3.5 h-3.5 inline mr-1 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                    Secured by <span className="font-semibold text-indigo-500">Stripe</span> · This is a demo environment
+                  </p>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Bottom Navigation */}
         <nav className="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 z-30">
