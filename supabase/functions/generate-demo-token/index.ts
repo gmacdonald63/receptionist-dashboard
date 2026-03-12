@@ -32,7 +32,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const dashboardUrl = Deno.env.get("DASHBOARD_URL") || "https://receptionist-dashboard.vercel.app";
+    const dashboardUrl = Deno.env.get("DASHBOARD_URL") || "https://app.reliantsupport.net";
     const redirectUrl = `${dashboardUrl}?demo=${data.id}`;
 
     // Redirect the browser directly to the dashboard with the fresh token
