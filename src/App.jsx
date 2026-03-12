@@ -517,7 +517,7 @@ const App = () => {
           state: formData.state,
           zip: formData.zip,
           notes: formData.notes || null,
-          technician_id: formData.technicianId || null,
+          technician_id: formData.technicianId ? parseInt(formData.technicianId, 10) : null,
           duration: formData.duration || 60,
         })
         .eq('id', formData.appointmentId);
@@ -541,7 +541,7 @@ const App = () => {
           notes: formData.notes || null,
           source: 'manual',
           status: 'confirmed',
-          technician_id: formData.technicianId || null,
+          technician_id: formData.technicianId ? parseInt(formData.technicianId, 10) : null,
           duration: formData.duration || 60,
         });
 

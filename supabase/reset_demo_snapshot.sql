@@ -49,7 +49,9 @@ BEGIN
   UPDATE appointments SET technician_id = NULL WHERE client_id = demo_cid;
   DELETE FROM appointments WHERE client_id = demo_cid;
 
-  DELETE FROM technicians WHERE client_id = demo_cid;
+  -- Only delete techs added during the demo (not the 3 core ones — their IDs must stay stable)
+  DELETE FROM technicians WHERE client_id = demo_cid
+    AND name NOT IN ('Mike Rodriguez', 'Scott Russell', 'Jake Thompson');
 
   DELETE FROM calls WHERE agent_id = demo_agent;
 
@@ -99,10 +101,19 @@ BEGIN
   -- 4. SEED TECHNICIANS (3)
   -- ============================================================
 
-  INSERT INTO technicians (client_id, name, phone, color, is_active) VALUES
-    (demo_cid, 'Mike Rodriguez', '(503) 555-0901', '#3B82F6', true),
-    (demo_cid, 'Scott Russell',  '(503) 555-0902', '#10B981', true),
-    (demo_cid, 'Jake Thompson',  '(503) 555-0903', '#F59E0B', true);
+  -- Upsert with fixed IDs so technician_id FKs in appointments never go stale.
+  -- OVERRIDING SYSTEM VALUE required because id is GENERATED ALWAYS AS IDENTITY.
+  INSERT INTO technicians (id, client_id, name, phone, color, is_active)
+  OVERRIDING SYSTEM VALUE VALUES
+    (1528, demo_cid, 'Mike Rodriguez', '(503) 555-0901', '#3B82F6', true),
+    (1529, demo_cid, 'Scott Russell',  '(503) 555-0902', '#10B981', true),
+    (1530, demo_cid, 'Jake Thompson',  '(503) 555-0903', '#F59E0B', true)
+  ON CONFLICT (id) DO UPDATE SET
+    client_id  = EXCLUDED.client_id,
+    name       = EXCLUDED.name,
+    phone      = EXCLUDED.phone,
+    color      = EXCLUDED.color,
+    is_active  = EXCLUDED.is_active;
 
   -- ============================================================
   -- 5. SEED APPOINTMENTS (16) — all dates use add_biz_days() to skip weekends
