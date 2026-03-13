@@ -637,20 +637,20 @@ const App = () => {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-7 gap-3">
-            {weekDates.map((date) => {
+          <div className="grid grid-cols-1 md:grid-cols-7 border-2 border-gray-500 rounded-lg overflow-hidden">
+            {weekDates.map((date, index) => {
               const dayAppointments = getAppointmentsForDate(date);
               const isToday = date.toDateString() === new Date().toDateString();
 
               return (
-                <div 
+                <div
                   key={date.toDateString()}
                   ref={isToday ? todayRef : null}
-                  className={`p-3 rounded-lg border min-h-[300px] ${
-                    isToday 
-                      ? 'border-blue-500 bg-blue-900/20' 
-                      : 'border-gray-700 bg-gray-800'
-                  }`}
+                  className={`p-3 min-h-[300px] ${
+                    isToday
+                      ? 'bg-blue-900/20'
+                      : 'bg-gray-800'
+                  } ${index < 6 ? 'md:border-r-2 md:border-r-gray-500' : ''} border-b md:border-b-0 border-b-gray-500`}
                 >
                   {/* Day Header */}
                   <div className="mb-3 pb-3 border-b border-gray-700">
