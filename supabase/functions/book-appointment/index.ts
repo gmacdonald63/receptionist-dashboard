@@ -217,18 +217,27 @@ Deno.serve(async (req) => {
 
     const dayAppts = existingAppointments || [];
 
-    // Find the first available technician for this slot
+    // Find the least-busy available technician for this slot
     let assignedTechId: number | null = null;
     let assignedTechName: string | null = null;
 
     if (activeTechs.length > 0) {
-      // Multi-tech mode: find first free tech
+      // Multi-tech mode: find ALL free techs, then pick the one with fewest appointments today
+      const freeTechs: { id: number; name: string; appointmentCount: number }[] = [];
+
       for (const tech of activeTechs) {
         if (isTechFreeAtSlot(tech.id, startTotalMinutes, appointmentDuration, dayAppts)) {
-          assignedTechId = tech.id;
-          assignedTechName = tech.name;
-          break;
+          const appointmentCount = dayAppts.filter(apt => apt.technician_id === tech.id).length;
+          freeTechs.push({ id: tech.id, name: tech.name, appointmentCount });
         }
+      }
+
+      if (freeTechs.length > 0) {
+        // Sort by fewest appointments first, then by name for deterministic tie-breaking
+        freeTechs.sort((a, b) => a.appointmentCount - b.appointmentCount || a.name.localeCompare(b.name));
+        assignedTechId = freeTechs[0].id;
+        assignedTechName = freeTechs[0].name;
+        console.log(`🔧 Assigned to ${assignedTechName} (${freeTechs[0].appointmentCount} existing appts today). Free techs: ${freeTechs.map(t => `${t.name}(${t.appointmentCount})`).join(', ')}`);
       }
 
       if (!assignedTechId) {

@@ -52,7 +52,7 @@ export default function AppointmentSidePanel({
   const [city, setCity] = useState('');
   const [state, setState] = useState('');
   const [zip, setZip] = useState('');
-  const [technicianId, setTechnicianId] = useState('');
+  const [technicianId, setTechnicianId] = useState('auto');
   const [duration, setDuration] = useState(60);
   const [notes, setNotes] = useState('');
   const [showCustomTime, setShowCustomTime] = useState(false);
@@ -89,7 +89,7 @@ export default function AppointmentSidePanel({
       setNotes(''); setErrors({}); setSaveError('');
       setShowCustomTime(false);
       setCustomTime(selectedSlot.time || '');
-      setTechnicianId(defaultTechnicianId ? String(defaultTechnicianId) : '');
+      setTechnicianId(defaultTechnicianId ? String(defaultTechnicianId) : 'auto');
       setDuration(60);
     }
   }, [selectedSlot]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -146,7 +146,7 @@ export default function AppointmentSidePanel({
         date: effectiveSlot?.date,
         time: effectiveTime,
         duration,
-        technicianId: technicianId || null,
+        technicianId: technicianId === 'auto' ? 'auto' : (technicianId || null),
         notes: notes.trim(),
         appointmentId: isEditing ? appointment?.id : undefined,
       });
@@ -262,6 +262,7 @@ export default function AppointmentSidePanel({
           <div className="grid grid-cols-2 gap-1.5">
             <select value={technicianId} onChange={e => setTechnicianId(e.target.value)}
               className={`${INPUT_CLS} appearance-none`}>
+              <option value="auto">Auto-assign (least busy)</option>
               <option value="">Unassigned</option>
               {activeTechnicians.map(t => (
                 <option key={t.id} value={t.id}>{t.name}</option>

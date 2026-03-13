@@ -499,9 +499,58 @@ const App = () => {
     return `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`;
   };
 
+  // Find the least-busy free technician for a given date/time/duration
+  const findLeastBusyTech = async (date, startTime, duration) => {
+    const activeTechs = technicians.filter(t => t.is_active);
+    if (activeTechs.length === 0) return null;
+
+    // Fetch all non-cancelled appointments for that day
+    const { data: dayAppts } = await supabase
+      .from('appointments')
+      .select('start_time, end_time, technician_id')
+      .eq('client_id', effectiveClientData.id)
+      .eq('date', date)
+      .neq('status', 'cancelled');
+
+    const appts = dayAppts || [];
+    const BUFFER = 30; // 30-min travel buffer, same as edge functions
+    const toMins = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+    const slotStart = toMins(startTime);
+    const slotEnd = slotStart + (duration || 60);
+
+    // Check which techs are free at this slot
+    const freeTechs = activeTechs.filter(tech => {
+      const techAppts = appts.filter(a => a.technician_id === tech.id);
+      return techAppts.every(a => {
+        const aStart = toMins(a.start_time);
+        const aEnd = a.end_time && a.end_time !== a.start_time ? toMins(a.end_time) : aStart + 60;
+        return !(slotStart < aEnd + BUFFER && slotEnd + BUFFER > aStart);
+      });
+    });
+
+    if (freeTechs.length === 0) return null;
+
+    // Pick the one with fewest appointments today, ties broken by name
+    freeTechs.sort((a, b) => {
+      const countA = appts.filter(ap => ap.technician_id === a.id).length;
+      const countB = appts.filter(ap => ap.technician_id === b.id).length;
+      return countA - countB || (a.name || '').localeCompare(b.name || '');
+    });
+
+    return freeTechs[0].id;
+  };
+
   const handleAddAppointment = async (formData) => {
     const fullName = `${formData.firstName.trim()} ${formData.lastName.trim()}`.trim();
     const endTime = calculateEndTime(formData.time, formData.duration || 60);
+
+    // Resolve technician: auto-assign picks least busy, explicit pick uses selected ID
+    let resolvedTechId = null;
+    if (formData.technicianId === 'auto') {
+      resolvedTechId = await findLeastBusyTech(formData.date, formData.time, formData.duration || 60);
+    } else if (formData.technicianId) {
+      resolvedTechId = parseInt(formData.technicianId, 10);
+    }
 
     if (formData.appointmentId) {
       // UPDATE existing appointment
@@ -518,7 +567,7 @@ const App = () => {
           state: formData.state,
           zip: formData.zip,
           notes: formData.notes || null,
-          technician_id: formData.technicianId ? parseInt(formData.technicianId, 10) : null,
+          technician_id: resolvedTechId,
           duration: formData.duration || 60,
         })
         .eq('id', formData.appointmentId);
@@ -542,7 +591,7 @@ const App = () => {
           notes: formData.notes || null,
           source: 'manual',
           status: 'confirmed',
-          technician_id: formData.technicianId ? parseInt(formData.technicianId, 10) : null,
+          technician_id: resolvedTechId,
           duration: formData.duration || 60,
         });
 
