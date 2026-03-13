@@ -329,7 +329,12 @@ const App = () => {
       if (data) {
         setAppointments(data.map(apt => ({
           id: apt.id,
-          name: apt.caller_name,
+          name: apt.first_name && apt.last_name
+            ? `${apt.first_name} ${apt.last_name}`
+            : apt.caller_name,
+          first_name: apt.first_name || '',
+          last_name: apt.last_name || '',
+          caller_name: apt.caller_name || '',
           date: apt.date,
           start_time: apt.start_time,
           end_time: apt.end_time || null,
@@ -558,6 +563,8 @@ const App = () => {
         .from('appointments')
         .update({
           caller_name: fullName,
+          first_name: formData.firstName.trim(),
+          last_name: formData.lastName.trim(),
           caller_number: formData.phone,
           date: formData.date,
           start_time: formData.time,
@@ -580,6 +587,8 @@ const App = () => {
         .insert({
           client_id: effectiveClientData.id,
           caller_name: fullName,
+          first_name: formData.firstName.trim(),
+          last_name: formData.lastName.trim(),
           caller_number: formData.phone,
           date: formData.date,
           start_time: formData.time,

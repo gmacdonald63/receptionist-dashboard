@@ -102,9 +102,16 @@ export default function AppointmentSidePanel({
 
   function startEditing() {
     if (!appointment) return;
-    const nameParts = (appointment.caller_name || appointment.customer_name || appointment.name || '').trim().split(' ');
-    setFirstName(nameParts[0] || '');
-    setLastName(nameParts.slice(1).join(' ') || '');
+    const fn = appointment.first_name || '';
+    const ln = appointment.last_name || '';
+    if (fn || ln) {
+      setFirstName(fn);
+      setLastName(ln);
+    } else {
+      const nameParts = (appointment.caller_name || appointment.customer_name || appointment.name || '').trim().split(' ');
+      setFirstName(nameParts[0] || '');
+      setLastName(nameParts.slice(1).join(' ') || '');
+    }
     setPhone(formatPhone(appointment.caller_number || appointment.phone || ''));
     setAddress(appointment.address || '');
     setCity(appointment.city || '');

@@ -56,6 +56,11 @@ Deno.serve(async (req) => {
     // Extract booking details from what the caller told the agent
     const callerName = args.caller_name;
     const callerNumber = args.caller_number || body.call?.from_number || null;
+
+    // Split caller_name into first/last for the name columns
+    const nameParts = (callerName || '').trim().split(' ');
+    const firstName = nameParts[0] || null;
+    const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : null;
     const date = args.date; // "YYYY-MM-DD"
     const startTime = args.start_time; // "HH:MM" (24h format)
     const serviceType = args.service_type || null;
@@ -277,6 +282,8 @@ Deno.serve(async (req) => {
       .insert({
         client_id: client.id,
         caller_name: callerName,
+        first_name: firstName,
+        last_name: lastName,
         caller_number: callerNumber,
         date: date,
         start_time: startTime,

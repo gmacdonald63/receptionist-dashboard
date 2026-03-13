@@ -18,6 +18,10 @@ serve(async (req) => {
     console.log("🔍 customData:", JSON.stringify(customData));
     const callerName   = customData.caller_name         ?? null;
     const callerNumber = customData.caller_phone_number ?? call.from_number ?? null;
+    // Split caller_name into first/last for the name columns
+    const callerNameParts = (callerName || '').trim().split(' ');
+    const callerFirstName = callerNameParts[0] || null;
+    const callerLastName = callerNameParts.length > 1 ? callerNameParts.slice(1).join(' ') : null;
     const apptDate     = customData.appointment_date    ?? null;
     const apptTime     = customData.appointment_time    ?? null;
     const apptAddress  = customData.appointment_address ?? null;
@@ -51,6 +55,8 @@ serve(async (req) => {
       const { error: apptError } = await supabase.from("appointments").insert({
         client_id:     clientRow?.id    ?? null,
         caller_name:   callerName,
+        first_name:    callerFirstName,
+        last_name:     callerLastName,
         caller_number: callerNumber,
         date:          apptDate,
         start_time:    apptTime,
