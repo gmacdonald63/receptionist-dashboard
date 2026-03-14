@@ -140,7 +140,7 @@ const DemoDashboard = ({ demoClientData, expiresAt, isPublicDemo, demoToken, onE
           'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
         },
         body: JSON.stringify({
-          agent_id: demoClientData?.retell_agent_id || 'agent_be6189dedb9fa036a84c3dda19',
+          agent_id: demoClientData?.retell_agent_id || 'agent_c48b68df1da80f01e2c1eea6aa',
           demo_token: demoToken || null,
         }),
       });

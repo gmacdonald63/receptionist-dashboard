@@ -52,7 +52,7 @@ Deno.serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        agent_id: agent_id || "agent_be6189dedb9fa036a84c3dda19",
+        agent_id: agent_id || "agent_c48b68df1da80f01e2c1eea6aa",
         metadata: {
           source: "demo_dashboard",
         },

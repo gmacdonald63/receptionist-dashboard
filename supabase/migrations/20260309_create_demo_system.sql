@@ -11,7 +11,7 @@ VALUES (
   9999,
   'demo@reliantsupport.com',
   'Reliant Support Heating & Air',
-  'agent_2a4314820da33d77656a6e4693',
+  'agent_c48b68df1da80f01e2c1eea6aa',
   false,
   'client',
   'active',
@@ -131,7 +131,7 @@ BEGIN
   DELETE FROM customer_notes WHERE customer_id IN (SELECT id FROM customers WHERE client_id = demo_cid);
   DELETE FROM customers WHERE client_id = demo_cid;
   DELETE FROM appointments WHERE client_id = demo_cid;
-  DELETE FROM calls WHERE agent_id = 'agent_2a4314820da33d77656a6e4693';
+  DELETE FROM calls WHERE agent_id = 'agent_c48b68df1da80f01e2c1eea6aa';
 
   -- Delete expired demo tokens
   DELETE FROM demo_tokens WHERE expires_at < now();
@@ -140,7 +140,7 @@ BEGIN
   UPDATE clients SET
     subscription_status = 'active',
     company_name = 'Reliant Support Heating & Air',
-    retell_agent_id = 'agent_2a4314820da33d77656a6e4693',
+    retell_agent_id = 'agent_c48b68df1da80f01e2c1eea6aa',
     appointment_duration = 120,
     buffer_time = 0,
     timezone = 'America/New_York'
@@ -180,42 +180,42 @@ BEGIN
 
   -- SEED: 8 Call records matching the AI appointments (with summaries and transcripts)
   INSERT INTO calls (call_id, agent_id, caller_name, caller_number, summary, transcript, duration_seconds, appointment_booked, created_at) VALUES
-    ('demo_call_001', 'agent_2a4314820da33d77656a6e4693', 'Maria Santos', '5551234567',
+    ('demo_call_001', 'agent_c48b68df1da80f01e2c1eea6aa', 'Maria Santos', '5551234567',
      'Maria Santos called to schedule her annual furnace inspection. She mentioned the furnace has been running fine but wants to stay on her regular maintenance schedule. Appointment booked for the morning at her home on Oak Ridge Dr.',
      'Agent: Thank you for calling Reliant Support Heating and Air. How can I help you today?\nMaria: Hi, this is Maria Santos. I''d like to schedule my annual furnace inspection.\nAgent: Of course, Maria! I can see you''re one of our valued annual contract customers. When would work best for you?\nMaria: I prefer mornings if possible. Do you have anything available this week?\nAgent: Let me check... I have an opening this Thursday at 9 AM. Would that work?\nMaria: That''s perfect. Same address, 142 Oak Ridge Drive.\nAgent: Great, I''ve booked you for Thursday at 9 AM at 142 Oak Ridge Dr, Springfield. Our technician will inspect the furnace, check the filter, and make sure everything is running efficiently.\nMaria: Wonderful, thank you so much!\nAgent: You''re welcome, Maria. See you Thursday!',
      187, true, now() - interval '14 days'),
 
-    ('demo_call_002', 'agent_2a4314820da33d77656a6e4693', 'James Mitchell', '5559876543',
+    ('demo_call_002', 'agent_c48b68df1da80f01e2c1eea6aa', 'James Mitchell', '5559876543',
      'James Mitchell called about his AC not cooling properly. He described warm air coming from vents despite thermostat being set to 72°F. Likely refrigerant issue. Appointment booked for afternoon service at his home on Maple Ave.',
      'Agent: Thank you for calling Reliant Support Heating and Air. How can I help you today?\nJames: Hi, my AC isn''t cooling. It''s been running all day but the house is still warm.\nAgent: I''m sorry to hear that. Can I get your name?\nJames: James Mitchell.\nAgent: Thanks, James. Can you describe what''s happening? Is the unit running but blowing warm air?\nJames: Yeah, exactly. The fan is running and air is coming out, but it''s not cold at all. Thermostat is set to 72 but it''s reading 81 in here.\nAgent: That sounds like it could be a refrigerant issue. We should get a technician out to diagnose it. I have an opening tomorrow afternoon at 1 PM. Would that work?\nJames: Yes, the sooner the better. It''s getting hot in here.\nAgent: Totally understand. I''ve booked you for tomorrow at 1 PM at 89 Maple Ave. Our tech will check the refrigerant levels and get your AC back up and running.\nJames: Thank you so much!\nAgent: You''re welcome. Stay cool, James!',
      203, true, now() - interval '11 days'),
 
-    ('demo_call_003', 'agent_2a4314820da33d77656a6e4693', 'Patricia Williams', '5553334444',
+    ('demo_call_003', 'agent_c48b68df1da80f01e2c1eea6aa', 'Patricia Williams', '5553334444',
      'Patricia Williams called requesting a thermostat replacement. Her current thermostat is outdated and she wants a programmable smart thermostat. Appointment booked for installation at her home on Elm Street.',
      'Agent: Thank you for calling Reliant Support Heating and Air. How can I help you today?\nPatricia: Hello, dear. My name is Patricia Williams. I was hoping to get a new thermostat put in.\nAgent: Of course, Patricia! What kind of thermostat are you looking for?\nPatricia: Well, my granddaughter was telling me about those smart ones that you can control from your phone. I think it would be nice to be able to adjust the temperature without getting up.\nAgent: A smart thermostat is a great choice! We install the Nest Learning Thermostat. It learns your schedule and adjusts automatically. Would you like us to come out and install one?\nPatricia: Yes, that sounds lovely. Can someone explain how to use it when they install it?\nAgent: Absolutely. Our technician will walk you through everything step by step. I have an opening on Friday at 2 PM. Does that work?\nPatricia: That would be fine. My address is 567 Elm Street.\nAgent: Perfect. I''ve booked you for Friday at 2 PM at 567 Elm Street. We''ll bring the Nest thermostat and have you up and running in no time.\nPatricia: Thank you so much, dear. You''ve been very helpful.\nAgent: My pleasure, Patricia. See you Friday!',
      245, true, now() - interval '7 days'),
 
-    ('demo_call_004', 'agent_2a4314820da33d77656a6e4693', 'Linda Garcia', '5552223333',
+    ('demo_call_004', 'agent_c48b68df1da80f01e2c1eea6aa', 'Linda Garcia', '5552223333',
      'Linda Garcia called about poor airflow in some rooms. Suspects ductwork issues. Wants an inspection to identify any leaks or blockages. Appointment booked for early morning duct inspection at her home on Cedar Lane.',
      'Agent: Thank you for calling Reliant Support Heating and Air. How can I help you today?\nLinda: Hi, this is Linda Garcia. I''m having some issues with airflow in a couple of rooms in my house.\nAgent: I''d be happy to help, Linda. Can you tell me more about what you''re experiencing?\nLinda: The living room and the master bedroom don''t seem to get as much air as the rest of the house. It''s noticeably warmer in those rooms.\nAgent: That could be a ductwork issue - possibly leaks or blockages. I''d recommend a full duct inspection so we can identify the problem. Would you like to schedule that?\nLinda: Yes, please. What do you have available?\nAgent: I can get someone out there Monday morning at 8 AM. Would that work for you?\nLinda: Early morning is great. I''m at 305 Cedar Lane.\nAgent: Perfect. Booked for Monday at 8 AM at 305 Cedar Lane. Our technician will inspect all the ductwork and let you know what we find.\nLinda: Sounds good. Thank you!\nAgent: You''re welcome, Linda. Talk to you soon!',
      156, true, now() - interval '5 days'),
 
-    ('demo_call_005', 'agent_2a4314820da33d77656a6e4693', 'Michael Brown', '5556667777',
+    ('demo_call_005', 'agent_c48b68df1da80f01e2c1eea6aa', 'Michael Brown', '5556667777',
      'Michael Brown called with an emergency - no heat in his home. Furnace is making clicking sounds but won''t ignite. Likely a faulty ignitor. Emergency appointment booked for next available slot.',
      'Agent: Thank you for calling Reliant Support Heating and Air. How can I help you today?\nMichael: Hi, I need help fast. My furnace stopped working and it''s freezing in my house.\nAgent: I''m sorry to hear that. Let me get your information and we''ll get someone out as soon as possible. What''s your name?\nMichael: Michael Brown. I''m at 48 Birch Court.\nAgent: Got it. Can you tell me what''s happening with the furnace? Any sounds, lights, error codes?\nMichael: It clicks like it''s trying to start, but then nothing happens. No heat comes out at all. The thermostat shows it''s trying to run.\nAgent: That sounds like it could be a faulty ignitor. The good news is that''s a common repair and our technicians carry replacement parts. I can get someone out to you tomorrow at 11 AM - that''s our first available emergency slot. Would that work?\nMichael: Tomorrow? I was hoping today... but I guess tomorrow is okay. I''ll use space heaters tonight.\nAgent: I understand, and I''m sorry we can''t get there sooner. I''ve marked this as a priority call. Tomorrow at 11 AM at 48 Birch Court. Bundle up tonight, and we''ll get your heat back on tomorrow.\nMichael: Alright, thank you.\nAgent: Hang in there, Michael. We''ll take care of you.',
      178, true, now() - interval '3 days'),
 
-    ('demo_call_006', 'agent_2a4314820da33d77656a6e4693', 'Sarah Davis', '5558889999',
+    ('demo_call_006', 'agent_c48b68df1da80f01e2c1eea6aa', 'Sarah Davis', '5558889999',
      'Sarah Davis called to schedule AC maintenance for her apartment. She mentioned reduced cooling performance and a musty smell when the AC runs. Appointment booked for filter replacement and condenser cleaning.',
      'Agent: Thank you for calling Reliant Support Heating and Air. How can I help you today?\nSarah: Hi, I''m Sarah Davis. I need to get my AC looked at.\nAgent: Sure thing, Sarah. What''s going on with it?\nSarah: It''s still cooling but not as well as it used to, and there''s kind of a musty smell when it kicks on.\nAgent: That often means the air filter needs replacing and the condenser coils could use a cleaning. When was the last time you had maintenance done?\nSarah: Honestly, I''m not sure. Maybe over a year ago?\nAgent: No worries. We can take care of that for you. I have an opening tomorrow afternoon at 2 PM. Does that work?\nSarah: That works. I''m in apartment 3B at 720 Walnut Street. You''ll need to check in with the building manager.\nAgent: Good to know. I''ve booked you for tomorrow at 2 PM at 720 Walnut St, Apt 3B. We''ll replace the filter, clean the coils, and get your AC running fresh again.\nSarah: Great, thank you!\nAgent: You''re welcome, Sarah. See you tomorrow!',
      142, true, now() - interval '1 day'),
 
-    ('demo_call_007', 'agent_2a4314820da33d77656a6e4693', 'David Thompson', '5557778888',
+    ('demo_call_007', 'agent_c48b68df1da80f01e2c1eea6aa', 'David Thompson', '5557778888',
      'David Thompson is a new customer who just moved in and wants a full system assessment. Not sure of the age or condition of the existing HVAC system. Appointment booked for a comprehensive evaluation.',
      'Agent: Thank you for calling Reliant Support Heating and Air. How can I help you today?\nDavid: Hi, my name is David Thompson. I just bought a house and I''d like to get the HVAC system checked out. I have no idea how old it is or what condition it''s in.\nAgent: Welcome to the neighborhood, David! A full system assessment is a great idea when you move into a new home. We''ll inspect the furnace, AC unit, ductwork, and thermostat and give you a complete report on everything.\nDavid: That sounds perfect. What does something like that cost?\nAgent: The assessment is $150, and it includes a written report with recommendations. If you end up needing any repairs, we''ll credit the assessment fee toward the work.\nDavid: Fair enough. When can you come out?\nAgent: I have an opening day after tomorrow at 10 AM. What''s your address?\nDavid: 1100 Pine Road.\nAgent: Great. Booked for 10 AM at 1100 Pine Road. Our technician will go through everything and give you a full picture of your system''s health.\nDavid: Awesome, thanks a lot.\nAgent: You''re welcome, David. Looking forward to meeting you!',
      195, true, now() + interval '1 day'),
 
-    ('demo_call_008', 'agent_2a4314820da33d77656a6e4693', 'Linda Garcia', '5552223333',
+    ('demo_call_008', 'agent_c48b68df1da80f01e2c1eea6aa', 'Linda Garcia', '5552223333',
      'Linda Garcia called back to schedule the duct sealing work that was recommended during her previous inspection. Wants basement and attic areas sealed. Appointment booked for next week.',
      'Agent: Thank you for calling Reliant Support Heating and Air. How can I help you today?\nLinda: Hi, it''s Linda Garcia again. I had the duct inspection done last week, and the technician recommended sealing in the basement and attic. I''d like to go ahead and schedule that.\nAgent: Great to hear from you again, Linda! Yes, I can see the notes from your inspection. The tech found two areas that need sealing. Let me get that scheduled for you.\nLinda: How long will it take?\nAgent: Typically about two hours for basement and attic sealing. I have an opening next Tuesday at 1 PM. Would that work?\nLinda: Tuesday afternoon is perfect.\nAgent: Wonderful. I''ve booked you for Tuesday at 1 PM at 305 Cedar Lane. The technician will seal both areas and verify improved airflow before they leave.\nLinda: That sounds great. And the price was $450, right?\nAgent: That''s correct, $450 for both areas. No surprises.\nLinda: Perfect. Thank you!\nAgent: You''re welcome, Linda. See you Tuesday!',
      134, true, now() + interval '4 days');
