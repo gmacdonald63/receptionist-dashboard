@@ -200,25 +200,44 @@ serve(async (req) => {
         aptDuration = serviceMatch.duration_minutes;
         console.log(`📋 Service type "${serviceType}" → ${aptDuration} min`);
       } else {
-        // Fuzzy match
-        const { data: fuzzyMatches } = await supabase
+        // Try fuzzy match: check name AND customer_phrases
+        const { data: allServices } = await supabase
           .from("service_types")
-          .select("name, duration_minutes")
+          .select("name, duration_minutes, customer_phrases")
           .eq("client_id", clientId)
           .eq("is_active", true);
 
-        if (fuzzyMatches) {
+        if (allServices) {
           const normalizedInput = serviceType.toLowerCase().trim();
-          const match = fuzzyMatches.find(
+
+          // 1. Check customer_phrases first (most specific)
+          const phraseMatch = allServices.find(
             (s) =>
-              s.name.toLowerCase().includes(normalizedInput) ||
-              normalizedInput.includes(s.name.toLowerCase())
+              s.customer_phrases &&
+              s.customer_phrases.some(
+                (phrase: string) =>
+                  phrase.toLowerCase() === normalizedInput ||
+                  normalizedInput.includes(phrase.toLowerCase()) ||
+                  phrase.toLowerCase().includes(normalizedInput)
+              )
           );
-          if (match) {
-            aptDuration = match.duration_minutes;
-            console.log(`📋 Fuzzy matched "${serviceType}" → "${match.name}" → ${aptDuration} min`);
+
+          if (phraseMatch) {
+            aptDuration = phraseMatch.duration_minutes;
+            console.log(`📋 Phrase matched "${serviceType}" → "${phraseMatch.name}" → ${aptDuration} min`);
           } else {
-            console.log(`📋 No service match for "${serviceType}", using client default: ${aptDuration} min`);
+            // 2. Fall back to fuzzy name match
+            const nameMatch = allServices.find(
+              (s) =>
+                s.name.toLowerCase().includes(normalizedInput) ||
+                normalizedInput.includes(s.name.toLowerCase())
+            );
+            if (nameMatch) {
+              aptDuration = nameMatch.duration_minutes;
+              console.log(`📋 Fuzzy name matched "${serviceType}" → "${nameMatch.name}" → ${aptDuration} min`);
+            } else {
+              console.log(`📋 No service match for "${serviceType}", using client default: ${aptDuration} min`);
+            }
           }
         }
       }

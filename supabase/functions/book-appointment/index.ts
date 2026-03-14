@@ -129,25 +129,44 @@ Deno.serve(async (req) => {
         appointmentDuration = serviceMatch.duration_minutes;
         console.log(`📋 Service type "${serviceType}" → ${appointmentDuration} min`);
       } else {
-        // Try fuzzy match: check if any service_type name contains the input or vice versa
-        const { data: fuzzyMatches } = await supabase
+        // Try fuzzy match: check name AND customer_phrases
+        const { data: allServices } = await supabase
           .from("service_types")
-          .select("name, duration_minutes")
+          .select("name, duration_minutes, customer_phrases")
           .eq("client_id", client.id)
           .eq("is_active", true);
 
-        if (fuzzyMatches) {
+        if (allServices) {
           const normalizedInput = serviceType.toLowerCase().trim();
-          const match = fuzzyMatches.find(
+
+          // 1. Check customer_phrases first (most specific — e.g. "thermostat replacement")
+          const phraseMatch = allServices.find(
             (s) =>
-              s.name.toLowerCase().includes(normalizedInput) ||
-              normalizedInput.includes(s.name.toLowerCase())
+              s.customer_phrases &&
+              s.customer_phrases.some(
+                (phrase: string) =>
+                  phrase.toLowerCase() === normalizedInput ||
+                  normalizedInput.includes(phrase.toLowerCase()) ||
+                  phrase.toLowerCase().includes(normalizedInput)
+              )
           );
-          if (match) {
-            appointmentDuration = match.duration_minutes;
-            console.log(`📋 Fuzzy matched "${serviceType}" → "${match.name}" → ${appointmentDuration} min`);
+
+          if (phraseMatch) {
+            appointmentDuration = phraseMatch.duration_minutes;
+            console.log(`📋 Phrase matched "${serviceType}" → "${phraseMatch.name}" → ${appointmentDuration} min`);
           } else {
-            console.log(`📋 No service match for "${serviceType}", using client default: ${appointmentDuration} min`);
+            // 2. Fall back to fuzzy name match
+            const nameMatch = allServices.find(
+              (s) =>
+                s.name.toLowerCase().includes(normalizedInput) ||
+                normalizedInput.includes(s.name.toLowerCase())
+            );
+            if (nameMatch) {
+              appointmentDuration = nameMatch.duration_minutes;
+              console.log(`📋 Fuzzy name matched "${serviceType}" → "${nameMatch.name}" → ${appointmentDuration} min`);
+            } else {
+              console.log(`📋 No service match for "${serviceType}", using client default: ${appointmentDuration} min`);
+            }
           }
         }
       }
