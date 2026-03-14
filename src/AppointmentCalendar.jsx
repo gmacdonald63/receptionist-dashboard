@@ -234,13 +234,10 @@ const AppointmentCalendar = ({
   // Show sub-columns when no filter is active and there are active techs
   const showSubColumns = !selectedTechId && activeTechs.length > 0;
 
-  // Sub-column definitions: each active tech + Unassigned at end
+  // Sub-column definitions: one column per active tech (no Unassigned column)
   const subColumns = useMemo(() => {
     if (!showSubColumns) return [];
-    return [
-      ...activeTechs.map(t => ({ id: t.id, name: t.name, color: t.color || '#6b7280' })),
-      { id: null, name: 'Unassigned', color: '#6b7280' },
-    ];
+    return activeTechs.map(t => ({ id: t.id, name: t.name, color: t.color || '#6b7280' }));
   }, [activeTechs, showSubColumns]);
 
   // Bucket appointments by date → tech key for sub-column rendering
@@ -456,8 +453,7 @@ const AppointmentCalendar = ({
     const dateStr = formatDateStr(date);
     const dayOfWeek = date.getDay();
     const closed = isDayClosed(dayOfWeek);
-    const isUnassigned = sc.id == null;
-    const techKey = isUnassigned ? 'unassigned' : String(sc.id);
+    const techKey = String(sc.id);
     const subColApts = appointmentsByDateAndTech[dateStr]?.[techKey] || [];
 
     return (
@@ -473,16 +469,11 @@ const AppointmentCalendar = ({
               className={`border-b ${isDayBorder ? 'border-r-2 border-r-gray-500' : isTechBorder ? 'border-r border-r-gray-700/10' : ''} ${
                 closed
                   ? 'bg-gray-900/50 cursor-not-allowed'
-                  : isUnassigned
-                  ? inBiz
-                    ? 'bg-gray-800/20 hover:bg-gray-700/30 cursor-pointer'
-                    : 'bg-gray-900/20 hover:bg-gray-800/20 cursor-pointer'
                   : inBiz
                   ? 'bg-gray-800/50 hover:bg-blue-900/20 cursor-pointer'
                   : 'bg-gray-900/30 hover:bg-blue-900/10 cursor-pointer'
               } border-b-gray-700/20`}
               style={{ height: `${SLOT_HEIGHT}px` }}
-              title={isUnassigned && !closed ? 'Unassigned — tech TBD. Assign before day of service.' : undefined}
               onClick={!closed ? () => handleSlotClick(dateStr, slotTime, sc.id) : undefined}
             />
           );
