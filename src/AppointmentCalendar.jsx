@@ -63,6 +63,7 @@ const AppointmentCalendar = ({
   appointments,
   businessHours,
   technicians,
+  serviceTypes,
   currentWeekStart,
   onWeekChange,
   onSaveAppointment,
@@ -1102,6 +1103,7 @@ const AppointmentCalendar = ({
                 selectedSlot={selectedSlot}
                 appointment={selectedAppointment}
                 technicians={technicians}
+                serviceTypes={serviceTypes}
                 defaultTechnicianId={selectedSlot?.techId ?? selectedTechId}
                 onSave={handleSave}
                 onClose={handleCloseSidePanel}
@@ -1129,6 +1131,7 @@ const AppointmentCalendar = ({
                   selectedSlot={selectedSlot}
                   appointment={selectedAppointment}
                   technicians={technicians}
+                  serviceTypes={serviceTypes}
                   defaultTechnicianId={selectedSlot?.techId ?? selectedTechId}
                   onSave={handleSave}
                   onClose={handleCloseSidePanel}
