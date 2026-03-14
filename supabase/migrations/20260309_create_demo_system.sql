@@ -17,7 +17,7 @@ VALUES (
   'active',
   120,
   0,
-  'America/New_York',
+  'America/Los_Angeles',
   false
 )
 ON CONFLICT (id) DO UPDATE SET
@@ -143,7 +143,7 @@ BEGIN
     retell_agent_id = 'agent_c48b68df1da80f01e2c1eea6aa',
     appointment_duration = 120,
     buffer_time = 0,
-    timezone = 'America/New_York'
+    timezone = 'America/Los_Angeles'
   WHERE id = demo_cid;
 
   -- SEED: 8 Customers (address is single field, tags is text[])
