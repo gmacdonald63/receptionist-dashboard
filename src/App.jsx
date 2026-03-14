@@ -57,6 +57,7 @@ const App = () => {
   // Business hours and technicians
   const [businessHours, setBusinessHours] = useState([]);
   const [technicians, setTechnicians] = useState([]);
+  const [serviceTypes, setServiceTypes] = useState([]);
   const [reminderCount, setReminderCount] = useState(0);
 
   // Tech management state
@@ -415,6 +416,22 @@ const App = () => {
     }
   };
 
+  const fetchServiceTypes = async () => {
+    const cid = effectiveClientData?.id;
+    if (!cid) return;
+    try {
+      const { data, error } = await supabase
+        .from('service_types')
+        .select('id, name, category, duration_minutes')
+        .eq('client_id', cid)
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
+      if (!error && data) setServiceTypes(data);
+    } catch (err) {
+      console.error('Could not load service types:', err);
+    }
+  };
+
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -469,7 +486,7 @@ const App = () => {
       setCallLogs(transformedCalls);
 
       // Fetch all appointments, business hours, and technicians from Supabase
-      await Promise.all([fetchAppointments(), fetchBusinessHours(), fetchTechnicians()]);
+      await Promise.all([fetchAppointments(), fetchBusinessHours(), fetchTechnicians(), fetchServiceTypes()]);
 
       // Calculate stats — filter to current billing period
       let periodStart = null;
@@ -574,6 +591,7 @@ const App = () => {
           state: formData.state,
           zip: formData.zip,
           notes: formData.notes || null,
+          service_type: formData.serviceType || null,
           technician_id: resolvedTechId,
           duration: formData.duration || 60,
         })
@@ -598,6 +616,7 @@ const App = () => {
           state: formData.state,
           zip: formData.zip,
           notes: formData.notes || null,
+          service_type: formData.serviceType || null,
           source: 'manual',
           status: 'confirmed',
           technician_id: resolvedTechId,
@@ -1633,6 +1652,7 @@ const App = () => {
               appointments={appointments}
               businessHours={businessHours}
               technicians={technicians}
+              serviceTypes={serviceTypes}
               currentWeekStart={currentWeekStart}
               onWeekChange={setCurrentWeekStart}
               onSaveAppointment={handleAddAppointment}
@@ -1959,6 +1979,7 @@ const App = () => {
             appointments={appointments}
             businessHours={businessHours}
             technicians={technicians}
+            serviceTypes={serviceTypes}
             currentWeekStart={currentWeekStart}
             onWeekChange={setCurrentWeekStart}
             onSaveAppointment={handleAddAppointment}
