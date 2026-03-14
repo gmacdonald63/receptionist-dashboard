@@ -113,7 +113,46 @@ Deno.serve(async (req) => {
       );
     }
 
-    const appointmentDuration = client.appointment_duration || 60;
+    // Look up service-specific duration from service_types table
+    let appointmentDuration = client.appointment_duration || 60;
+
+    if (serviceType) {
+      const { data: serviceMatch } = await supabase
+        .from("service_types")
+        .select("duration_minutes")
+        .eq("client_id", client.id)
+        .eq("is_active", true)
+        .ilike("name", serviceType)
+        .maybeSingle();
+
+      if (serviceMatch) {
+        appointmentDuration = serviceMatch.duration_minutes;
+        console.log(`📋 Service type "${serviceType}" → ${appointmentDuration} min`);
+      } else {
+        // Try fuzzy match: check if any service_type name contains the input or vice versa
+        const { data: fuzzyMatches } = await supabase
+          .from("service_types")
+          .select("name, duration_minutes")
+          .eq("client_id", client.id)
+          .eq("is_active", true);
+
+        if (fuzzyMatches) {
+          const normalizedInput = serviceType.toLowerCase().trim();
+          const match = fuzzyMatches.find(
+            (s) =>
+              s.name.toLowerCase().includes(normalizedInput) ||
+              normalizedInput.includes(s.name.toLowerCase())
+          );
+          if (match) {
+            appointmentDuration = match.duration_minutes;
+            console.log(`📋 Fuzzy matched "${serviceType}" → "${match.name}" → ${appointmentDuration} min`);
+          } else {
+            console.log(`📋 No service match for "${serviceType}", using client default: ${appointmentDuration} min`);
+          }
+        }
+      }
+    }
+
     const bufferTime = client.buffer_time || 0;
 
     // Calculate end time from start time + duration
@@ -294,6 +333,7 @@ Deno.serve(async (req) => {
         state: state,
         zip: zip,
         notes: notes,
+        duration: appointmentDuration,
         source: "ai",
         call_id: callId,
         status: "confirmed",

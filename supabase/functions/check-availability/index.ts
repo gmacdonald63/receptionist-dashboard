@@ -137,6 +137,7 @@ serve(async (req) => {
     const body = await req.json();
     const args = body.args ?? body;
     const { date, time } = args;
+    const serviceType: string | null = args.service_type || null;
     const findNext: number | null = args.find_next ? parseInt(args.find_next) : null;
     const agent_id = args.agent_id ?? body.call?.agent_id ?? queryAgentId;
 
@@ -183,7 +184,46 @@ serve(async (req) => {
     }
 
     const clientId = clientRow.id;
-    const aptDuration = clientRow.appointment_duration || 60; // default 1hr
+    let aptDuration = clientRow.appointment_duration || 60; // default 1hr
+
+    // Look up service-specific duration if service_type was provided
+    if (serviceType) {
+      const { data: serviceMatch } = await supabase
+        .from("service_types")
+        .select("duration_minutes")
+        .eq("client_id", clientId)
+        .eq("is_active", true)
+        .ilike("name", serviceType)
+        .maybeSingle();
+
+      if (serviceMatch) {
+        aptDuration = serviceMatch.duration_minutes;
+        console.log(`📋 Service type "${serviceType}" → ${aptDuration} min`);
+      } else {
+        // Fuzzy match
+        const { data: fuzzyMatches } = await supabase
+          .from("service_types")
+          .select("name, duration_minutes")
+          .eq("client_id", clientId)
+          .eq("is_active", true);
+
+        if (fuzzyMatches) {
+          const normalizedInput = serviceType.toLowerCase().trim();
+          const match = fuzzyMatches.find(
+            (s) =>
+              s.name.toLowerCase().includes(normalizedInput) ||
+              normalizedInput.includes(s.name.toLowerCase())
+          );
+          if (match) {
+            aptDuration = match.duration_minutes;
+            console.log(`📋 Fuzzy matched "${serviceType}" → "${match.name}" → ${aptDuration} min`);
+          } else {
+            console.log(`📋 No service match for "${serviceType}", using client default: ${aptDuration} min`);
+          }
+        }
+      }
+    }
+
     const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
     // Fetch active technicians for this client
