@@ -54,6 +54,7 @@ BEGIN
     AND name NOT IN ('Mike Rodriguez', 'Scott Russell', 'Jake Thompson');
 
   DELETE FROM calls WHERE agent_id = demo_agent;
+  DELETE FROM calls WHERE agent_id = 'agent_c48b68df1da80f01e2c1eea6aa'; -- legacy demo agent
 
   DELETE FROM service_types WHERE client_id = demo_cid;
 
