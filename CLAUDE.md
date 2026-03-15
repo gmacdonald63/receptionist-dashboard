@@ -1036,3 +1036,37 @@ The `agent_id` is passed as a `const` parameter in each tool's JSON schema so Re
 1. Confirm branch: `git status` — should be on `claude/dashboard-repo-setup-UvgMs`
 2. User provides Supabase personal access token (needed for any function deployment)
 3. Read recent git log to catch up: `git log --oneline -10`
+
+---
+
+## Demo Reset Plan (PENDING — waiting for user to finalize data)
+
+### Context
+The real dashboard (client_id=1, agent `agent_3bec4ff7311350d9b19b93db05`) is being retired as a live account and frozen as the **source of truth** for demo data. The demo account is client_id=9999 (agent `agent_c48b68df1da80f01e2c1eea6aa`).
+
+### Current State
+- Client_id=1 will NOT be logged into or used for calls anymore — its data is frozen
+- The demo account (client_id=9999) needs `reset_demo_data()` rewritten to produce an exact replica of the real dashboard
+
+### The Plan (execute when user says "the dashboard is ready")
+1. **Snapshot ALL data** from client_id=1's frozen state:
+   - `appointments` table (all rows where client_id=1)
+   - `customers` table (all rows where client_id=1)
+   - `customer_notes` (linked to those customers)
+   - `follow_up_reminders` (linked to those customers)
+   - `calls` table — the real calls under `agent_3bec4ff7311350d9b19b93db05` that have **transcripts AND recordings** (CloudFront URLs). These are the ones that matter for the demo.
+2. **Rewrite `reset_demo_data()`** to:
+   - Wipe all demo data (appointments, customers, notes, reminders, calls for demo agent)
+   - Re-insert everything from the snapshot with client_id=9999 and demo agent_id
+   - Use **relative dates** (CURRENT_DATE +/- N) so appointments stay current on each reset
+   - Include full call records with real transcripts and CloudFront recording URLs
+   - The function can either hardcode the data OR copy it live from client_id=1 — both produce identical results since client_id=1 is frozen
+3. **Deploy** the updated Edge Function and SQL function
+4. **Test** by calling reset and verifying the demo dashboard matches
+
+### Key Technical Details
+- Demo mode fetches calls from Supabase `calls` table filtered by agent_id (not from Retell API)
+- Recording URLs are on Retell's CloudFront CDN — they persist as long as the Retell account exists
+- The demo agent_id is `agent_c48b68df1da80f01e2c1eea6aa` — all demo call records must use this
+- Appointments need date shifting (relative to CURRENT_DATE) so the demo always looks current
+- Call `created_at` timestamps should also be shifted to stay relative to current date
