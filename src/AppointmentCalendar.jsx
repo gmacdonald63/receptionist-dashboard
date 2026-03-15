@@ -550,7 +550,7 @@ const AppointmentCalendar = ({
         }}
       >
         {/* Header row */}
-        <div className="sticky top-0 z-20 bg-gray-900 border-b border-gray-700" />
+        <div className="sticky top-0 z-20 bg-gray-900 border-b border-gray-700 border-r-2 border-r-gray-500" />
         {visibleWeekDates.map((date, idx) => {
           const isToday = formatDateStr(date) === todayStr;
           const isLastCol = idx === visibleWeekDates.length - 1;
@@ -608,7 +608,7 @@ const AppointmentCalendar = ({
         }}
       >
         {/* Time labels */}
-        <div>
+        <div className="border-r-2 border-gray-500">
           {timeSlots.map((slotTime, idx) => (
             <div
               key={slotTime}
@@ -1003,29 +1003,37 @@ const AppointmentCalendar = ({
               </span>
             </div>
           ) : (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={goPreviousWeek}
-                className="px-2.5 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 border border-gray-700 text-sm font-medium"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <button
-                onClick={goToToday}
-                className={`px-3 py-2 rounded-lg text-sm font-medium ${
-                  isCurrentWeek
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-800 text-white hover:bg-gray-700 border border-gray-700'
-                }`}
-              >
-                Current
-              </button>
-              <button
-                onClick={goNextWeek}
-                className="px-2.5 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 border border-gray-700 text-sm font-medium"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
+            <div className="flex flex-col items-center gap-0.5">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={goPreviousWeek}
+                  className="px-2.5 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 border border-gray-700 text-sm font-medium"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={goToToday}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium ${
+                    isCurrentWeek
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-800 text-white hover:bg-gray-700 border border-gray-700'
+                  }`}
+                >
+                  Current
+                </button>
+                <button
+                  onClick={goNextWeek}
+                  className="px-2.5 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 border border-gray-700 text-sm font-medium"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+              <span className="text-white font-bold text-sm">
+                {(() => {
+                  const months = new Set(visibleWeekDates.map(d => d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })));
+                  return [...months].join(' / ');
+                })()}
+              </span>
             </div>
           )}
 
