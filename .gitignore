@@ -4,3 +4,10 @@ dist
 .env.local
 *.local
 supabase/.temp/
+
+# Visual brainstorming companion
+.superpowers/
+
+# Claude Code worktrees and local settings
+.claude/worktrees/
+.claude/settings.local.json
