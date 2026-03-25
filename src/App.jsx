@@ -7,6 +7,8 @@ import Admin from './Admin';
 import ResetPassword from './ResetPassword';
 import Customers from './Customers';
 import DemoDashboard from './DemoDashboard';
+import TechDashboard from './TechDashboard';
+import TeamTab from './TeamTab';
 
 import InstallPrompt from './InstallPrompt';
 import UpdatePrompt from './UpdatePrompt';
@@ -1645,6 +1647,7 @@ const App = () => {
   };
 
 
+  // Demo nav — unchanged (used by the isPublicDemo render block above)
   const navItems = [
     { id: 'appointments', label: 'Appointments', icon: Calendar },
     { id: 'customers', label: 'Customers', icon: Users },
@@ -1652,6 +1655,27 @@ const App = () => {
     { id: 'billing', label: 'Billing', icon: DollarSign },
     { id: 'settings', label: 'Settings', icon: Settings }
   ];
+
+  // Authenticated nav — owner gets 6 tabs, dispatcher gets 4 tabs
+  const teamTab = { id: 'team', label: 'Team', icon: Users };
+
+  const ownerNavItems = [
+    { id: 'appointments', label: 'Appointments', icon: Calendar },
+    { id: 'customers', label: 'Customers', icon: Users },
+    { id: 'calls', label: 'Calls', icon: Phone },
+    teamTab,
+    { id: 'billing', label: 'Billing', icon: DollarSign },
+    { id: 'settings', label: 'Settings', icon: Settings },
+  ];
+
+  const dispatcherNavItems = [
+    { id: 'appointments', label: 'Appointments', icon: Calendar },
+    { id: 'customers', label: 'Customers', icon: Users },
+    { id: 'calls', label: 'Calls', icon: Phone },
+    teamTab,
+  ];
+
+  const activeNavItems = role === 'dispatcher' ? dispatcherNavItems : ownerNavItems;
 
   // ── Public onboarding route (no auth required) ──────────────
   const _onboardParams = new URLSearchParams(window.location.search);
@@ -1894,6 +1918,11 @@ const App = () => {
     return <Login onLogin={handleLogin} />;
   }
 
+  // Tech view — hard return before clientData null check and subscription gate
+  if (role === 'tech' && techData) {
+    return <TechDashboard techData={techData} />;
+  }
+
   // User is authenticated but no client record — show message and sign out option
   if (user && !clientData) {
     return (
@@ -2101,7 +2130,7 @@ const App = () => {
             </button>
           </div>
         )}
-        {activeTab === 'billing' && (
+        {activeTab === 'billing' && role !== 'dispatcher' && (
           <>
             <div className="flex items-center justify-between mb-3">
               <img src={logo} alt="Reliant Support" style={{ height: '26px', width: 'auto' }} />
@@ -2119,7 +2148,7 @@ const App = () => {
             {renderBilling()}
           </>
         )}
-        {activeTab === 'settings' && (
+        {activeTab === 'settings' && role !== 'dispatcher' && (
           <>
             <div className="flex items-center justify-between mb-3">
               <img src={logo} alt="Reliant Support" style={{ height: '26px', width: 'auto' }} />
@@ -2137,12 +2166,30 @@ const App = () => {
             {renderSettings()}
           </>
         )}
+        {activeTab === 'team' && (
+          <>
+            <div className="flex items-center justify-between mb-3">
+              <img src={logo} alt="Reliant Support" style={{ height: '26px', width: 'auto' }} />
+              <div className="flex items-center gap-1">
+                {clientData?.is_admin && (
+                  <button onClick={() => setShowAdmin(true)} className="p-2 hover:bg-gray-700 rounded-lg" title="Admin Dashboard">
+                    <Settings className="w-5 h-5 text-gray-400" />
+                  </button>
+                )}
+                <button onClick={handleLogout} className="p-2 hover:bg-gray-700 rounded-lg" title="Sign out">
+                  <LogOut className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+            </div>
+            <TeamTab clientData={clientData} role={role} />
+          </>
+        )}
       </main>
 
       {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 z-30">
-        <div className="grid grid-cols-5 gap-1">
-          {navItems.map(item => (
+        <div className={`grid grid-cols-${activeNavItems.length} gap-1`}>
+          {activeNavItems.map(item => (
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
