@@ -48,6 +48,60 @@ Deno.serve(async (req) => {
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
+
+        // ── Setup fee payment (one-time, from onboarding form) ────
+        if (session.mode === "payment" && session.metadata?.type === "setup_fee") {
+          const dealId = session.metadata?.deal_id;
+          if (!dealId) {
+            console.warn("setup_fee checkout completed but no deal_id in metadata");
+            break;
+          }
+
+          // Update deal status → setup_in_progress
+          const { data: deal, error: dealError } = await supabase
+            .from("deals")
+            .update({
+              status: "setup_in_progress",
+              stripe_setup_payment_id: session.payment_intent as string,
+              stripe_customer_id: session.customer as string,
+            })
+            .eq("id", dealId)
+            .select("id, rep_id")
+            .single();
+
+          if (dealError) {
+            console.error(`Failed to update deal ${dealId}:`, dealError);
+            break;
+          }
+
+          console.log(`Setup fee paid for deal ${dealId} — status -> setup_in_progress`);
+
+          // Fire HubSpot sync
+          const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+
+          await fetch(`${supabaseUrl}/functions/v1/hubspot-sync`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ deal_id: dealId, action: "update" }),
+          }).catch(e => console.error("hubspot-sync call failed:", e));
+
+          // Fire notifications (Greg + rep)
+          await fetch(`${supabaseUrl}/functions/v1/send-notification`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ template: "setup_fee_paid_greg", deal_id: dealId }),
+          }).catch(e => console.error("send-notification (greg) failed:", e));
+
+          await fetch(`${supabaseUrl}/functions/v1/send-notification`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ template: "setup_fee_paid_rep", deal_id: dealId }),
+          }).catch(e => console.error("send-notification (rep) failed:", e));
+
+          break;
+        }
+
+        // ── Subscription checkout (existing behavior) ─────────────
         if (session.mode === "subscription" && session.subscription) {
           const subscription = await stripe.subscriptions.retrieve(
             session.subscription as string
