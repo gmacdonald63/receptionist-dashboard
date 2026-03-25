@@ -114,6 +114,14 @@ Deno.serve(async (req) => {
 
     console.log(`Deal created: ${deal.id} by rep ${rep.id}, token: ${deal.onboarding_token}`);
 
+    // Fire HubSpot sync (action: create) — non-blocking
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    fetch(`${supabaseUrl}/functions/v1/hubspot-sync`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ deal_id: deal.id, action: "create" }),
+    }).catch(e => console.error("hubspot-sync call failed:", e));
+
     return new Response(
       JSON.stringify({
         deal_id: deal.id,
