@@ -79,6 +79,12 @@ CREATE POLICY "tech_read_own" ON technicians
 ```sql
 -- Verify RLS is enabled before running. If not: ALTER TABLE appointments ENABLE ROW LEVEL SECURITY;
 -- Then audit existing client/admin policies to ensure they still work.
+--
+-- Column-level note: FOR UPDATE RLS does not restrict which columns can be written.
+-- Techs could technically update any column on their assigned appointment row.
+-- For Phase 1 this is an acceptable trust boundary (techs are known employees,
+-- app only sends status updates). To restrict: GRANT UPDATE (status) ON appointments TO authenticated;
+-- and revoke broader UPDATE — but only if column-level grants are configured for all other roles too.
 
 -- Techs read appointments assigned to them
 CREATE POLICY "tech_read_own_appointments" ON appointments
@@ -189,7 +195,8 @@ WHERE NOT EXISTS (
 CREATE TABLE client_staff (
   id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   client_id   int  NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
-  email       text NOT NULL UNIQUE,
+  email       text NOT NULL,
+  UNIQUE(client_id, email),  -- same person can be dispatcher for multiple clients
   name        text NOT NULL,
   role        text NOT NULL DEFAULT 'dispatcher',
   active      bool NOT NULL DEFAULT true,
@@ -217,47 +224,71 @@ CREATE POLICY "owner_manage_staff" ON client_staff
 
 ### 2. Auth Flow
 
-**Structural change to `App.jsx`:** The existing code performs a single `clients` lookup (inside the `useEffect` that depends on `user`) and force-signs out the user if no record is found. The force sign-out moves to the end of the chain. The `onAuthStateChange` handler does not perform role lookups — it only tracks auth events (`PASSWORD_RECOVERY`, `SIGNED_OUT`, session changes) and sets `user` state. No changes are needed to `onAuthStateChange` beyond what's already there.
+**Three code paths must all be updated:**
 
-The four-step lookup lives in the existing `useEffect(() => { ... }, [user])` block:
+**Path 1 — `App.jsx` `getSession` block (lines 111–129):**
+The current block does a `clients`-only lookup and force-signs out if not found. It must: (a) short-circuit immediately if `?track` is in the URL, and (b) replace the clients-only lookup with the four-step chain below.
 
 ```js
-// Inside the useEffect that fires when `user` changes:
-if (!user) return;
-const email = user.email;
+supabase.auth.getSession().then(async ({ data: { session } }) => {
+  // Short-circuit for public tracking page
+  if (new URLSearchParams(window.location.search).get('track')) {
+    setAuthLoading(false);
+    return;
+  }
+  if (!session?.user) { setAuthLoading(false); return; }
+  setUser(session.user);
+  await resolvRole(session.user.email);
+  setAuthLoading(false);
+});
+```
 
-// Step 1: owner / admin
-const { data: clientRecord } = await supabase
-  .from('clients').select('*').eq('email', email).maybeSingle();
-if (clientRecord) {
-  setRole(clientRecord.is_admin ? 'admin' : 'owner');
-  setClientData(clientRecord);
-  return;
+**Path 2 — `Login.jsx`:**
+Currently does its own `clients` lookup (line 25) and calls `onLogin(user, clientData)`. Must be updated to run the same `resolveRole` logic and call `onLogin(user, { role, clientData, techData })`.
+
+**Path 3 — `handleLogin` in `App.jsx`:**
+Currently `(user, clientData)`. Must be updated to `(user, { role, clientData, techData })`.
+
+**The `onAuthStateChange` handler is unchanged** — it handles `PASSWORD_RECOVERY`, `SIGNED_OUT`, and session state only. No role lookups.
+
+**Shared `resolveRole(email)` helper** (extracted function, called from both Path 1 and Path 2):
+
+```js
+async function resolveRole(email) {
+  // Step 1: owner / admin (email is unique in clients table)
+  const { data: clientRecord } = await supabase
+    .from('clients').select('*').eq('email', email).maybeSingle();
+  if (clientRecord) {
+    setRole(clientRecord.is_admin ? 'admin' : 'owner');
+    setClientData(clientRecord);
+    return { role: clientRecord.is_admin ? 'admin' : 'owner', clientData: clientRecord };
+  }
+
+  // Step 2: dispatcher
+  const { data: staffRecord } = await supabase
+    .from('client_staff').select('*').eq('email', email).eq('active', true).maybeSingle();
+  if (staffRecord) {
+    const { data: ownerData } = await supabase
+      .from('clients').select('*').eq('id', staffRecord.client_id).single();
+    setRole('dispatcher');
+    setClientData(ownerData);
+    return { role: 'dispatcher', clientData: ownerData };
+  }
+
+  // Step 3: technician
+  const { data: techRecord } = await supabase
+    .from('technicians').select('*').eq('email', email).eq('is_active', true).maybeSingle();
+  if (techRecord) {
+    setRole('tech');
+    setTechData(techRecord);
+    return { role: 'tech', techData: techRecord };
+  }
+
+  // Step 4: no match — sign out
+  await supabase.auth.signOut();
+  setError('Account not found.');
+  return null;
 }
-
-// Step 2: dispatcher
-const { data: staffRecord } = await supabase
-  .from('client_staff').select('*').eq('email', email).eq('active', true).maybeSingle();
-if (staffRecord) {
-  const { data: ownerData } = await supabase
-    .from('clients').select('*').eq('id', staffRecord.client_id).single();
-  setRole('dispatcher');
-  setClientData(ownerData);
-  return;
-}
-
-// Step 3: technician
-const { data: techRecord } = await supabase
-  .from('technicians').select('*').eq('email', email).eq('is_active', true).maybeSingle();
-if (techRecord) {
-  setRole('tech');
-  setTechData(techRecord);
-  return;
-}
-
-// Step 4: no match — sign out
-await supabase.auth.signOut();
-setError('Account not found.');
 ```
 
 App state shape:
@@ -265,29 +296,48 @@ App state shape:
 { user, role: 'admin' | 'owner' | 'dispatcher' | 'tech', clientData, techData? }
 ```
 
-**Deactivated techs:** The RLS policies include `is_active = true`, so a deactivated tech's queries will return no data after their next token refresh. However, an already-authenticated session is not immediately invalidated. This is acceptable for Phase 1 — session expires naturally (typically within 1 hour for Supabase JWTs). If immediate lockout is needed, that is a Phase 2 concern.
+**Deactivated techs:** RLS subqueries include `is_active = true`, so a deactivated tech's queries return no data after their next token refresh. An already-authenticated session is not immediately invalidated — acceptable for Phase 1 (Supabase JWTs expire in ~1 hour). Immediate lockout is a Phase 2 concern.
+
+**`clients` RLS subquery multi-row safety:** The `client_manage_own_techs` and similar policies use `(SELECT id FROM clients WHERE email = ...)`. The `clients.email` column is unique, so this subquery always returns 0 or 1 rows — no runtime error risk.
 
 ---
 
 ### 3. URL Param Handling
 
-The `?track=<uuid>` check must be synchronous in the render function, before any `useEffect` fires:
+The `?track=<uuid>` check must be synchronous in the App render, and the `getSession` block must short-circuit for it (see Section 2 Path 1). In the render function, `?track` is checked before the `authLoading` spinner gate:
 
 ```jsx
 function App() {
-  // Priority 1: public tracking page — checked synchronously before auth
+  // ... all useState/useEffect hooks must still run (React rules) ...
+
+  // Priority 1: public tracking page — before authLoading gate
   const searchParams = new URLSearchParams(window.location.search);
   const trackingId = searchParams.get('track');
   if (trackingId) {
     return <TrackingPage appointmentId={trackingId} />;
   }
 
-  // All existing useEffects and auth logic follow below
+  // Existing authLoading gate follows
+  if (authLoading || demoLoading) return <spinner />;
   // ...
 }
 ```
 
-If `?track` and `?demo` are both present (edge case), `?track` wins since it is checked first. This is intentional — tracking links are public-facing and must render without auth.
+Note: All `useState`/`useEffect` calls must remain above the early return (React rules of hooks). Only the *render output* short-circuits.
+
+If `?track` and `?demo` are both present, `?track` wins. `?billing=success` useEffect is safe — it only runs when `user` is set, which techs and dispatchers can have; however it queries `clients` directly. Dispatchers have a `clients` row via `clientData`, so they are safe. Techs don't hit this useEffect because they have no `?billing` redirect path.
+
+**Render waterfall — tech short-circuit:**
+The existing guard `if (user && !clientData)` (line 1783) would show "No Account Found" for techs since they set `techData`, not `clientData`. Add a role check before this guard:
+
+```jsx
+// After: if (!user) return <Login />
+// Before: if (user && !clientData) return <NoAccountFound />
+
+if (role === 'tech' && techData) {
+  return <TechDashboard techData={techData} />;
+}
+```
 
 ---
 
