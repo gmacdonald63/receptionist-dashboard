@@ -11,6 +11,7 @@ import DemoDashboard from './DemoDashboard';
 import InstallPrompt from './InstallPrompt';
 import UpdatePrompt from './UpdatePrompt';
 import AppointmentCalendar from './AppointmentCalendar';
+import OnboardingPage from './pages/OnboardingPage.jsx';
 
 const SUPABASE_URL = 'https://zmppdmfdhknnwzwdfhwf.supabase.co';
 
@@ -1545,6 +1546,13 @@ const App = () => {
     { id: 'billing', label: 'Billing', icon: DollarSign },
     { id: 'settings', label: 'Settings', icon: Settings }
   ];
+
+  // ── Public onboarding route (no auth required) ──────────────
+  const _onboardParams = new URLSearchParams(window.location.search);
+  const _onboardToken = _onboardParams.get('token');
+  if (_onboardToken) {
+    return <OnboardingPage token={_onboardToken} />;
+  }
 
   // Show loading while checking auth or demo token
   if (authLoading || demoLoading) {
