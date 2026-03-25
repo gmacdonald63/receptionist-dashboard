@@ -57,6 +57,7 @@ const App = () => {
   // Business hours and technicians
   const [businessHours, setBusinessHours] = useState([]);
   const [technicians, setTechnicians] = useState([]);
+  const [serviceTypes, setServiceTypes] = useState([]);
   const [reminderCount, setReminderCount] = useState(0);
 
   // Tech management state
@@ -329,7 +330,12 @@ const App = () => {
       if (data) {
         setAppointments(data.map(apt => ({
           id: apt.id,
-          name: apt.caller_name,
+          name: apt.first_name && apt.last_name
+            ? `${apt.first_name} ${apt.last_name}`
+            : apt.caller_name,
+          first_name: apt.first_name || '',
+          last_name: apt.last_name || '',
+          caller_name: apt.caller_name || '',
           date: apt.date,
           start_time: apt.start_time,
           end_time: apt.end_time || null,
@@ -410,6 +416,22 @@ const App = () => {
     }
   };
 
+  const fetchServiceTypes = async () => {
+    const cid = effectiveClientData?.id;
+    if (!cid) return;
+    try {
+      const { data, error } = await supabase
+        .from('service_types')
+        .select('id, name, category, duration_minutes')
+        .eq('client_id', cid)
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
+      if (!error && data) setServiceTypes(data);
+    } catch (err) {
+      console.error('Could not load service types:', err);
+    }
+  };
+
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -464,7 +486,7 @@ const App = () => {
       setCallLogs(transformedCalls);
 
       // Fetch all appointments, business hours, and technicians from Supabase
-      await Promise.all([fetchAppointments(), fetchBusinessHours(), fetchTechnicians()]);
+      await Promise.all([fetchAppointments(), fetchBusinessHours(), fetchTechnicians(), fetchServiceTypes()]);
 
       // Calculate stats — filter to current billing period
       let periodStart = null;
@@ -499,9 +521,58 @@ const App = () => {
     return `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`;
   };
 
+  // Find the least-busy free technician for a given date/time/duration
+  const findLeastBusyTech = async (date, startTime, duration) => {
+    const activeTechs = technicians.filter(t => t.is_active);
+    if (activeTechs.length === 0) return null;
+
+    // Fetch all non-cancelled appointments for that day
+    const { data: dayAppts } = await supabase
+      .from('appointments')
+      .select('start_time, end_time, technician_id')
+      .eq('client_id', effectiveClientData.id)
+      .eq('date', date)
+      .neq('status', 'cancelled');
+
+    const appts = dayAppts || [];
+    const BUFFER = 30; // 30-min travel buffer, same as edge functions
+    const toMins = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+    const slotStart = toMins(startTime);
+    const slotEnd = slotStart + (duration || 60);
+
+    // Check which techs are free at this slot
+    const freeTechs = activeTechs.filter(tech => {
+      const techAppts = appts.filter(a => a.technician_id === tech.id);
+      return techAppts.every(a => {
+        const aStart = toMins(a.start_time);
+        const aEnd = a.end_time && a.end_time !== a.start_time ? toMins(a.end_time) : aStart + 60;
+        return !(slotStart < aEnd + BUFFER && slotEnd + BUFFER > aStart);
+      });
+    });
+
+    if (freeTechs.length === 0) return null;
+
+    // Pick the one with fewest appointments today, ties broken by name
+    freeTechs.sort((a, b) => {
+      const countA = appts.filter(ap => ap.technician_id === a.id).length;
+      const countB = appts.filter(ap => ap.technician_id === b.id).length;
+      return countA - countB || (a.name || '').localeCompare(b.name || '');
+    });
+
+    return freeTechs[0].id;
+  };
+
   const handleAddAppointment = async (formData) => {
     const fullName = `${formData.firstName.trim()} ${formData.lastName.trim()}`.trim();
     const endTime = calculateEndTime(formData.time, formData.duration || 60);
+
+    // Resolve technician: auto-assign picks least busy, explicit pick uses selected ID
+    let resolvedTechId = null;
+    if (formData.technicianId === 'auto') {
+      resolvedTechId = await findLeastBusyTech(formData.date, formData.time, formData.duration || 60);
+    } else if (formData.technicianId) {
+      resolvedTechId = parseInt(formData.technicianId, 10);
+    }
 
     if (formData.appointmentId) {
       // UPDATE existing appointment
@@ -509,6 +580,8 @@ const App = () => {
         .from('appointments')
         .update({
           caller_name: fullName,
+          first_name: formData.firstName.trim(),
+          last_name: formData.lastName.trim(),
           caller_number: formData.phone,
           date: formData.date,
           start_time: formData.time,
@@ -518,7 +591,8 @@ const App = () => {
           state: formData.state,
           zip: formData.zip,
           notes: formData.notes || null,
-          technician_id: formData.technicianId ? parseInt(formData.technicianId, 10) : null,
+          service_type: formData.serviceType || null,
+          technician_id: resolvedTechId,
           duration: formData.duration || 60,
         })
         .eq('id', formData.appointmentId);
@@ -531,6 +605,8 @@ const App = () => {
         .insert({
           client_id: effectiveClientData.id,
           caller_name: fullName,
+          first_name: formData.firstName.trim(),
+          last_name: formData.lastName.trim(),
           caller_number: formData.phone,
           date: formData.date,
           start_time: formData.time,
@@ -540,9 +616,10 @@ const App = () => {
           state: formData.state,
           zip: formData.zip,
           notes: formData.notes || null,
+          service_type: formData.serviceType || null,
           source: 'manual',
           status: 'confirmed',
-          technician_id: formData.technicianId ? parseInt(formData.technicianId, 10) : null,
+          technician_id: resolvedTechId,
           duration: formData.duration || 60,
         });
 
@@ -1575,6 +1652,7 @@ const App = () => {
               appointments={appointments}
               businessHours={businessHours}
               technicians={technicians}
+              serviceTypes={serviceTypes}
               currentWeekStart={currentWeekStart}
               onWeekChange={setCurrentWeekStart}
               onSaveAppointment={handleAddAppointment}
@@ -1901,6 +1979,7 @@ const App = () => {
             appointments={appointments}
             businessHours={businessHours}
             technicians={technicians}
+            serviceTypes={serviceTypes}
             currentWeekStart={currentWeekStart}
             onWeekChange={setCurrentWeekStart}
             onSaveAppointment={handleAddAppointment}

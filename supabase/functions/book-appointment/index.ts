@@ -56,6 +56,11 @@ Deno.serve(async (req) => {
     // Extract booking details from what the caller told the agent
     const callerName = args.caller_name;
     const callerNumber = args.caller_number || body.call?.from_number || null;
+
+    // Split caller_name into first/last for the name columns
+    const nameParts = (callerName || '').trim().split(' ');
+    const firstName = nameParts[0] || null;
+    const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : null;
     const date = args.date; // "YYYY-MM-DD"
     const startTime = args.start_time; // "HH:MM" (24h format)
     const serviceType = args.service_type || null;
@@ -108,7 +113,65 @@ Deno.serve(async (req) => {
       );
     }
 
-    const appointmentDuration = client.appointment_duration || 60;
+    // Look up service-specific duration from service_types table
+    let appointmentDuration = client.appointment_duration || 60;
+
+    if (serviceType) {
+      const { data: serviceMatch } = await supabase
+        .from("service_types")
+        .select("duration_minutes")
+        .eq("client_id", client.id)
+        .eq("is_active", true)
+        .ilike("name", serviceType)
+        .maybeSingle();
+
+      if (serviceMatch) {
+        appointmentDuration = serviceMatch.duration_minutes;
+        console.log(`📋 Service type "${serviceType}" → ${appointmentDuration} min`);
+      } else {
+        // Try fuzzy match: check name AND customer_phrases
+        const { data: allServices } = await supabase
+          .from("service_types")
+          .select("name, duration_minutes, customer_phrases")
+          .eq("client_id", client.id)
+          .eq("is_active", true);
+
+        if (allServices) {
+          const normalizedInput = serviceType.toLowerCase().trim();
+
+          // 1. Check customer_phrases first (most specific — e.g. "thermostat replacement")
+          const phraseMatch = allServices.find(
+            (s) =>
+              s.customer_phrases &&
+              s.customer_phrases.some(
+                (phrase: string) =>
+                  phrase.toLowerCase() === normalizedInput ||
+                  normalizedInput.includes(phrase.toLowerCase()) ||
+                  phrase.toLowerCase().includes(normalizedInput)
+              )
+          );
+
+          if (phraseMatch) {
+            appointmentDuration = phraseMatch.duration_minutes;
+            console.log(`📋 Phrase matched "${serviceType}" → "${phraseMatch.name}" → ${appointmentDuration} min`);
+          } else {
+            // 2. Fall back to fuzzy name match
+            const nameMatch = allServices.find(
+              (s) =>
+                s.name.toLowerCase().includes(normalizedInput) ||
+                normalizedInput.includes(s.name.toLowerCase())
+            );
+            if (nameMatch) {
+              appointmentDuration = nameMatch.duration_minutes;
+              console.log(`📋 Fuzzy name matched "${serviceType}" → "${nameMatch.name}" → ${appointmentDuration} min`);
+            } else {
+              console.log(`📋 No service match for "${serviceType}", using client default: ${appointmentDuration} min`);
+            }
+          }
+        }
+      }
+    }
+
     const bufferTime = client.buffer_time || 0;
 
     // Calculate end time from start time + duration
@@ -217,18 +280,27 @@ Deno.serve(async (req) => {
 
     const dayAppts = existingAppointments || [];
 
-    // Find the first available technician for this slot
+    // Find the least-busy available technician for this slot
     let assignedTechId: number | null = null;
     let assignedTechName: string | null = null;
 
     if (activeTechs.length > 0) {
-      // Multi-tech mode: find first free tech
+      // Multi-tech mode: find ALL free techs, then pick the one with fewest appointments today
+      const freeTechs: { id: number; name: string; appointmentCount: number }[] = [];
+
       for (const tech of activeTechs) {
         if (isTechFreeAtSlot(tech.id, startTotalMinutes, appointmentDuration, dayAppts)) {
-          assignedTechId = tech.id;
-          assignedTechName = tech.name;
-          break;
+          const appointmentCount = dayAppts.filter(apt => apt.technician_id === tech.id).length;
+          freeTechs.push({ id: tech.id, name: tech.name, appointmentCount });
         }
+      }
+
+      if (freeTechs.length > 0) {
+        // Sort by fewest appointments first, then by name for deterministic tie-breaking
+        freeTechs.sort((a, b) => a.appointmentCount - b.appointmentCount || a.name.localeCompare(b.name));
+        assignedTechId = freeTechs[0].id;
+        assignedTechName = freeTechs[0].name;
+        console.log(`🔧 Assigned to ${assignedTechName} (${freeTechs[0].appointmentCount} existing appts today). Free techs: ${freeTechs.map(t => `${t.name}(${t.appointmentCount})`).join(', ')}`);
       }
 
       if (!assignedTechId) {
@@ -268,6 +340,8 @@ Deno.serve(async (req) => {
       .insert({
         client_id: client.id,
         caller_name: callerName,
+        first_name: firstName,
+        last_name: lastName,
         caller_number: callerNumber,
         date: date,
         start_time: startTime,
@@ -278,6 +352,7 @@ Deno.serve(async (req) => {
         state: state,
         zip: zip,
         notes: notes,
+        duration: appointmentDuration,
         source: "ai",
         call_id: callId,
         status: "confirmed",

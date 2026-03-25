@@ -137,6 +137,7 @@ serve(async (req) => {
     const body = await req.json();
     const args = body.args ?? body;
     const { date, time } = args;
+    const serviceType: string | null = args.service_type || null;
     const findNext: number | null = args.find_next ? parseInt(args.find_next) : null;
     const agent_id = args.agent_id ?? body.call?.agent_id ?? queryAgentId;
 
@@ -183,7 +184,65 @@ serve(async (req) => {
     }
 
     const clientId = clientRow.id;
-    const aptDuration = clientRow.appointment_duration || 60; // default 1hr
+    let aptDuration = clientRow.appointment_duration || 60; // default 1hr
+
+    // Look up service-specific duration if service_type was provided
+    if (serviceType) {
+      const { data: serviceMatch } = await supabase
+        .from("service_types")
+        .select("duration_minutes")
+        .eq("client_id", clientId)
+        .eq("is_active", true)
+        .ilike("name", serviceType)
+        .maybeSingle();
+
+      if (serviceMatch) {
+        aptDuration = serviceMatch.duration_minutes;
+        console.log(`📋 Service type "${serviceType}" → ${aptDuration} min`);
+      } else {
+        // Try fuzzy match: check name AND customer_phrases
+        const { data: allServices } = await supabase
+          .from("service_types")
+          .select("name, duration_minutes, customer_phrases")
+          .eq("client_id", clientId)
+          .eq("is_active", true);
+
+        if (allServices) {
+          const normalizedInput = serviceType.toLowerCase().trim();
+
+          // 1. Check customer_phrases first (most specific)
+          const phraseMatch = allServices.find(
+            (s) =>
+              s.customer_phrases &&
+              s.customer_phrases.some(
+                (phrase: string) =>
+                  phrase.toLowerCase() === normalizedInput ||
+                  normalizedInput.includes(phrase.toLowerCase()) ||
+                  phrase.toLowerCase().includes(normalizedInput)
+              )
+          );
+
+          if (phraseMatch) {
+            aptDuration = phraseMatch.duration_minutes;
+            console.log(`📋 Phrase matched "${serviceType}" → "${phraseMatch.name}" → ${aptDuration} min`);
+          } else {
+            // 2. Fall back to fuzzy name match
+            const nameMatch = allServices.find(
+              (s) =>
+                s.name.toLowerCase().includes(normalizedInput) ||
+                normalizedInput.includes(s.name.toLowerCase())
+            );
+            if (nameMatch) {
+              aptDuration = nameMatch.duration_minutes;
+              console.log(`📋 Fuzzy name matched "${serviceType}" → "${nameMatch.name}" → ${aptDuration} min`);
+            } else {
+              console.log(`📋 No service match for "${serviceType}", using client default: ${aptDuration} min`);
+            }
+          }
+        }
+      }
+    }
+
     const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
     // Fetch active technicians for this client

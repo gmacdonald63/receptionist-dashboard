@@ -63,6 +63,7 @@ const AppointmentCalendar = ({
   appointments,
   businessHours,
   technicians,
+  serviceTypes,
   currentWeekStart,
   onWeekChange,
   onSaveAppointment,
@@ -233,13 +234,10 @@ const AppointmentCalendar = ({
   // Show sub-columns when no filter is active and there are active techs
   const showSubColumns = !selectedTechId && activeTechs.length > 0;
 
-  // Sub-column definitions: each active tech + Unassigned at end
+  // Sub-column definitions: one column per active tech (no Unassigned column)
   const subColumns = useMemo(() => {
     if (!showSubColumns) return [];
-    return [
-      ...activeTechs.map(t => ({ id: t.id, name: t.name, color: t.color || '#6b7280' })),
-      { id: null, name: 'Unassigned', color: '#6b7280' },
-    ];
+    return activeTechs.map(t => ({ id: t.id, name: t.name, color: t.color || '#6b7280' }));
   }, [activeTechs, showSubColumns]);
 
   // Bucket appointments by date → tech key for sub-column rendering
@@ -455,8 +453,7 @@ const AppointmentCalendar = ({
     const dateStr = formatDateStr(date);
     const dayOfWeek = date.getDay();
     const closed = isDayClosed(dayOfWeek);
-    const isUnassigned = sc.id == null;
-    const techKey = isUnassigned ? 'unassigned' : String(sc.id);
+    const techKey = String(sc.id);
     const subColApts = appointmentsByDateAndTech[dateStr]?.[techKey] || [];
 
     return (
@@ -464,23 +461,19 @@ const AppointmentCalendar = ({
         {/* Slot cells */}
         {timeSlots.map((slotTime) => {
           const inBiz = isSlotInBusinessHours(dayOfWeek, slotTime);
-          const borderR = !(isLastSubCol && isLastDay);
+          const isDayBorder = isLastSubCol && !isLastDay; // bold line between days
+          const isTechBorder = !isLastSubCol; // thin line between techs
           return (
             <div
               key={slotTime}
-              className={`border-b ${borderR ? 'border-r border-gray-700/10' : ''} ${
+              className={`border-b ${isDayBorder ? 'border-r-2 border-r-gray-500' : isTechBorder ? 'border-r border-r-gray-700/10' : ''} ${
                 closed
                   ? 'bg-gray-900/50 cursor-not-allowed'
-                  : isUnassigned
-                  ? inBiz
-                    ? 'bg-gray-800/20 hover:bg-gray-700/30 cursor-pointer'
-                    : 'bg-gray-900/20 hover:bg-gray-800/20 cursor-pointer'
                   : inBiz
                   ? 'bg-gray-800/50 hover:bg-blue-900/20 cursor-pointer'
                   : 'bg-gray-900/30 hover:bg-blue-900/10 cursor-pointer'
-              } border-gray-700/20`}
+              } border-b-gray-700/20`}
               style={{ height: `${SLOT_HEIGHT}px` }}
-              title={isUnassigned && !closed ? 'Unassigned — tech TBD. Assign before day of service.' : undefined}
               onClick={!closed ? () => handleSlotClick(dateStr, slotTime, sc.id) : undefined}
             />
           );
@@ -521,13 +514,13 @@ const AppointmentCalendar = ({
           return (
             <div
               key={slotTime}
-              className={`border-b border-r ${
+              className={`border-b ${isLastColumn ? '' : 'border-r-2 border-r-gray-500'} ${
                 closed
-                  ? 'bg-gray-900/50 border-gray-700/10 cursor-not-allowed'
+                  ? 'bg-gray-900/50 border-b-gray-700/10 cursor-not-allowed'
                   : inBiz
-                  ? 'bg-gray-800/50 border-gray-700/20 hover:bg-blue-900/20 cursor-pointer'
-                  : 'bg-gray-900/30 border-gray-700/10 hover:bg-blue-900/10 cursor-pointer'
-              } ${isLastColumn ? 'border-r-0' : 'border-gray-700/20'}`}
+                  ? 'bg-gray-800/50 border-b-gray-700/20 hover:bg-blue-900/20 cursor-pointer'
+                  : 'bg-gray-900/30 border-b-gray-700/10 hover:bg-blue-900/10 cursor-pointer'
+              }`}
               style={{ height: `${SLOT_HEIGHT}px` }}
               onClick={slotClickable ? () => handleSlotClick(dateStr, slotTime) : undefined}
             />
@@ -548,7 +541,7 @@ const AppointmentCalendar = ({
   const renderDesktopGrid = () => (
     <div
       ref={scrollContainerRef}
-      className="flex-1 overflow-auto border border-gray-700 rounded-lg bg-gray-900"
+      className="flex-1 overflow-auto border-2 border-gray-500 rounded-lg bg-gray-900"
     >
       <div
         className="grid min-w-0"
@@ -557,13 +550,14 @@ const AppointmentCalendar = ({
         }}
       >
         {/* Header row */}
-        <div className="sticky top-0 z-20 bg-gray-900 border-b border-gray-700" />
-        {visibleWeekDates.map((date) => {
+        <div className="sticky top-0 z-20 bg-gray-900 border-b border-gray-700 border-r-2 border-r-gray-500" />
+        {visibleWeekDates.map((date, idx) => {
           const isToday = formatDateStr(date) === todayStr;
+          const isLastCol = idx === visibleWeekDates.length - 1;
           return (
             <div
               key={formatDateStr(date)}
-              className="sticky top-0 z-20 bg-gray-900 border-b border-gray-700 text-center overflow-hidden"
+              className={`sticky top-0 z-20 bg-gray-900 border-b border-gray-700 text-center overflow-hidden ${isLastCol ? '' : 'border-r-2 border-r-gray-500'}`}
             >
               {/* Day name + date — clickable to drill into day view */}
               <div
@@ -614,7 +608,7 @@ const AppointmentCalendar = ({
         }}
       >
         {/* Time labels */}
-        <div>
+        <div className="border-r-2 border-gray-500">
           {timeSlots.map((slotTime, idx) => (
             <div
               key={slotTime}
@@ -705,7 +699,7 @@ const AppointmentCalendar = ({
       >
       <div
         ref={scrollContainerRef}
-        className="flex-1 overflow-auto border border-gray-700 rounded-lg bg-gray-900"
+        className="flex-1 overflow-auto border-2 border-gray-500 rounded-lg bg-gray-900"
       >
         <div className="relative" style={{ minWidth: 0 }}>
           {/* Time slots */}
@@ -833,7 +827,7 @@ const AppointmentCalendar = ({
     return (
       <div
         ref={scrollContainerRef}
-        className="flex-1 overflow-auto border border-gray-700 rounded-lg bg-gray-900"
+        className="flex-1 overflow-auto border-2 border-gray-500 rounded-lg bg-gray-900"
       >
         {/* Sub-column header row */}
         <div className="sticky top-0 z-20 flex bg-gray-900 border-b border-gray-700">
@@ -1009,29 +1003,37 @@ const AppointmentCalendar = ({
               </span>
             </div>
           ) : (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={goPreviousWeek}
-                className="px-2.5 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 border border-gray-700 text-sm font-medium"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <button
-                onClick={goToToday}
-                className={`px-3 py-2 rounded-lg text-sm font-medium ${
-                  isCurrentWeek
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-800 text-white hover:bg-gray-700 border border-gray-700'
-                }`}
-              >
-                Current
-              </button>
-              <button
-                onClick={goNextWeek}
-                className="px-2.5 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 border border-gray-700 text-sm font-medium"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
+            <div className="flex flex-col items-center gap-0.5">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={goPreviousWeek}
+                  className="px-2.5 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 border border-gray-700 text-sm font-medium"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={goToToday}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium ${
+                    isCurrentWeek
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-800 text-white hover:bg-gray-700 border border-gray-700'
+                  }`}
+                >
+                  Current
+                </button>
+                <button
+                  onClick={goNextWeek}
+                  className="px-2.5 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 border border-gray-700 text-sm font-medium"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+              <span className="text-white font-bold text-sm">
+                {(() => {
+                  const months = new Set(visibleWeekDates.map(d => d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })));
+                  return [...months].join(' / ');
+                })()}
+              </span>
             </div>
           )}
 
@@ -1100,6 +1102,7 @@ const AppointmentCalendar = ({
                 selectedSlot={selectedSlot}
                 appointment={selectedAppointment}
                 technicians={technicians}
+                serviceTypes={serviceTypes}
                 defaultTechnicianId={selectedSlot?.techId ?? selectedTechId}
                 onSave={handleSave}
                 onClose={handleCloseSidePanel}
@@ -1127,6 +1130,7 @@ const AppointmentCalendar = ({
                   selectedSlot={selectedSlot}
                   appointment={selectedAppointment}
                   technicians={technicians}
+                  serviceTypes={serviceTypes}
                   defaultTechnicianId={selectedSlot?.techId ?? selectedTechId}
                   onSave={handleSave}
                   onClose={handleCloseSidePanel}
