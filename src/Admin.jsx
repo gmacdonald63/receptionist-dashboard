@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, Edit, Trash2, Save, X, RefreshCw, ArrowLeft, Mail, Check, UserPlus } from 'lucide-react';
+import { Users, Plus, Edit, Trash2, Save, X, RefreshCw, ArrowLeft, Mail, Check, UserPlus, TrendingUp } from 'lucide-react';
 import { supabase } from './supabaseClient';
+import AdminSalesPanel from './pages/AdminSalesPanel';
 
-const Admin = ({ onBack }) => {
+const Admin = ({ onBack, session }) => {
   const [adminTab, setAdminTab] = useState('clients');
 
   // Shared state
@@ -24,7 +25,7 @@ const Admin = ({ onBack }) => {
   const [showRepForm, setShowRepForm] = useState(false);
   const [editingRep, setEditingRep] = useState(null);
   const [repForm, setRepForm] = useState({
-    company_name: '', email: '', phone: ''
+    company_name: '', email: '', phone: '', commission_option: 1
   });
 
   // Derived lists
@@ -141,6 +142,7 @@ const Admin = ({ onBack }) => {
       company_name: rep.company_name || '',
       email: rep.email || '',
       phone: rep.phone || '',
+      commission_option: rep.commission_option || 1,
     });
     setEditingRep(rep);
     setShowRepForm(true);
@@ -156,6 +158,7 @@ const Admin = ({ onBack }) => {
           .update({
             company_name: repForm.company_name,
             phone: repForm.phone,
+            commission_option: repForm.commission_option,
           })
           .eq('id', editingRep.id);
         if (error) throw error;
@@ -175,9 +178,10 @@ const Admin = ({ onBack }) => {
             company_name: repForm.company_name,
             phone: repForm.phone,
             role: 'sales_rep',
+            is_sales_rep: true,
+            commission_option: repForm.commission_option,
             is_admin: false,
             invite_sent: false,
-            demo_client_id: 9999,
           }]);
         if (error) throw error;
         setSuccessMessage("Sales rep added! Click 'Send Invite' to email them.");
@@ -338,6 +342,14 @@ const Admin = ({ onBack }) => {
         >
           <UserPlus className="w-4 h-4" /> Reps
         </button>
+        <button
+          onClick={() => setAdminTab('sales')}
+          className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+            adminTab === 'sales' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'
+          }`}
+        >
+          <TrendingUp className="w-4 h-4" /> Sales
+        </button>
       </div>
 
       {/* Success / Error Messages */}
@@ -456,10 +468,25 @@ const Admin = ({ onBack }) => {
                   className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
                   placeholder="(555) 123-4567" />
               </div>
+              <div>
+                <label className="block text-gray-400 text-sm mb-1">Commission Option *</label>
+                <select
+                  value={repForm.commission_option}
+                  onChange={(e) => setRepForm({ ...repForm, commission_option: parseInt(e.target.value) })}
+                  className="w-full px-3 py-2 bg-gray-750 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                >
+                  <option value={1}>Option 1 — Full Upfront</option>
+                  <option value={2}>Option 2 — Split + Residual</option>
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Option 1: rep receives full monthly plan price as a one-time payment.
+                  Option 2: 50% upfront + 10% residual for 12 months.
+                </p>
+              </div>
               {error && <p className="text-red-400 text-sm">{error}</p>}
               <div className="flex gap-3 pt-2">
                 <button onClick={resetRepForm} className="flex-1 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600">Cancel</button>
-                <button onClick={handleSaveRep} disabled={saving || !repForm.email || !repForm.company_name}
+                <button onClick={handleSaveRep} disabled={saving || !repForm.email || !repForm.company_name || !repForm.commission_option}
                   className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50">
                   {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                   {saving ? 'Saving...' : 'Save'}
@@ -556,6 +583,11 @@ const Admin = ({ onBack }) => {
           ))}
         </div>
       ))}
+
+      {/* ==================== SALES TAB ==================== */}
+      {adminTab === 'sales' && (
+        <AdminSalesPanel session={session} />
+      )}
 
       {/* ==================== REPS TAB ==================== */}
       {adminTab === 'reps' && (loading ? (

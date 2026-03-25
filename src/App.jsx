@@ -11,6 +11,8 @@ import DemoDashboard from './DemoDashboard';
 import InstallPrompt from './InstallPrompt';
 import UpdatePrompt from './UpdatePrompt';
 import AppointmentCalendar from './AppointmentCalendar';
+import OnboardingPage from './pages/OnboardingPage.jsx';
+import SalesRepDashboard from './pages/SalesRepDashboard.jsx';
 
 const SUPABASE_URL = 'https://zmppdmfdhknnwzwdfhwf.supabase.co';
 
@@ -197,26 +199,7 @@ const App = () => {
     validateToken();
   }, []);
 
-  // Sales rep auto-enters demo mode
-  useEffect(() => {
-    if (clientData?.role === 'sales_rep' && clientData?.demo_client_id) {
-      const fetchDemoClient = async () => {
-        const { data } = await supabase
-          .from('clients')
-          .select('*')
-          .eq('id', clientData.demo_client_id)
-          .single();
-        if (data) {
-          setDemoClientData(data);
-          // Sales reps get a 1-hour session from now
-          setDemoExpiresAt(new Date(Date.now() + 60 * 60 * 1000).toISOString());
-          setDemoMode(true);
-          setIsPublicDemo(false);
-        }
-      };
-      fetchDemoClient();
-    }
-  }, [clientData]);
+  // Sales rep auto-demo removed — reps now use the Show Demo button in SalesRepDashboard.
 
   // After Stripe checkout redirect, poll for subscription activation (webhook may be slightly delayed)
   useEffect(() => {
@@ -297,12 +280,8 @@ const App = () => {
     setDemoExpiresAt(null);
     setDemoToken(null);
     setIsPublicDemo(false);
-    // Sales reps have nothing outside demo — log them out
-    if (clientData?.role === 'sales_rep') {
-      await supabase.auth.signOut();
-      setUser(null);
-      setClientData(null);
-    }
+    // If a sales rep triggered demo, exiting returns them to SalesRepDashboard.
+    // Public demo viewers are just unauthenticated — no action needed.
   };
 
   const handleDemoDataRefresh = () => {
@@ -1623,6 +1602,13 @@ const App = () => {
     { id: 'settings', label: 'Settings', icon: Settings }
   ];
 
+  // ── Public onboarding route (no auth required) ──────────────
+  const _onboardParams = new URLSearchParams(window.location.search);
+  const _onboardToken = _onboardParams.get('token');
+  if (_onboardToken) {
+    return <OnboardingPage token={_onboardToken} />;
+  }
+
   // Show loading while checking auth or demo token
   if (authLoading || demoLoading) {
     return (
@@ -1878,6 +1864,36 @@ const App = () => {
       </div>
     );
   }
+
+  // ── Sales Rep Dashboard ─────────────────────────────────────────
+  // If the logged-in user is a sales rep, render the rep dashboard.
+  // In demo mode (triggered by Show Demo button), fall through to the
+  // main demo view below by skipping this block.
+  if (clientData?.is_sales_rep && !demoMode) {
+    const handleShowDemo = async () => {
+      // Fetch the demo client (uses demo_client_id from rep's record, or falls back to client id 9)
+      const { data } = await supabase
+        .from('clients')
+        .select('*')
+        .eq('id', clientData.demo_client_id || 9)
+        .single();
+      if (data) {
+        setDemoClientData(data);
+        setDemoExpiresAt(new Date(Date.now() + 60 * 60 * 1000).toISOString());
+        setDemoMode(true);
+        setIsPublicDemo(false);
+      }
+    };
+
+    return (
+      <SalesRepDashboard
+        clientData={clientData}
+        onLogout={handleLogout}
+        onShowDemo={handleShowDemo}
+      />
+    );
+  }
+  // ── End Sales Rep Dashboard ─────────────────────────────────────
 
   // Show admin dashboard if admin and showAdmin is true
   if (showAdmin && clientData?.is_admin) {
