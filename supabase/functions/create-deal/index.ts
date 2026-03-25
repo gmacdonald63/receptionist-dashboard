@@ -122,6 +122,13 @@ Deno.serve(async (req) => {
       body: JSON.stringify({ deal_id: deal.id, action: "create" }),
     }).catch(e => console.error("hubspot-sync call failed:", e));
 
+    // Email the onboarding link directly to the client — non-blocking
+    fetch(`${supabaseUrl}/functions/v1/send-notification`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ template: "onboarding_link_client", deal_id: deal.id }),
+    }).catch(e => console.error("send-notification (onboarding link) failed:", e));
+
     return new Response(
       JSON.stringify({
         deal_id: deal.id,

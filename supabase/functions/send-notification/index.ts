@@ -8,6 +8,7 @@ const corsHeaders = {
 };
 
 type Template =
+  | "onboarding_link_client"
   | "setup_fee_paid_greg"
   | "setup_fee_paid_rep"
   | "client_active_greg"
@@ -82,7 +83,34 @@ Deno.serve(async (req) => {
     const planLabel = deal.plan === "pro" ? "Pro" : "Standard";
     const cycleLabel = deal.billing_cycle === "annual" ? "Annual" : "Monthly";
 
+    const APP_URL = "https://app.reliantsupport.net";
+
     switch (template) {
+      case "onboarding_link_client": {
+        const onboardingUrl = `${APP_URL}/onboard?token=${deal.id}`;
+        // Fetch the actual onboarding token from the deal
+        const { data: dealWithToken } = await supabase
+          .from("deals")
+          .select("onboarding_token")
+          .eq("id", deal_id)
+          .single();
+        const url = `${APP_URL}/onboard?token=${dealWithToken?.onboarding_token || deal.id}`;
+        await sendEmail(
+          resendKey,
+          deal.client_email,
+          `Your Reliant Support setup link — ${deal.company_name}`,
+          `<h2>Welcome to Reliant Support!</h2>
+           <p>Hi ${deal.client_name},</p>
+           <p>Your sales representative has set up an account for <strong>${deal.company_name}</strong>.</p>
+           <p>Please click the link below to complete your setup and pay the one-time setup fee of <strong>$395</strong>:</p>
+           <p><a href="${url}" style="background:#2563eb;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;">Complete Your Setup</a></p>
+           <p>Or copy this link into your browser:<br/>${url}</p>
+           <p>If you have any questions, reply to this email or contact your sales representative.</p>
+           <br/><p>— The Reliant Support Team</p>`
+        );
+        break;
+      }
+
       case "setup_fee_paid_greg": {
         const od = deal.onboarding_data || {};
         await sendEmail(
