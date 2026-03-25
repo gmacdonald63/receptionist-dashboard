@@ -294,38 +294,70 @@ App state shape:
 
 ### 3. URL Param Handling
 
-The `?track=<uuid>` check is handled in two places: (a) in the `getSession` block — skip `setUser` and set `authLoading(false)` immediately so no role lookup fires for the unauthenticated tracking visitor, and (b) synchronously in the render function before the `authLoading` spinner gate:
+The `?track=<uuid>` check is handled in two places:
 
-```jsx
-function App() {
-  // ... all useState/useEffect hooks must still run (React rules) ...
+**(a) In the `getSession` block:** Short-circuit before any auth lookup fires. The existing `clients` lookup + `signOut()` inside the `.then()` callback must be **deleted entirely** and replaced with just `setUser(session.user)`:
 
-  // Priority 1: public tracking page — before authLoading gate
-  const searchParams = new URLSearchParams(window.location.search);
-  const trackingId = searchParams.get('track');
-  if (trackingId) {
-    return <TrackingPage appointmentId={trackingId} />;
+```js
+// BEFORE (existing — delete this entirely):
+supabase.from('clients').select('*').eq('email', session.user.email).single()
+  .then(async ({ data }) => {
+    if (data) { setClientData(data); }
+    else { await supabase.auth.signOut(); setUser(null); }
+    setAuthLoading(false);
+  });
+
+// AFTER:
+supabase.auth.getSession().then(({ data: { session } }) => {
+  if (new URLSearchParams(window.location.search).get('track')) {
+    setAuthLoading(false);
+    return;
   }
-
-  // Existing authLoading gate follows
-  if (authLoading || demoLoading) return <spinner />;
-  // ...
-}
+  if (session?.user) setUser(session.user);
+  // authLoading is now set to false inside useEffect([user]) at each branch
+  else setAuthLoading(false);
+});
 ```
 
-Note: All `useState`/`useEffect` calls must remain above the early return (React rules of hooks). Only the *render output* short-circuits.
-
-If `?track` and `?demo` are both present, `?track` wins. `?billing=success` useEffect is safe — it only runs when `user` is set, which techs and dispatchers can have; however it queries `clients` directly. Dispatchers have a `clients` row via `clientData`, so they are safe. Techs don't hit this useEffect because they have no `?billing` redirect path.
-
-**Render waterfall — tech short-circuit:**
-The existing guard `if (user && !clientData)` (line 1783) would show "No Account Found" for techs since they set `techData`, not `clientData`. Add a role check before this guard:
+**(b) Synchronously in the render function** (before the `authLoading` gate — all hooks must run above this):
 
 ```jsx
-// After: if (!user) return <Login />
-// Before: if (user && !clientData) return <NoAccountFound />
+const trackingId = new URLSearchParams(window.location.search).get('track');
+if (trackingId) return <TrackingPage appointmentId={trackingId} />;
 
+if (authLoading || demoLoading) return <spinner />;
+```
+
+If `?track` and `?demo` are both present, `?track` wins.
+
+**Render waterfall — full sequence:**
+
+```jsx
+// 1. ?track → TrackingPage (before authLoading)
+// 2. authLoading spinner (existing)
+// 3. !user → <Login> (existing)
+// 4. role==='tech' → <TechDashboard> — MUST be a hard return here
 if (role === 'tech' && techData) {
   return <TechDashboard techData={techData} />;
+}
+// 5. !clientData → "No Account Found" (existing, line 1783)
+// 6. showAdmin → <Admin> (existing)
+// 7. Subscription gate (existing, line 1814 — reads clientData; safe since tech returned above)
+// 8. Main dashboard render (existing — reads clientData; safe since tech returned above)
+```
+
+The tech `return` at step 4 must be a hard `return` statement. If it falls through to step 7, `clientData` is null, `isSubscriptionActive` is false, and the app continues to the main dashboard which crashes reading null clientData properties.
+
+**`onAuthStateChange` — two additions needed:**
+The existing `SIGNED_OUT` handler (line 149–152) clears `user` and `clientData` but not `role` or `techData`. These must be cleared on sign-out to prevent stale state if a different user logs in:
+
+```js
+if (event === 'SIGNED_OUT') {
+  setUser(null);
+  setClientData(null);
+  setRole(null);       // ADD
+  setTechData(null);   // ADD
+  return;
 }
 ```
 
@@ -403,7 +435,37 @@ The function:
 
 `team` is inserted between `calls` and `billing`.
 
-**`grid-cols` update required:** The existing bottom nav uses `grid grid-cols-5` in two places (lines 1745 and 1998 in `App.jsx`). This class must be made dynamic based on the number of tabs visible for the current role: `grid-cols-6` for owners (6 tabs), `grid-cols-4` for dispatchers (4 tabs). Use `grid-cols-${navItems.length}` where `navItems` is the filtered array of visible tabs.
+**`navItems` and `grid-cols` update:**
+
+The existing `navItems` constant (line 1541) is a static 5-item array used by both the public demo nav and the authenticated nav. Do not modify it — it stays as the demo nav's source.
+
+For the authenticated nav, define separate computed arrays below `navItems`:
+
+```js
+const teamTab = { id: 'team', label: 'Team', icon: Users }; // choose appropriate icon
+
+const ownerNavItems = [
+  { id: 'appointments', label: 'Appointments', icon: Calendar },
+  { id: 'customers', label: 'Customers', icon: Users },
+  { id: 'calls', label: 'Calls', icon: Phone },
+  teamTab,
+  { id: 'billing', label: 'Billing', icon: DollarSign },
+  { id: 'settings', label: 'Settings', icon: Settings }
+];
+
+const dispatcherNavItems = [
+  { id: 'appointments', label: 'Appointments', icon: Calendar },
+  { id: 'customers', label: 'Customers', icon: Users },
+  { id: 'calls', label: 'Calls', icon: Phone },
+  teamTab,
+];
+
+const activeNavItems = role === 'dispatcher' ? dispatcherNavItems : ownerNavItems;
+```
+
+In the authenticated nav render (lines 1745 and 1998), replace `navItems` with `activeNavItems` and `grid-cols-5` with `grid-cols-${activeNavItems.length}`.
+
+The demo nav (line 1745 area) continues to use `navItems` unchanged.
 
 **Dispatcher tab visibility:**
 
