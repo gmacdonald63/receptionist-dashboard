@@ -69,7 +69,7 @@ Deno.serve(async (req) => {
       .from("deals")
       .select(`
         id, client_name, client_email, company_name, plan, billing_cycle, status, onboarding_data,
-        rep:rep_id ( id, email, first_name, last_name )
+        rep:rep_id ( id, email, company_name )
       `)
       .eq("id", deal_id)
       .single();
@@ -78,7 +78,7 @@ Deno.serve(async (req) => {
       throw new Error(`Deal not found: ${deal_id}`);
     }
 
-    const repName = [deal.rep?.first_name, deal.rep?.last_name].filter(Boolean).join(" ") || deal.rep?.email || "Sales Rep";
+    const repName = deal.rep?.company_name || deal.rep?.email || "Sales Rep";
     const planLabel = deal.plan === "pro" ? "Pro" : "Standard";
     const cycleLabel = deal.billing_cycle === "annual" ? "Annual" : "Monthly";
 

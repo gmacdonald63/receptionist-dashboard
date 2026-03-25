@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
     // Load deal + rep
     const { data: deal, error } = await supabase
       .from("deals")
-      .select("id, client_name, client_email, client_phone, company_name, plan, billing_cycle, status, hubspot_deal_id, rep:rep_id(email, first_name, last_name)")
+      .select("id, client_name, client_email, client_phone, company_name, plan, billing_cycle, status, hubspot_deal_id, rep:rep_id(email, company_name)")
       .eq("id", deal_id)
       .single();
 
@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
     const stageId = stageEnvKey ? Deno.env.get(stageEnvKey) : undefined;
 
     const dealName = `${deal.company_name} — ${deal.plan === "pro" ? "Pro" : "Standard"} (${deal.billing_cycle === "annual" ? "Annual" : "Monthly"})`;
-    const repName = [deal.rep?.first_name, deal.rep?.last_name].filter(Boolean).join(" ") || deal.rep?.email || "";
+    const repName = deal.rep?.company_name || deal.rep?.email || "";
 
     const dealProperties: Record<string, string> = {
       dealname: dealName,
