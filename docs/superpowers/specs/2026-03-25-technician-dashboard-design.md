@@ -224,87 +224,77 @@ CREATE POLICY "owner_manage_staff" ON client_staff
 
 ### 2. Auth Flow
 
-**Three code paths must all be updated:**
-
-**Path 1 — `App.jsx` `getSession` block (lines 111–129):**
-The current block does a `clients`-only lookup and force-signs out if not found. It must: (a) short-circuit immediately if `?track` is in the URL, and (b) replace the clients-only lookup with the four-step chain below.
+**Role resolution lives entirely in `useEffect([user])`** — this is the single source of truth, triggered by every auth path (page load via `getSession`, email/password login via `Login.jsx`, and invite-link completion via `onAuthStateChange SIGNED_IN`):
 
 ```js
-supabase.auth.getSession().then(async ({ data: { session } }) => {
-  // Short-circuit for public tracking page
-  if (new URLSearchParams(window.location.search).get('track')) {
+useEffect(() => {
+  if (!user) return;
+
+  const resolveRole = async () => {
+    const email = user.email;
+
+    // Step 1: owner / admin
+    const { data: clientRecord } = await supabase
+      .from('clients').select('*').eq('email', email).maybeSingle();
+    if (clientRecord) {
+      setRole(clientRecord.is_admin ? 'admin' : 'owner');
+      setClientData(clientRecord);
+      setAuthLoading(false);
+      return;
+    }
+
+    // Step 2: dispatcher
+    const { data: staffRecord } = await supabase
+      .from('client_staff').select('*').eq('email', email).eq('active', true).maybeSingle();
+    if (staffRecord) {
+      const { data: ownerData } = await supabase
+        .from('clients').select('*').eq('id', staffRecord.client_id).single();
+      setRole('dispatcher');
+      setClientData(ownerData);
+      setAuthLoading(false);
+      return;
+    }
+
+    // Step 3: technician
+    const { data: techRecord } = await supabase
+      .from('technicians').select('*').eq('email', email).eq('is_active', true).maybeSingle();
+    if (techRecord) {
+      setRole('tech');
+      setTechData(techRecord);
+      setAuthLoading(false);
+      return;
+    }
+
+    // Step 4: no match — sign out
+    await supabase.auth.signOut();
     setAuthLoading(false);
-    return;
-  }
-  if (!session?.user) { setAuthLoading(false); return; }
-  setUser(session.user);
-  await resolvRole(session.user.email);
-  setAuthLoading(false);
-});
+  };
+
+  resolveRole();
+}, [user]);
 ```
 
-**Path 2 — `Login.jsx`:**
-Currently does its own `clients` lookup (line 25) and calls `onLogin(user, clientData)`. Must be updated to run the same `resolveRole` logic and call `onLogin(user, { role, clientData, techData })`.
+**Changes required by this approach:**
 
-**Path 3 — `handleLogin` in `App.jsx`:**
-Currently `(user, clientData)`. Must be updated to `(user, { role, clientData, techData })`.
-
-**The `onAuthStateChange` handler is unchanged** — it handles `PASSWORD_RECOVERY`, `SIGNED_OUT`, and session state only. No role lookups.
-
-**Shared `resolveRole(email)` helper** (extracted function, called from both Path 1 and Path 2):
-
-```js
-async function resolveRole(email) {
-  // Step 1: owner / admin (email is unique in clients table)
-  const { data: clientRecord } = await supabase
-    .from('clients').select('*').eq('email', email).maybeSingle();
-  if (clientRecord) {
-    setRole(clientRecord.is_admin ? 'admin' : 'owner');
-    setClientData(clientRecord);
-    return { role: clientRecord.is_admin ? 'admin' : 'owner', clientData: clientRecord };
-  }
-
-  // Step 2: dispatcher
-  const { data: staffRecord } = await supabase
-    .from('client_staff').select('*').eq('email', email).eq('active', true).maybeSingle();
-  if (staffRecord) {
-    const { data: ownerData } = await supabase
-      .from('clients').select('*').eq('id', staffRecord.client_id).single();
-    setRole('dispatcher');
-    setClientData(ownerData);
-    return { role: 'dispatcher', clientData: ownerData };
-  }
-
-  // Step 3: technician
-  const { data: techRecord } = await supabase
-    .from('technicians').select('*').eq('email', email).eq('is_active', true).maybeSingle();
-  if (techRecord) {
-    setRole('tech');
-    setTechData(techRecord);
-    return { role: 'tech', techData: techRecord };
-  }
-
-  // Step 4: no match — sign out
-  await supabase.auth.signOut();
-  setError('Account not found.');
-  return null;
-}
-```
+- **`getSession` block:** Remove the `clients` lookup and force sign-out entirely. Just call `setUser(session.user)` (or skip if `?track` is present — see Section 3). `setAuthLoading(false)` moves inside `resolveRole` at each branch.
+- **`onAuthStateChange`:** Unchanged. When `SIGNED_IN` fires (invite link), `setUser` is called at line 155, which re-triggers `useEffect([user])` → role is resolved automatically.
+- **`Login.jsx`:** Remove the `clients` lookup. Just call `supabase.auth.signInWithPassword` and on success call `onLogin(user)` — no clientData needed. The `useEffect([user])` in App.jsx handles the rest.
+- **`handleLogin` in `App.jsx`:** Simplify to `(user) => setUser(user)`.
 
 App state shape:
 ```js
 { user, role: 'admin' | 'owner' | 'dispatcher' | 'tech', clientData, techData? }
 ```
 
-**Deactivated techs:** RLS subqueries include `is_active = true`, so a deactivated tech's queries return no data after their next token refresh. An already-authenticated session is not immediately invalidated — acceptable for Phase 1 (Supabase JWTs expire in ~1 hour). Immediate lockout is a Phase 2 concern.
+**Deactivated techs:** RLS subqueries include `is_active = true`, so deactivated tech queries return no data after next token refresh. Session expires naturally (~1 hour). Immediate lockout is a Phase 2 concern.
 
-**`clients` RLS subquery multi-row safety:** The `client_manage_own_techs` and similar policies use `(SELECT id FROM clients WHERE email = ...)`. The `clients.email` column is unique, so this subquery always returns 0 or 1 rows — no runtime error risk.
+**`clients` RLS subquery multi-row safety:** `clients.email` is unique — subqueries always return 0 or 1 rows.
 
 ---
 
 ### 3. URL Param Handling
 
-The `?track=<uuid>` check must be synchronous in the App render, and the `getSession` block must short-circuit for it (see Section 2 Path 1). In the render function, `?track` is checked before the `authLoading` spinner gate:
+The `?track=<uuid>` check is handled in two places: (a) in the `getSession` block — skip `setUser` and set `authLoading(false)` immediately so no role lookup fires for the unauthenticated tracking visitor, and (b) synchronously in the render function before the `authLoading` spinner gate:
 
 ```jsx
 function App() {
@@ -409,9 +399,11 @@ The function:
 
 ### 6. Tab Structure
 
-**Owner tab order:** `appointments` | `customers` | `calls` | `team` | `billing` | `settings`
+**Owner tab order:** `appointments` | `customers` | `calls` | `team` | `billing` | `settings` (6 tabs)
 
 `team` is inserted between `calls` and `billing`.
+
+**`grid-cols` update required:** The existing bottom nav uses `grid grid-cols-5` in two places (lines 1745 and 1998 in `App.jsx`). This class must be made dynamic based on the number of tabs visible for the current role: `grid-cols-6` for owners (6 tabs), `grid-cols-4` for dispatchers (4 tabs). Use `grid-cols-${navItems.length}` where `navItems` is the filtered array of visible tabs.
 
 **Dispatcher tab visibility:**
 
