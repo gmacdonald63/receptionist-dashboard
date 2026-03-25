@@ -68,6 +68,16 @@ CREATE POLICY "tech_read_own" ON technicians
     AND email IS NOT NULL
     AND email = (SELECT email FROM auth.users WHERE id = auth.uid())
   );
+
+-- Dispatchers read all techs for their client (needed for Team tab read-only list)
+CREATE POLICY "dispatcher_read_client_techs" ON technicians
+  FOR SELECT USING (
+    client_id = (
+      SELECT client_id FROM client_staff
+      WHERE email = (SELECT email FROM auth.users WHERE id = auth.uid())
+        AND active = true
+    )
+  );
 ```
 
 **Existing tech rows:** After this migration, all existing rows have `email = NULL` and cannot log in until an email is added via the updated form. This does not affect existing owner functionality.
@@ -479,6 +489,8 @@ The demo nav (line 1745 area) continues to use `navItems` unchanged.
 | Settings | ✅ | ❌ hidden |
 
 Dispatchers see Calls — read-only, same as the existing calls view.
+
+**Team tab — rendered by:** New component `src/TeamTab.jsx`. Receives `clientData`, `role`, and `activeTab` props (or reads from shared state). The main content render block in `App.jsx` adds: `{activeTab === 'team' && <TeamTab clientData={clientData} role={role} />}`.
 
 **Team tab — owner view:** Full CRUD on techs + permission management. "Add Tech" button.
 
