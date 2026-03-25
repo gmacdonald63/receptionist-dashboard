@@ -1783,7 +1783,7 @@ git commit -m "feat: add 6-tab owner nav, 4-tab dispatcher nav, TeamTab wired in
 **Files:**
 - Create: `supabase/functions/invite-user/index.ts`
 
-This function is the only way to call `auth.admin.inviteUserByEmail` — it requires the service role key which cannot be used client-side. The caller must be an authenticated owner (verified by JWT + `clients` table lookup). The function deduplicates by checking `auth.admin.listUsers()` before inviting.
+This function is the only way to call `auth.admin.inviteUserByEmail` — it requires the service role key which cannot be used client-side. The caller must be an authenticated owner (verified by JWT + `clients` table lookup). The function deduplicates by calling `auth.admin.getUserByEmail()` — a direct lookup that avoids the 50-user pagination limit of `listUsers()`.
 
 - [ ] **Step 1: Create the function**
 
@@ -1849,9 +1849,10 @@ Deno.serve(async (req) => {
     }
 
     // ── Dedup check: email already in auth.users? ────────────────────────────
-    const { data: { users } } = await supabase.auth.admin.listUsers();
-    const existing = users.find((u) => u.email?.toLowerCase() === email.toLowerCase());
-    if (existing) {
+    // Using getUserByEmail (direct lookup) instead of listUsers() which only
+    // returns the first 50 users and would miss existing accounts beyond that.
+    const { data: existingUser } = await supabase.auth.admin.getUserByEmail(email);
+    if (existingUser?.user) {
       console.log(`invite-user: ${email} already exists — skipping invite`);
       return new Response(JSON.stringify({ existing: true }), {
         status: 200,
