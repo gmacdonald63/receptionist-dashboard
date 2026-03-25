@@ -29,6 +29,8 @@ const App = () => {
   const [user, setUser] = useState(null);
   const [clientData, setClientData] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [role, setRole] = useState(null); // 'admin' | 'owner' | 'dispatcher' | 'tech' | null
+  const [techData, setTechData] = useState(null);
   const [showAdmin, setShowAdmin] = useState(false);
   const [showResetPassword, setShowResetPassword] = useState(false);
   const showResetPasswordRef = useRef(false);
@@ -112,27 +114,14 @@ const App = () => {
     }
 
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        setUser(session.user);
-        // Fetch client data — sign out if no clients record exists
-        supabase
-          .from('clients')
-          .select('*')
-          .eq('email', session.user.email)
-          .single()
-          .then(async ({ data }) => {
-            if (data) {
-              setClientData(data);
-            } else {
-              // No client record — force sign out
-              await supabase.auth.signOut();
-              setUser(null);
-            }
-            setAuthLoading(false);
-          });
-      } else {
+      // Phase 2: ?track short-circuit — no auth needed for tracking page
+      if (new URLSearchParams(window.location.search).get('track')) {
         setAuthLoading(false);
+        return;
       }
+      if (session?.user) setUser(session.user);
+      // authLoading is set to false inside resolveRole() at each branch for authenticated users
+      else setAuthLoading(false);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
@@ -152,6 +141,8 @@ const App = () => {
       if (event === 'SIGNED_OUT') {
         setUser(null);
         setClientData(null);
+        setRole(null);
+        setTechData(null);
         return;
       }
 
@@ -200,6 +191,67 @@ const App = () => {
   }, []);
 
   // Sales rep auto-demo removed — reps now use the Show Demo button in SalesRepDashboard.
+
+  // Role resolution — single source of truth for all auth paths
+  useEffect(() => {
+    if (!user) return;
+
+    const resolveRole = async () => {
+      const email = user.email;
+
+      // Step 1: owner / admin — check clients table
+      const { data: clientRecord } = await supabase
+        .from('clients')
+        .select('*')
+        .eq('email', email)
+        .maybeSingle();
+      if (clientRecord) {
+        setRole(clientRecord.is_admin ? 'admin' : 'owner');
+        setClientData(clientRecord);
+        setAuthLoading(false);
+        return;
+      }
+
+      // Step 2: dispatcher — check client_staff table
+      const { data: staffRecord } = await supabase
+        .from('client_staff')
+        .select('*')
+        .eq('email', email)
+        .eq('active', true)
+        .maybeSingle();
+      if (staffRecord) {
+        const { data: ownerData } = await supabase
+          .from('clients')
+          .select('*')
+          .eq('id', staffRecord.client_id)
+          .single();
+        setRole('dispatcher');
+        setClientData(ownerData);
+        setAuthLoading(false);
+        return;
+      }
+
+      // Step 3: technician — check technicians table
+      const { data: techRecord } = await supabase
+        .from('technicians')
+        .select('*')
+        .eq('email', email)
+        .eq('is_active', true)
+        .maybeSingle();
+      if (techRecord) {
+        setRole('tech');
+        setTechData(techRecord);
+        setAuthLoading(false);
+        return;
+      }
+
+      // Step 4: no match — sign out (unknown user)
+      await supabase.auth.signOut();
+      setAuthLoading(false);
+    };
+
+    resolveRole();
+  }, [user]);
 
   // After Stripe checkout redirect, poll for subscription activation (webhook may be slightly delayed)
   useEffect(() => {
@@ -261,9 +313,8 @@ const App = () => {
     setSettingsHoursForm(form);
   }, [businessHours]);
 
-  const handleLogin = (user, clientData) => {
+  const handleLogin = (user) => {
     setUser(user);
-    setClientData(clientData);
   };
 
   const handleLogout = async () => {

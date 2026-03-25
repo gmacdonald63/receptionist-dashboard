@@ -14,27 +14,10 @@ const Login = ({ onLogin }) => {
     setError(null);
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
-
-      // Get client data for this user
-      const { data: clientData, error: clientError } = await supabase
-        .from('clients')
-        .select('*')
-        .eq('email', email)
-        .single();
-
-      if (clientError || !clientData) {
-        // User authenticated but no client record — sign them out and show error
-        await supabase.auth.signOut();
-        throw new Error('No account found. Please contact your administrator for an invitation.');
-      }
-
-      onLogin(data.user, clientData);
+      onLogin(data.user);
+      // Role resolution happens in App.jsx useEffect([user])
     } catch (error) {
       setError(error.message);
     } finally {
