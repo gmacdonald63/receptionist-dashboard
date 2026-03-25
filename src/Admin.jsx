@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, Edit, Trash2, Save, X, RefreshCw, ArrowLeft, Mail, Check, UserPlus } from 'lucide-react';
+import { Users, Plus, Edit, Trash2, Save, X, RefreshCw, ArrowLeft, Mail, Check, UserPlus, TrendingUp } from 'lucide-react';
 import { supabase } from './supabaseClient';
+import AdminSalesPanel from './pages/AdminSalesPanel';
 
-const Admin = ({ onBack }) => {
+const Admin = ({ onBack, session }) => {
   const [adminTab, setAdminTab] = useState('clients');
 
   // Shared state
@@ -341,6 +342,14 @@ const Admin = ({ onBack }) => {
         >
           <UserPlus className="w-4 h-4" /> Reps
         </button>
+        <button
+          onClick={() => setAdminTab('sales')}
+          className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+            adminTab === 'sales' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'
+          }`}
+        >
+          <TrendingUp className="w-4 h-4" /> Sales
+        </button>
       </div>
 
       {/* Success / Error Messages */}
@@ -574,6 +583,11 @@ const Admin = ({ onBack }) => {
           ))}
         </div>
       ))}
+
+      {/* ==================== SALES TAB ==================== */}
+      {adminTab === 'sales' && (
+        <AdminSalesPanel session={session} />
+      )}
 
       {/* ==================== REPS TAB ==================== */}
       {adminTab === 'reps' && (loading ? (
