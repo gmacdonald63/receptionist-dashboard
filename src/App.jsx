@@ -14,6 +14,7 @@ import InstallPrompt from './InstallPrompt';
 import UpdatePrompt from './UpdatePrompt';
 import AppointmentCalendar from './AppointmentCalendar';
 import OnboardingPage from './pages/OnboardingPage.jsx';
+import ActivationPage from './pages/ActivationPage.jsx';
 import SalesRepDashboard from './pages/SalesRepDashboard.jsx';
 
 const SUPABASE_URL = 'https://zmppdmfdhknnwzwdfhwf.supabase.co';
@@ -118,6 +119,10 @@ const App = () => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       // Phase 2: ?track short-circuit — no auth needed for tracking page
       if (new URLSearchParams(window.location.search).get('track')) {
+        setAuthLoading(false);
+        return;
+      }
+      if (new URLSearchParams(window.location.search).get('activate')) {
         setAuthLoading(false);
         return;
       }
@@ -1692,6 +1697,12 @@ const App = () => {
   const _onboardToken = _onboardParams.get('token');
   if (_onboardToken) {
     return <OnboardingPage token={_onboardToken} />;
+  }
+
+  // ── Public activation route (no auth required) ──────────────
+  const _activateToken = _onboardParams.get('activate');
+  if (_activateToken) {
+    return <ActivationPage activationToken={_activateToken} paid={_onboardParams.has('paid')} />;
   }
 
   // Show loading while checking auth or demo token
