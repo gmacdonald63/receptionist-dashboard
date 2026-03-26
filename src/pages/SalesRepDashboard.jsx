@@ -1,7 +1,7 @@
 // src/pages/SalesRepDashboard.jsx
 import React, { useState, useEffect } from 'react';
 import {
-  Plus, Copy, Check, RefreshCw, LogOut, ChevronDown, ChevronUp,
+  Plus, RefreshCw, LogOut, ChevronDown, ChevronUp,
   DollarSign, Link, Briefcase, TrendingUp, Play
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
@@ -63,8 +63,7 @@ const SalesRepDashboard = ({ clientData, onLogout, onShowDemo }) => {
   });
   const [formError, setFormError] = useState(null);
   const [generating, setGenerating] = useState(false);
-  const [generatedLink, setGeneratedLink] = useState(null);
-  const [copied, setCopied] = useState(false);
+  const [linkSent, setLinkSent] = useState(false);
 
   // ── Data state ──────────────────────────────────────────────
   const [deals, setDeals] = useState([]);
@@ -127,7 +126,7 @@ const SalesRepDashboard = ({ clientData, onLogout, onShowDemo }) => {
 
     setFormError(null);
     setGenerating(true);
-    setGeneratedLink(null);
+    setLinkSent(false);
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -153,7 +152,7 @@ const SalesRepDashboard = ({ clientData, onLogout, onShowDemo }) => {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to create deal');
 
-      setGeneratedLink(data.onboarding_url);
+      setLinkSent(true);
       // Reset form
       setForm({ client_name: '', client_email: '', client_phone: '', company_name: '', plan: 'standard', billing_cycle: 'monthly' });
       // Refresh deals list
@@ -166,25 +165,6 @@ const SalesRepDashboard = ({ clientData, onLogout, onShowDemo }) => {
     }
   };
 
-  // ── Copy link to clipboard ───────────────────────────────────
-  const handleCopy = async () => {
-    if (!generatedLink) return;
-    try {
-      await navigator.clipboard.writeText(generatedLink);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
-    } catch {
-      // Fallback for browsers without clipboard API
-      const el = document.createElement('textarea');
-      el.value = generatedLink;
-      document.body.appendChild(el);
-      el.select();
-      document.execCommand('copy');
-      document.body.removeChild(el);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
-    }
-  };
 
   // ── Commissions grouped by deal ──────────────────────────────
   const commissionsByDeal = deals.reduce((acc, deal) => {
@@ -331,35 +311,19 @@ const SalesRepDashboard = ({ clientData, onLogout, onShowDemo }) => {
             <button
               onClick={handleGenerateLink}
               disabled={generating}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium"
+              className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg disabled:opacity-50 font-medium ${
+                linkSent
+                  ? 'bg-gray-600 text-gray-300 hover:bg-gray-500'
+                  : 'bg-blue-600 text-white hover:bg-blue-700'
+              }`}
             >
               {generating
                 ? <><RefreshCw className="w-4 h-4 animate-spin" /> Sending...</>
-                : <><Link className="w-4 h-4" /> Send Onboarding Link</>
+                : linkSent
+                  ? <><Link className="w-4 h-4" /> Resend Onboarding Link</>
+                  : <><Link className="w-4 h-4" /> Send Onboarding Link</>
               }
             </button>
-
-            {/* Generated link output */}
-            {generatedLink && (
-              <div className="mt-3 p-4 bg-green-900/30 border border-green-700 rounded-lg space-y-3">
-                <div className="flex gap-2 items-center">
-                  <input
-                    type="text"
-                    readOnly
-                    value={generatedLink}
-                    className="flex-1 px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white text-sm font-mono truncate"
-                    onClick={e => e.target.select()}
-                  />
-                  <button
-                    onClick={handleCopy}
-                    className="flex items-center gap-1.5 px-3 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 text-sm whitespace-nowrap"
-                  >
-                    {copied ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
-                    {copied ? 'Copied!' : 'Copy'}
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         </Section>
 
