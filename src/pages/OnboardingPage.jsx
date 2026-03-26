@@ -84,6 +84,7 @@ export default function OnboardingPage({ token }) {
 
   const handlePaySetupFee = async () => {
     setLoading(true);
+    setError(null);
     try {
       const res = await fetch(
         `${SUPABASE_URL}/functions/v1/create-onboarding-checkout`,
@@ -115,6 +116,7 @@ export default function OnboardingPage({ token }) {
     }
 
     setLoading(true);
+    setError(null);
     try {
       const res = await fetch(
         `${SUPABASE_URL}/functions/v1/save-onboarding-data`,
