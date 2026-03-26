@@ -13,6 +13,8 @@ const Admin = ({ onBack, session }) => {
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
   const [sendingInvite, setSendingInvite] = useState(null);
+  const [activationSending, setActivationSending] = useState({});
+  const [activationStatus, setActivationStatus] = useState({});
 
   // Client form state
   const [showClientForm, setShowClientForm] = useState(false);
@@ -244,6 +246,40 @@ const Admin = ({ onBack, session }) => {
   const handleResendInvite = async (record) => {
     if (!confirm(`Resend invite to ${record.email}?`)) return;
     await handleSendInvite(record);
+  };
+
+  const handleSendActivationInvite = async (client) => {
+    setActivationSending(prev => ({ ...prev, [client.id]: true }));
+    setActivationStatus(prev => ({ ...prev, [client.id]: null }));
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL || 'https://zmppdmfdhknnwzwdfhwf.supabase.co'}/functions/v1/send-activation-invite`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InptcHBkbWZkaGtubnd6d2RmaHdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk4MzQyMDYsImV4cCI6MjA4NTQxMDIwNn0.mXfuz8mEZhizFen78gUaakBDbrzANn4ZM1a7KuDiKJs',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ client_id: client.id }),
+        }
+      );
+      const data = await res.json();
+      if (data.sent) {
+        setActivationStatus(prev => ({ ...prev, [client.id]: 'sent' }));
+        fetchAllRecords();
+      } else if (data.error === 'setup_fee_not_paid') {
+        setActivationStatus(prev => ({ ...prev, [client.id]: 'fee_not_paid' }));
+      } else {
+        setActivationStatus(prev => ({ ...prev, [client.id]: 'error' }));
+      }
+    } catch (err) {
+      console.error('Activation invite error:', err);
+      setActivationStatus(prev => ({ ...prev, [client.id]: 'error' }));
+    } finally {
+      setActivationSending(prev => ({ ...prev, [client.id]: false }));
+    }
   };
 
   // ==================== RENDER HELPERS ====================
@@ -577,6 +613,35 @@ const Admin = ({ onBack, session }) => {
                 <p className="text-xs text-gray-600">Created: {new Date(client.created_at).toLocaleDateString()}</p>
                 {client.invite_sent_at && (
                   <p className="text-xs text-gray-600">Invited: {new Date(client.invite_sent_at).toLocaleDateString()}</p>
+                )}
+              </div>
+              {/* Send Activation Invite — shown until setup_complete is true */}
+              <div className="mt-2">
+                {!client.setup_complete ? (
+                  <button
+                    onClick={() => handleSendActivationInvite(client)}
+                    disabled={activationSending[client.id]}
+                    className="px-3 py-1 text-sm bg-green-700 hover:bg-green-600 text-white rounded disabled:opacity-50"
+                  >
+                    {activationSending[client.id] ? 'Sending...' : 'Send Activation Invite'}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleSendActivationInvite(client)}
+                    disabled={activationSending[client.id]}
+                    className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 text-gray-300 rounded disabled:opacity-50"
+                  >
+                    {activationSending[client.id] ? 'Sending...' : 'Resend Activation'}
+                  </button>
+                )}
+                {activationStatus[client.id] === 'sent' && (
+                  <span className="text-green-400 text-xs ml-2">Invite sent!</span>
+                )}
+                {activationStatus[client.id] === 'fee_not_paid' && (
+                  <span className="text-red-400 text-xs ml-2">Setup fee not yet paid</span>
+                )}
+                {activationStatus[client.id] === 'error' && (
+                  <span className="text-red-400 text-xs ml-2">Error — try again</span>
                 )}
               </div>
             </div>
