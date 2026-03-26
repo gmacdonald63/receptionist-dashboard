@@ -200,6 +200,17 @@ const TeamTab = ({ clientData, role }) => {
     }
   };
 
+  const handleDeleteTech = async (tech) => {
+    if (!window.confirm(`Permanently delete "${tech.name}"? This cannot be undone.`)) return;
+    try {
+      await supabase.from('technicians').delete().eq('id', tech.id);
+      setTechnicians(prev => prev.filter(t => t.id !== tech.id));
+    } catch (err) {
+      console.error('Delete tech error:', err);
+      alert('Failed to delete technician.');
+    }
+  };
+
   const handleToggleTechActive = async (tech) => {
     try {
       await supabase.from('technicians').update({ is_active: !tech.is_active }).eq('id', tech.id);
@@ -428,6 +439,14 @@ const TeamTab = ({ clientData, role }) => {
                         >
                           Perms {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                         </button>
+                        {!tech.is_active && (
+                          <button
+                            onClick={() => handleDeleteTech(tech)}
+                            className="px-2 py-1 text-xs text-red-400 hover:bg-red-900/30 rounded"
+                          >
+                            Delete
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
