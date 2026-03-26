@@ -91,7 +91,7 @@ Deno.serve(async (req) => {
 
     // ── Copy stripe_customer_id to clients ────────────────────
     // ── Set supabase_client_id FK on deal ─────────────────────
-    await Promise.all([
+    const [clientUpdate, dealUpdate] = await Promise.all([
       supabase.from("clients").update({
         stripe_customer_id: deal.stripe_customer_id,
       }).eq("id", targetClient.id),
@@ -99,6 +99,8 @@ Deno.serve(async (req) => {
         supabase_client_id: targetClient.id,
       }).eq("id", deal.id),
     ]);
+    if (clientUpdate.error) throw new Error(`Failed to copy stripe_customer_id: ${clientUpdate.error.message}`);
+    if (dealUpdate.error) throw new Error(`Failed to set supabase_client_id: ${dealUpdate.error.message}`);
 
     // ── Generate Supabase invite token (no email sent) ────────
     const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
@@ -114,15 +116,16 @@ Deno.serve(async (req) => {
 
     // ── Store tokens + mark setup_complete ───────────────────
     const activation_token = crypto.randomUUID();
-    await supabase.from("clients").update({
+    const { error: tokenStoreError } = await supabase.from("clients").update({
       activation_token,
       invite_token_hash: linkData.properties.hashed_token,
       setup_complete: true,
     }).eq("id", targetClient.id);
+    if (tokenStoreError) throw new Error(`Failed to store activation tokens: ${tokenStoreError.message}`);
 
     // ── Send activation email ─────────────────────────────────
     const notifyUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/send-notification`;
-    await fetch(notifyUrl, {
+    const notifyRes = await fetch(notifyUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -137,6 +140,10 @@ Deno.serve(async (req) => {
         activation_token,
       }),
     });
+    if (!notifyRes.ok) {
+      const errBody = await notifyRes.text();
+      throw new Error(`send-notification failed: ${notifyRes.status} ${errBody}`);
+    }
 
     return new Response(JSON.stringify({ sent: true }), {
       status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
