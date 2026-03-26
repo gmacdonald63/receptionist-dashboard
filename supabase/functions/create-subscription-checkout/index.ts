@@ -10,11 +10,11 @@ const corsHeaders = {
 
 const PRICE_IDS: Record<string, Record<string, string>> = {
   standard: {
-    monthly: "price_1T7BFxJVgG4IIGoFcnMC98UN",
+    monthly: "price_1TFLt6J9Bes3rv7O0fWvfB3c",
     annual: Deno.env.get("STRIPE_PRICE_STANDARD_ANNUAL") ?? "",
   },
   pro: {
-    monthly: "price_1T7BLkJVgG4IIGoFRdPuSpS9",
+    monthly: "price_1TFLwtJ9Bes3rv7ObtuStIhj",
     annual: Deno.env.get("STRIPE_PRICE_PRO_ANNUAL") ?? "",
   },
 };
