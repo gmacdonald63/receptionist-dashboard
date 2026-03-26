@@ -334,15 +334,14 @@ const SalesRepDashboard = ({ clientData, onLogout, onShowDemo }) => {
               className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium"
             >
               {generating
-                ? <><RefreshCw className="w-4 h-4 animate-spin" /> Generating...</>
-                : <><Link className="w-4 h-4" /> Generate Onboarding Link</>
+                ? <><RefreshCw className="w-4 h-4 animate-spin" /> Sending...</>
+                : <><Link className="w-4 h-4" /> Send Onboarding Link</>
               }
             </button>
 
             {/* Generated link output */}
             {generatedLink && (
               <div className="mt-3 p-4 bg-green-900/30 border border-green-700 rounded-lg space-y-3">
-                <p className="text-green-300 text-sm font-medium">Onboarding link ready — copy and send to the client:</p>
                 <div className="flex gap-2 items-center">
                   <input
                     type="text"
