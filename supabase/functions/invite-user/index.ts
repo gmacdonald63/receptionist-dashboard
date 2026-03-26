@@ -58,21 +58,21 @@ Deno.serve(async (req) => {
       });
     }
 
-    // ── Dedup check: email already in auth.users? ────────────────────────────
-    // Using getUserByEmail (direct lookup) instead of listUsers() which only
-    // returns the first 50 users and would miss existing accounts beyond that.
-    const { data: existingUser } = await supabase.auth.admin.getUserByEmail(email);
-    if (existingUser?.user) {
-      console.log(`invite-user: ${email} already exists — skipping invite`);
-      return new Response(JSON.stringify({ existing: true }), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
     // ── Send invite ──────────────────────────────────────────────────────────
+    // inviteUserByEmail returns an error if the user is already registered.
+    // We catch that case and return { existing: true } so the UI can handle it
+    // gracefully (show a "resend invite" option) rather than treating it as a
+    // hard failure. All other errors are re-thrown as 500.
     const { error: inviteError } = await supabase.auth.admin.inviteUserByEmail(email);
     if (inviteError) {
+      const msg = inviteError.message?.toLowerCase() ?? "";
+      if (msg.includes("already") || msg.includes("registered") || msg.includes("exists")) {
+        console.log(`invite-user: ${email} already exists — skipping invite`);
+        return new Response(JSON.stringify({ existing: true }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       console.error("inviteUserByEmail error:", inviteError);
       return new Response(JSON.stringify({ error: inviteError.message }), {
         status: 500,
