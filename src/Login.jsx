@@ -7,6 +7,8 @@ const Login = ({ onLogin }) => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [resetSent, setResetSent] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -25,18 +27,44 @@ const Login = ({ onLogin }) => {
     }
   };
 
+  const handleForgotPassword = async () => {
+    if (!email.trim()) {
+      setError('Enter your email address above, then click Forgot password.');
+      return;
+    }
+    setResetLoading(true);
+    setError(null);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) throw error;
+      setResetSent(true);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
       <div className="bg-gray-800 rounded-lg border border-gray-700 p-8 w-full max-w-md">
         <div className="flex justify-center mb-8">
           <img src={logo} alt="Reliant Support" style={{ height: '50px', width: 'auto' }} />
         </div>
-        
+
         <h2 className="text-2xl font-bold text-white text-center mb-6">Sign In</h2>
-        
+
         {error && (
           <div className="mb-4 p-3 bg-red-900/50 border border-red-700 rounded-lg">
             <p className="text-red-300 text-sm">{error}</p>
+          </div>
+        )}
+
+        {resetSent && (
+          <div className="mb-4 p-3 bg-green-900/50 border border-green-700 rounded-lg">
+            <p className="text-green-300 text-sm">Password reset email sent — check your inbox.</p>
           </div>
         )}
 
@@ -54,7 +82,17 @@ const Login = ({ onLogin }) => {
           </div>
 
           <div>
-            <label className="block text-gray-400 text-sm mb-2">Password</label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-gray-400 text-sm">Password</label>
+              <button
+                type="button"
+                onClick={handleForgotPassword}
+                disabled={resetLoading}
+                className="text-xs text-blue-400 hover:text-blue-300 disabled:opacity-50"
+              >
+                {resetLoading ? 'Sending...' : 'Forgot password?'}
+              </button>
+            </div>
             <input
               type="password"
               value={password}
