@@ -271,8 +271,8 @@ const TeamTab = ({ clientData, role }) => {
 
   const handleToggleStaffActive = async (staffMember) => {
     try {
-      await supabase.from('client_staff').update({ active: !staffMember.active }).eq('id', staffMember.id);
-      setStaff(prev => prev.map(s => s.id === staffMember.id ? { ...s, active: !staffMember.active } : s));
+      await supabase.from('client_staff').update({ active: !staffMember.is_active }).eq('id', staffMember.id);
+      setStaff(prev => prev.map(s => s.id === staffMember.id ? { ...s, active: !staffMember.is_active } : s));
     } catch (err) {
       console.error('Toggle staff active error:', err);
     }
@@ -555,18 +555,18 @@ const TeamTab = ({ clientData, role }) => {
               {staff.map(s => (
                 <div
                   key={s.id}
-                  className={`flex items-center gap-3 p-3 rounded-lg border ${s.active ? 'bg-gray-750 border-gray-600' : 'bg-gray-750/50 border-gray-700'}`}
+                  className={`flex items-center gap-3 p-3 rounded-lg border ${s.is_active ? 'bg-gray-750 border-gray-600' : 'bg-gray-750/50 border-gray-700'}`}
                 >
                   <div className="flex-1 min-w-0">
-                    <p className={`text-sm font-medium ${s.active ? 'text-white' : 'text-gray-500 line-through'}`}>{s.name}</p>
+                    <p className={`text-sm font-medium ${s.is_active ? 'text-white' : 'text-gray-500 line-through'}`}>{s.name}</p>
                     <p className="text-xs text-gray-400">{s.email}</p>
                     <p className="text-xs text-gray-600 capitalize">{s.role}</p>
                   </div>
                   <button
                     onClick={() => handleToggleStaffActive(s)}
-                    className={`px-2 py-1 text-xs rounded flex-shrink-0 ${s.active ? 'text-amber-400 hover:bg-amber-900/30' : 'text-green-400 hover:bg-green-900/30'}`}
+                    className={`px-2 py-1 text-xs rounded flex-shrink-0 ${s.is_active ? 'text-amber-400 hover:bg-amber-900/30' : 'text-green-400 hover:bg-green-900/30'}`}
                   >
-                    {s.active ? 'Deactivate' : 'Activate'}
+                    {s.is_active ? 'Deactivate' : 'Activate'}
                   </button>
                 </div>
               ))}

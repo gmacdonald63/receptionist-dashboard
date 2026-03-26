@@ -229,7 +229,7 @@ const App = () => {
         .from('client_staff')
         .select('*')
         .eq('email', email)
-        .eq('active', true)
+        .eq('is_active', true)
         .maybeSingle();
       if (staffRecord) {
         const { data: ownerData } = await supabase

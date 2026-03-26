@@ -964,8 +964,8 @@ Key tables:
 - `customers` — Customer profiles with tags, addresses, contact info
 - `customer_notes` — Notes linked to customers
 - `follow_up_reminders` — Reminders with due dates and completion status
-- `client_staff` — Dispatcher accounts per client. Columns: `id (uuid)`, `client_id`, `email`, `name`, `role` (default `'dispatcher'`), `active (bool)`, `invited_at`. Note: column is `active`, NOT `is_active`. No `user_id` column.
-- `technicians` — Field technicians per client. Columns: `id (int serial)`, `client_id`, `name`, `phone`, `color`, `email`, `is_active`. Note: column is `is_active`, NOT `active`.
+- `client_staff` — Dispatcher accounts per client. Columns: `id (uuid)`, `client_id`, `email`, `name`, `role` (default `'dispatcher'`), `is_active (bool)`, `invited_at`. No `user_id` column.
+- `technicians` — Field technicians per client. Columns: `id (int serial)`, `client_id`, `name`, `phone`, `color`, `email`, `is_active (bool)`
 - `technician_permissions` — Per-tech feature toggles. Columns: `id`, `technician_id`, `client_id`, `feature`, `enabled`.
 
 **RLS CRITICAL:** All RLS policies must use `auth.email()` — NOT `(SELECT email FROM auth.users WHERE id = auth.uid())`. The authenticated role lacks direct access to `auth.users`; the subquery causes "permission denied for table users" at runtime. Migration `20260325005` enforces this across all tables.
@@ -1048,8 +1048,8 @@ The `agent_id` is passed as a `const` parameter in each tool's JSON schema so Re
 - `customers` — Customer profiles linked to clients
 - `customer_notes` — Notes per customer
 - `follow_up_reminders` — Reminders with due dates
-- `client_staff` — Dispatcher accounts per client. Key columns: `id (uuid)`, `client_id`, `email`, `name`, `role` (default `'dispatcher'`), `active` (bool — NOT `is_active`)
-- `technicians` — Field technicians. Key columns: `id (int)`, `client_id`, `name`, `phone`, `color`, `email`, `is_active` (bool — NOT `active`)
+- `client_staff` — Dispatcher accounts per client. Key columns: `id (uuid)`, `client_id`, `email`, `name`, `role` (default `'dispatcher'`), `is_active` (bool)
+- `technicians` — Field technicians. Key columns: `id (int)`, `client_id`, `name`, `phone`, `color`, `email`, `is_active (bool)`
 - `technician_permissions` — Per-tech feature flags. Key columns: `id`, `technician_id`, `client_id`, `feature`, `enabled`
 
 ### Session Start Checklist
