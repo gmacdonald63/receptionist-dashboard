@@ -2,8 +2,8 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://zmppdmfdhknnwzwdfhwf.supabase.co';
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InptcHBkbWZkaGtubnd6d2RmaHdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk4MzQyMDYsImV4cCI6MjA4NTQxMDIwNn0.mXfuz8mEZhizFen78gUaakBDbrzANn4ZM1a7KuDiKJs';
 
 async function callFunction(name, body) {
   const res = await fetch(`${SUPABASE_URL}/functions/v1/${name}`, {
@@ -29,7 +29,9 @@ export default function ActivationPage({ activationToken, paid }) {
   useEffect(() => {
     callFunction('get-activation-data', { activation_token: activationToken })
       .then(data => {
-        if (data.error) {
+        if (data.error === 'token_expired') {
+          setLoadError('This activation link has expired. Please contact support@reliantsupport.net to resend your activation.');
+        } else if (data.error) {
           setLoadError(data.error);
         } else {
           setAccountData(data);
