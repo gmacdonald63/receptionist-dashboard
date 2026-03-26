@@ -249,6 +249,9 @@ const Admin = ({ onBack, session }) => {
   };
 
   const handleSendActivationInvite = async (client) => {
+    if (client.setup_complete) {
+      if (!window.confirm(`Resend activation invite to ${client.email}?`)) return;
+    }
     setActivationSending(prev => ({ ...prev, [client.id]: true }));
     setActivationStatus(prev => ({ ...prev, [client.id]: null }));
     try {
@@ -259,7 +262,7 @@ const Admin = ({ onBack, session }) => {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InptcHBkbWZkaGtubnd6d2RmaHdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk4MzQyMDYsImV4cCI6MjA4NTQxMDIwNn0.mXfuz8mEZhizFen78gUaakBDbrzANn4ZM1a7KuDiKJs',
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
             'Authorization': `Bearer ${session.access_token}`,
           },
           body: JSON.stringify({ client_id: client.id }),
@@ -306,6 +309,37 @@ const Admin = ({ onBack, session }) => {
         <span className="hidden sm:inline">Resend</span>
       </button>
     )
+  );
+
+  const renderActivationButton = (client) => (
+    <div className="mt-2">
+      {!client.setup_complete ? (
+        <button
+          onClick={() => handleSendActivationInvite(client)}
+          disabled={activationSending[client.id]}
+          className="px-3 py-1 text-sm bg-green-700 hover:bg-green-600 text-white rounded disabled:opacity-50"
+        >
+          {activationSending[client.id] ? 'Sending...' : 'Send Activation Invite'}
+        </button>
+      ) : (
+        <button
+          onClick={() => handleSendActivationInvite(client)}
+          disabled={activationSending[client.id]}
+          className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 text-gray-300 rounded disabled:opacity-50"
+        >
+          {activationSending[client.id] ? 'Sending...' : 'Resend Activation'}
+        </button>
+      )}
+      {activationStatus[client.id] === 'sent' && (
+        <span className="text-green-400 text-xs ml-2">Invite sent!</span>
+      )}
+      {activationStatus[client.id] === 'fee_not_paid' && (
+        <span className="text-red-400 text-xs ml-2">Setup fee not yet paid</span>
+      )}
+      {activationStatus[client.id] === 'error' && (
+        <span className="text-red-400 text-xs ml-2">Error — try again</span>
+      )}
+    </div>
   );
 
   // ==================== MAIN RENDER ====================
@@ -615,35 +649,7 @@ const Admin = ({ onBack, session }) => {
                   <p className="text-xs text-gray-600">Invited: {new Date(client.invite_sent_at).toLocaleDateString()}</p>
                 )}
               </div>
-              {/* Send Activation Invite — shown until setup_complete is true */}
-              <div className="mt-2">
-                {!client.setup_complete ? (
-                  <button
-                    onClick={() => handleSendActivationInvite(client)}
-                    disabled={activationSending[client.id]}
-                    className="px-3 py-1 text-sm bg-green-700 hover:bg-green-600 text-white rounded disabled:opacity-50"
-                  >
-                    {activationSending[client.id] ? 'Sending...' : 'Send Activation Invite'}
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => handleSendActivationInvite(client)}
-                    disabled={activationSending[client.id]}
-                    className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 text-gray-300 rounded disabled:opacity-50"
-                  >
-                    {activationSending[client.id] ? 'Sending...' : 'Resend Activation'}
-                  </button>
-                )}
-                {activationStatus[client.id] === 'sent' && (
-                  <span className="text-green-400 text-xs ml-2">Invite sent!</span>
-                )}
-                {activationStatus[client.id] === 'fee_not_paid' && (
-                  <span className="text-red-400 text-xs ml-2">Setup fee not yet paid</span>
-                )}
-                {activationStatus[client.id] === 'error' && (
-                  <span className="text-red-400 text-xs ml-2">Error — try again</span>
-                )}
-              </div>
+              {renderActivationButton(client)}
             </div>
           ))}
         </div>
