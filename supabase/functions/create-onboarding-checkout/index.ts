@@ -16,10 +16,10 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { token, onboarding_data } = await req.json();
+    const { token } = await req.json();
 
-    if (!token || !onboarding_data) {
-      return new Response(JSON.stringify({ error: "Missing token or onboarding_data" }), {
+    if (!token) {
+      return new Response(JSON.stringify({ error: "Missing token" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -51,17 +51,6 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "This onboarding has already been completed." }), {
         status: 410, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
-    }
-
-    // ── Save onboarding form data ────────────────────────────
-    const { error: updateError } = await supabase
-      .from("deals")
-      .update({ onboarding_data })
-      .eq("id", deal.id);
-
-    if (updateError) {
-      console.error("Failed to save onboarding data:", updateError);
-      // Non-fatal — continue to checkout anyway
     }
 
     // ── Create Stripe Checkout session ($395 one-time) ───────
