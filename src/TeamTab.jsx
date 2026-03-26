@@ -28,21 +28,26 @@ const formatPhone = (raw) => {
   return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
 };
 
-// Send an account setup email using the same pattern as Admin.jsx:
-// 1. signUp with a random temp password (creates the auth user if they don't exist)
-// 2. resetPasswordForEmail → sends a "set your password" link (uses configured email provider,
-//    no invite-specific rate limit, redirects to /reset-password just like password resets do)
-const sendInviteEmail = async (email) => {
-  const tempPassword = Math.random().toString(36).slice(-12) + 'A1!';
-  const { error: signUpError } = await supabase.auth.signUp({ email, password: tempPassword });
-  if (signUpError && !signUpError.message.includes('already registered')) throw signUpError;
+const SUPABASE_FUNCTIONS_URL = 'https://zmppdmfdhknnwzwdfhwf.supabase.co/functions/v1';
 
-  const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${window.location.origin}/reset-password`,
+// Calls the invite-user Edge Function which uses inviteUserByEmail (service role).
+// Routes through Resend SMTP — no rate limits, single clean invite email.
+const sendInviteEmail = async (email, name, role) => {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData?.session?.access_token;
+  const res = await fetch(`${SUPABASE_FUNCTIONS_URL}/invite-user`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify({ email, name, role }),
   });
-  if (resetError) throw resetError;
-
-  return { existing: !!(signUpError?.message?.includes('already registered')) };
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `Invite failed (${res.status})`);
+  }
+  return res.json();
 };
 
 const TeamTab = ({ clientData, role }) => {
@@ -181,7 +186,7 @@ const TeamTab = ({ clientData, role }) => {
       // Fire invite (non-blocking — DB row is already saved)
       if ((techForm.sendInvite || techForm.resendInvite) && techForm.email.trim()) {
         try {
-          const result = await sendInviteEmail(techForm.email.trim().toLowerCase());
+          const result = await sendInviteEmail(techForm.email.trim().toLowerCase(), techForm.name.trim(), 'tech');
           if (result.existing) {
             alert('Tech saved. An account with this email already exists — they can log in immediately.');
           }
@@ -245,7 +250,7 @@ const TeamTab = ({ clientData, role }) => {
 
       // Always send invite for dispatchers (no checkbox — always required for login)
       try {
-        const result = await sendInviteEmail(staffForm.email.trim().toLowerCase());
+        const result = await sendInviteEmail(staffForm.email.trim().toLowerCase(), staffForm.name.trim(), 'dispatcher');
         if (result.existing) {
           alert('Dispatcher saved. An account with this email already exists — they can log in immediately.');
         }
