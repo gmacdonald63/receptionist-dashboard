@@ -59,14 +59,7 @@ Deno.serve(async (req) => {
       payment_method_types: ["card"],
       customer_creation: "always", // Ensures session.customer is set in the webhook
       line_items: [{
-        price_data: {
-          currency: "usd",
-          product_data: {
-            name: "Reliant Support — AI Receptionist Setup Fee",
-            description: `Account setup for ${deal.company_name}`,
-          },
-          unit_amount: 39500, // $395.00
-        },
+        price: "price_1TFLrDJ9Bes3rv7OINJ2diqf",
         quantity: 1,
       }],
       metadata: {
