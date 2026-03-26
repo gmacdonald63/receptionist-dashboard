@@ -129,7 +129,7 @@ const TeamTab = ({ clientData, role }) => {
   };
 
   const handleEditTech = (tech) => {
-    setTechForm({ name: tech.name, phone: tech.phone || '', color: tech.color || '#3B82F6', email: tech.email || '', sendInvite: false });
+    setTechForm({ name: tech.name, phone: tech.phone || '', color: tech.color || '#3B82F6', email: tech.email || '', sendInvite: false, resendInvite: false });
     setEditingTechId(tech.id);
     setShowTechForm(true);
     setTechFormError(null);
@@ -178,7 +178,7 @@ const TeamTab = ({ clientData, role }) => {
       }
 
       // Fire invite (non-blocking — DB row is already saved)
-      if (techForm.sendInvite && techForm.email.trim()) {
+      if ((techForm.sendInvite || techForm.resendInvite) && techForm.email.trim()) {
         try {
           const result = await callInviteFunction(techForm.email.trim().toLowerCase(), techForm.name.trim(), 'tech');
           if (result.existing) {
@@ -357,6 +357,17 @@ const TeamTab = ({ clientData, role }) => {
                   className="w-4 h-4 accent-blue-500"
                 />
                 <span className="text-sm text-gray-300">Send invite email to tech</span>
+              </label>
+            )}
+            {editingTechId && techForm.email.trim() && (
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={techForm.resendInvite}
+                  onChange={e => setTechForm(f => ({ ...f, resendInvite: e.target.checked }))}
+                  className="w-4 h-4 accent-blue-500"
+                />
+                <span className="text-sm text-gray-300">Resend invite email</span>
               </label>
             )}
 
