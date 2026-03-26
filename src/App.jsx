@@ -7,6 +7,8 @@ import Admin from './Admin';
 import ResetPassword from './ResetPassword';
 import Customers from './Customers';
 import DemoDashboard from './DemoDashboard';
+import TechDashboard from './TechDashboard';
+import TeamTab from './TeamTab';
 
 import InstallPrompt from './InstallPrompt';
 import UpdatePrompt from './UpdatePrompt';
@@ -29,6 +31,8 @@ const App = () => {
   const [user, setUser] = useState(null);
   const [clientData, setClientData] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [role, setRole] = useState(null); // 'admin' | 'owner' | 'dispatcher' | 'tech' | null
+  const [techData, setTechData] = useState(null);
   const [showAdmin, setShowAdmin] = useState(false);
   const [showResetPassword, setShowResetPassword] = useState(false);
   const showResetPasswordRef = useRef(false);
@@ -96,7 +100,7 @@ const App = () => {
     const hashParams = new URLSearchParams(window.location.hash.substring(1));
     const type = hashParams.get('type');
     
-    if (type === 'recovery') {
+    if (type === 'recovery' || type === 'invite') {
       setShowResetPassword(true);
       showResetPasswordRef.current = true;
       setAuthLoading(false);
@@ -112,27 +116,14 @@ const App = () => {
     }
 
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        setUser(session.user);
-        // Fetch client data — sign out if no clients record exists
-        supabase
-          .from('clients')
-          .select('*')
-          .eq('email', session.user.email)
-          .single()
-          .then(async ({ data }) => {
-            if (data) {
-              setClientData(data);
-            } else {
-              // No client record — force sign out
-              await supabase.auth.signOut();
-              setUser(null);
-            }
-            setAuthLoading(false);
-          });
-      } else {
+      // Phase 2: ?track short-circuit — no auth needed for tracking page
+      if (new URLSearchParams(window.location.search).get('track')) {
         setAuthLoading(false);
+        return;
       }
+      if (session?.user) setUser(session.user);
+      // authLoading is set to false inside resolveRole() at each branch for authenticated users
+      else setAuthLoading(false);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
@@ -145,6 +136,16 @@ const App = () => {
         return;
       }
 
+      // Invite link clicked — user is auto-signed-in but has no password yet
+      // Show the set-password screen so they can establish their credentials
+      if (event === 'SIGNED_IN' && session?.user?.invited_at && !session.user.last_sign_in_at) {
+        setShowResetPassword(true);
+        showResetPasswordRef.current = true;
+        setUser(null);
+        setClientData(null);
+        return;
+      }
+
       if (showResetPasswordRef.current) {
         return;
       }
@@ -152,6 +153,8 @@ const App = () => {
       if (event === 'SIGNED_OUT') {
         setUser(null);
         setClientData(null);
+        setRole(null);
+        setTechData(null);
         return;
       }
 
@@ -200,6 +203,67 @@ const App = () => {
   }, []);
 
   // Sales rep auto-demo removed — reps now use the Show Demo button in SalesRepDashboard.
+
+  // Role resolution — single source of truth for all auth paths
+  useEffect(() => {
+    if (!user) return;
+
+    const resolveRole = async () => {
+      const email = user.email;
+
+      // Step 1: owner / admin — check clients table
+      const { data: clientRecord } = await supabase
+        .from('clients')
+        .select('*')
+        .eq('email', email)
+        .maybeSingle();
+      if (clientRecord) {
+        setRole(clientRecord.is_admin ? 'admin' : 'owner');
+        setClientData(clientRecord);
+        setAuthLoading(false);
+        return;
+      }
+
+      // Step 2: dispatcher — check client_staff table
+      const { data: staffRecord } = await supabase
+        .from('client_staff')
+        .select('*')
+        .eq('email', email)
+        .eq('active', true)
+        .maybeSingle();
+      if (staffRecord) {
+        const { data: ownerData } = await supabase
+          .from('clients')
+          .select('*')
+          .eq('id', staffRecord.client_id)
+          .single();
+        setRole('dispatcher');
+        setClientData(ownerData);
+        setAuthLoading(false);
+        return;
+      }
+
+      // Step 3: technician — check technicians table
+      const { data: techRecord } = await supabase
+        .from('technicians')
+        .select('*')
+        .eq('email', email)
+        .eq('is_active', true)
+        .maybeSingle();
+      if (techRecord) {
+        setRole('tech');
+        setTechData(techRecord);
+        setAuthLoading(false);
+        return;
+      }
+
+      // Step 4: no match — sign out (unknown user)
+      await supabase.auth.signOut();
+      setAuthLoading(false);
+    };
+
+    resolveRole();
+  }, [user]);
 
   // After Stripe checkout redirect, poll for subscription activation (webhook may be slightly delayed)
   useEffect(() => {
@@ -261,9 +325,8 @@ const App = () => {
     setSettingsHoursForm(form);
   }, [businessHours]);
 
-  const handleLogin = (user, clientData) => {
+  const handleLogin = (user) => {
     setUser(user);
-    setClientData(clientData);
   };
 
   const handleLogout = async () => {
@@ -1594,6 +1657,7 @@ const App = () => {
   };
 
 
+  // Demo nav — unchanged (used by the isPublicDemo render block above)
   const navItems = [
     { id: 'appointments', label: 'Appointments', icon: Calendar },
     { id: 'customers', label: 'Customers', icon: Users },
@@ -1601,6 +1665,27 @@ const App = () => {
     { id: 'billing', label: 'Billing', icon: DollarSign },
     { id: 'settings', label: 'Settings', icon: Settings }
   ];
+
+  // Authenticated nav — owner gets 6 tabs, dispatcher gets 4 tabs
+  const teamTab = { id: 'team', label: 'Team', icon: Users };
+
+  const ownerNavItems = [
+    { id: 'appointments', label: 'Appointments', icon: Calendar },
+    { id: 'customers', label: 'Customers', icon: Users },
+    { id: 'calls', label: 'Calls', icon: Phone },
+    teamTab,
+    { id: 'billing', label: 'Billing', icon: DollarSign },
+    { id: 'settings', label: 'Settings', icon: Settings },
+  ];
+
+  const dispatcherNavItems = [
+    { id: 'appointments', label: 'Appointments', icon: Calendar },
+    { id: 'customers', label: 'Customers', icon: Users },
+    { id: 'calls', label: 'Calls', icon: Phone },
+    teamTab,
+  ];
+
+  const activeNavItems = role === 'dispatcher' ? dispatcherNavItems : ownerNavItems;
 
   // ── Public onboarding route (no auth required) ──────────────
   const _onboardParams = new URLSearchParams(window.location.search);
@@ -1843,6 +1928,11 @@ const App = () => {
     return <Login onLogin={handleLogin} />;
   }
 
+  // Tech view — hard return before clientData null check and subscription gate
+  if (role === 'tech' && techData) {
+    return <TechDashboard techData={techData} />;
+  }
+
   // User is authenticated but no client record — show message and sign out option
   if (user && !clientData) {
     return (
@@ -2050,7 +2140,7 @@ const App = () => {
             </button>
           </div>
         )}
-        {activeTab === 'billing' && (
+        {activeTab === 'billing' && role !== 'dispatcher' && (
           <>
             <div className="flex items-center justify-between mb-3">
               <img src={logo} alt="Reliant Support" style={{ height: '26px', width: 'auto' }} />
@@ -2068,7 +2158,7 @@ const App = () => {
             {renderBilling()}
           </>
         )}
-        {activeTab === 'settings' && (
+        {activeTab === 'settings' && role !== 'dispatcher' && (
           <>
             <div className="flex items-center justify-between mb-3">
               <img src={logo} alt="Reliant Support" style={{ height: '26px', width: 'auto' }} />
@@ -2086,12 +2176,30 @@ const App = () => {
             {renderSettings()}
           </>
         )}
+        {activeTab === 'team' && (
+          <>
+            <div className="flex items-center justify-between mb-3">
+              <img src={logo} alt="Reliant Support" style={{ height: '26px', width: 'auto' }} />
+              <div className="flex items-center gap-1">
+                {clientData?.is_admin && (
+                  <button onClick={() => setShowAdmin(true)} className="p-2 hover:bg-gray-700 rounded-lg" title="Admin Dashboard">
+                    <Settings className="w-5 h-5 text-gray-400" />
+                  </button>
+                )}
+                <button onClick={handleLogout} className="p-2 hover:bg-gray-700 rounded-lg" title="Sign out">
+                  <LogOut className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+            </div>
+            <TeamTab clientData={clientData} role={role} />
+          </>
+        )}
       </main>
 
       {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 z-30">
-        <div className="grid grid-cols-5 gap-1">
-          {navItems.map(item => (
+        <div className={`grid gap-1 ${role === 'dispatcher' ? 'grid-cols-4' : 'grid-cols-6'}`}>
+          {activeNavItems.map(item => (
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}

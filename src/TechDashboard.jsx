@@ -1,0 +1,331 @@
+// src/TechDashboard.jsx
+import React, { useState, useEffect } from 'react';
+import { MapPin, CheckCircle, Navigation, RefreshCw, LogOut, ChevronRight, X } from 'lucide-react';
+import { supabase } from './supabaseClient';
+import logo from './assets/RELIANT SUPPORT LOGO.svg';
+
+const STATUS_CONFIG = {
+  confirmed: { label: 'PENDING',   color: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' },
+  en_route:  { label: 'EN ROUTE',  color: 'bg-blue-500/20 text-blue-400 border border-blue-500/30' },
+  complete:  { label: 'COMPLETE',  color: 'bg-green-500/20 text-green-400 border border-green-500/30' },
+};
+
+// Phase 1 features default on when row is absent; Phase 2 features default off
+const PHASE2_FEATURES = ['gps_tracking', 'customer_sms', 'customer_tracking_link'];
+const isAllowed = (permissions, feature) => {
+  const row = permissions.find(p => p.feature === feature);
+  if (row) return row.enabled;
+  return !PHASE2_FEATURES.includes(feature);
+};
+
+const buildMapsUrl = (apt) => {
+  const addr = [apt.address, apt.city, apt.state, apt.zip].filter(Boolean).join(' ');
+  return `https://maps.google.com/?daddr=${encodeURIComponent(addr)}`;
+};
+
+// ── Job Detail Bottom Sheet ──────────────────────────────────────────────────
+const JobDetail = ({ apt, permissions, updatingId, onClose, onUpdateStatus }) => {
+  const sc = STATUS_CONFIG[apt.status] || STATUS_CONFIG.confirmed;
+  const canOnMyWay  = isAllowed(permissions, 'on_my_way');
+  const canComplete = isAllowed(permissions, 'mark_complete');
+  const canNotes    = isAllowed(permissions, 'job_notes');
+
+  return (
+    <div className="fixed inset-0 bg-black/80 z-40 flex flex-col justify-end">
+      <div className="bg-gray-800 rounded-t-2xl p-5 max-h-[85vh] overflow-y-auto">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-white">Job Detail</h3>
+          <button onClick={onClose} className="p-2 hover:bg-gray-700 rounded-lg">
+            <X className="w-5 h-5 text-gray-400" />
+          </button>
+        </div>
+
+        {/* Status badge */}
+        <span className={`inline-block text-xs font-medium px-2 py-1 rounded-full mb-4 ${sc.color}`}>
+          {sc.label}
+        </span>
+
+        {/* Customer / job info */}
+        <div className="space-y-3 mb-5">
+          <div>
+            <p className="text-xs text-gray-500 uppercase tracking-wide">Customer</p>
+            <p className="text-white font-medium">{apt.caller_name || 'Customer'}</p>
+          </div>
+          {(apt.address || apt.city) && (
+            <div>
+              <p className="text-xs text-gray-500 uppercase tracking-wide">Address</p>
+              <p className="text-gray-300 text-sm">
+                {[apt.address, apt.city, apt.state, apt.zip].filter(Boolean).join(', ')}
+              </p>
+            </div>
+          )}
+          {(apt.start_time || apt.end_time) && (
+            <div>
+              <p className="text-xs text-gray-500 uppercase tracking-wide">Time</p>
+              <p className="text-gray-300 text-sm">
+                {apt.start_time?.slice(0, 5)}{apt.end_time ? ` – ${apt.end_time.slice(0, 5)}` : ''}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Job notes — only if permitted and notes exist */}
+        {canNotes && apt.notes && (
+          <div className="mb-5">
+            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Job Notes</p>
+            <p className="text-gray-300 text-sm bg-gray-900 rounded-lg p-3 border border-gray-600">
+              {apt.notes}
+            </p>
+          </div>
+        )}
+
+        {/* Action buttons */}
+        <div className="space-y-3">
+          {/* Navigate — always shown */}
+          <a
+            href={buildMapsUrl(apt)}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center justify-center gap-2 w-full py-4 bg-blue-600 text-white rounded-xl font-medium text-base min-h-[56px]"
+          >
+            <Navigation className="w-5 h-5" />
+            Navigate
+          </a>
+
+          {/* On My Way — shown if permitted AND status is confirmed */}
+          {canOnMyWay && apt.status === 'confirmed' && (
+            <button
+              onClick={() => onUpdateStatus(apt, 'en_route')}
+              disabled={updatingId === apt.id}
+              className="flex items-center justify-center gap-2 w-full py-4 bg-amber-600 text-white rounded-xl font-medium text-base min-h-[56px] disabled:opacity-50"
+            >
+              {updatingId === apt.id
+                ? <RefreshCw className="w-5 h-5 animate-spin" />
+                : <MapPin className="w-5 h-5" />}
+              On My Way
+            </button>
+          )}
+
+          {/* Mark Complete — shown if permitted AND not already complete */}
+          {canComplete && apt.status !== 'complete' && (
+            <button
+              onClick={() => onUpdateStatus(apt, 'complete')}
+              disabled={updatingId === apt.id}
+              className="flex items-center justify-center gap-2 w-full py-4 bg-green-600 text-white rounded-xl font-medium text-base min-h-[56px] disabled:opacity-50"
+            >
+              {updatingId === apt.id
+                ? <RefreshCw className="w-5 h-5 animate-spin" />
+                : <CheckCircle className="w-5 h-5" />}
+              Mark Complete
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ── Main TechDashboard ───────────────────────────────────────────────────────
+const TechDashboard = ({ techData }) => {
+  const [jobs, setJobs]             = useState([]);
+  const [permissions, setPermissions] = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState(null);
+  const [selectedJob, setSelectedJob] = useState(null);
+  const [updatingId, setUpdatingId] = useState(null);
+  const [toast, setToast]           = useState(null);
+
+  const todayISO = new Date().toISOString().split('T')[0];
+
+  const fetchJobs = async () => {
+    setError(null);
+    try {
+      const [jobsRes, permsRes] = await Promise.all([
+        supabase
+          .from('appointments')
+          .select('*')
+          .eq('client_id', techData.client_id)   // defense-in-depth; RLS also filters
+          .eq('technician_id', techData.id)
+          .eq('date', todayISO)
+          .in('status', ['confirmed', 'en_route', 'complete'])
+          .order('start_time', { ascending: true }),
+        supabase
+          .from('technician_permissions')
+          .select('feature, enabled')
+          .eq('technician_id', techData.id),
+      ]);
+      if (jobsRes.error) throw jobsRes.error;
+      setJobs(jobsRes.data || []);
+      setPermissions(permsRes.data || []);
+    } catch (err) {
+      console.error('TechDashboard fetch error:', err);
+      setError('Could not load your jobs. Tap Retry to try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchJobs(); }, []);
+
+  const showToast = (msg) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const updateStatus = async (apt, newStatus) => {
+    setUpdatingId(apt.id);
+    try {
+      const { error } = await supabase
+        .from('appointments')
+        .update({ status: newStatus })
+        .eq('id', apt.id);
+      if (error) throw error;
+
+      // Optimistic update — don't wait for a re-fetch
+      setJobs(prev => prev.map(j => j.id === apt.id ? { ...j, status: newStatus } : j));
+      if (selectedJob?.id === apt.id) setSelectedJob(prev => ({ ...prev, status: newStatus }));
+
+      if (newStatus === 'complete')  showToast('Job marked complete!');
+      if (newStatus === 'en_route')  showToast("Status updated — on your way!");
+    } catch (err) {
+      console.error('Status update error:', err);
+      showToast('Failed to update status. Please try again.');
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    // onAuthStateChange SIGNED_OUT in App.jsx clears all state and renders Login
+  };
+
+  // ── Loading skeleton ───────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-900 p-4">
+        <div className="flex items-center justify-between mb-6">
+          <img src={logo} alt="Reliant Support" style={{ height: '26px', width: 'auto' }} />
+        </div>
+        {[1, 2, 3].map(i => (
+          <div key={i} className="bg-gray-800 rounded-lg p-4 mb-3 animate-pulse">
+            <div className="h-4 bg-gray-700 rounded w-3/4 mb-2" />
+            <div className="h-3 bg-gray-700 rounded w-1/2" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // ── Error state ────────────────────────────────────────────────────────────
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center p-4">
+        <p className="text-gray-400 text-center mb-4">{error}</p>
+        <button
+          onClick={() => { setLoading(true); fetchJobs(); }}
+          className="px-6 py-3 bg-blue-600 text-white rounded-lg font-medium"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-900 pb-6">
+      {/* Toast notification */}
+      {toast && (
+        <div className="fixed top-4 left-4 right-4 z-50 bg-gray-700 text-white px-4 py-3 rounded-lg shadow-lg text-sm text-center">
+          {toast}
+        </div>
+      )}
+
+      {/* Job detail bottom sheet */}
+      {selectedJob && (
+        <JobDetail
+          apt={selectedJob}
+          permissions={permissions}
+          updatingId={updatingId}
+          onClose={() => setSelectedJob(null)}
+          onUpdateStatus={updateStatus}
+        />
+      )}
+
+      {/* Sticky header */}
+      <div className="sticky top-0 bg-gray-900 border-b border-gray-700 px-4 py-3 z-10">
+        <div className="flex items-center justify-between">
+          <div>
+            <img src={logo} alt="Reliant Support" style={{ height: '26px', width: 'auto' }} />
+            <p className="text-xs text-gray-400 mt-0.5">
+              {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => { setLoading(true); fetchJobs(); }}
+              className="p-2 hover:bg-gray-700 rounded-lg"
+              title="Refresh"
+            >
+              <RefreshCw className="w-5 h-5 text-gray-400" />
+            </button>
+            <button onClick={handleLogout} className="p-2 hover:bg-gray-700 rounded-lg" title="Sign out">
+              <LogOut className="w-5 h-5 text-gray-400" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Jobs list */}
+      <div className="p-4">
+        <h2 className="text-lg font-semibold text-white mb-3">
+          {techData.name} — Today's Jobs
+        </h2>
+
+        {jobs.length === 0 ? (
+          <div className="bg-gray-800 rounded-lg p-8 text-center border border-gray-700">
+            <CheckCircle className="w-10 h-10 text-gray-600 mx-auto mb-3" />
+            <p className="text-gray-400">No jobs scheduled for today.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {jobs.map(apt => {
+              const sc = STATUS_CONFIG[apt.status] || STATUS_CONFIG.confirmed;
+              return (
+                <button
+                  key={apt.id}
+                  onClick={() => setSelectedJob(apt)}
+                  className="w-full bg-gray-800 rounded-lg p-4 border border-gray-700 text-left hover:border-gray-500 transition-colors active:bg-gray-750"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-white font-medium truncate">{apt.caller_name || 'Customer'}</p>
+                      <p className="text-gray-400 text-sm mt-0.5">
+                        {apt.start_time ? apt.start_time.slice(0, 5) : '—'}
+                        {apt.end_time ? ` – ${apt.end_time.slice(0, 5)}` : ''}
+                      </p>
+                      {apt.address && (
+                        <p className="text-gray-500 text-xs mt-1 truncate">
+                          <MapPin className="w-3 h-3 inline mr-1" />{apt.address}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className={`text-xs font-medium px-2 py-1 rounded-full ${sc.color}`}>
+                        {sc.label}
+                      </span>
+                      <ChevronRight className="w-4 h-4 text-gray-500" />
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default TechDashboard;
