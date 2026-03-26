@@ -103,9 +103,9 @@ Deno.serve(async (req) => {
            <p>Hi ${deal.client_name},</p>
            <p>Your sales representative has set up an account for <strong>${deal.company_name}</strong>.</p>
            <p>Please click the link below to complete your setup and pay the one-time setup fee of <strong>$395</strong>:</p>
-           <p><a href="${url}" style="background:#2563eb;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;">Complete Your Setup</a></p>
+           <p><a href="${url}" style="background:#2563eb;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;">Begin Your Setup</a></p>
            <p>Or copy this link into your browser:<br/>${url}</p>
-           <p>If you have any questions, reply to this email or contact your sales representative.</p>
+           <p>If you have any questions, contact us at <a href="mailto:support@reliantsupport.net">support@reliantsupport.net</a></p>
            <br/><p>— The Reliant Support Team</p>`
         );
         break;
