@@ -63,7 +63,9 @@ Deno.serve(async (req) => {
     // We catch that case and return { existing: true } so the UI can handle it
     // gracefully (show a "resend invite" option) rather than treating it as a
     // hard failure. All other errors are re-thrown as 500.
-    const { error: inviteError } = await supabase.auth.admin.inviteUserByEmail(email);
+    const { error: inviteError } = await supabase.auth.admin.inviteUserByEmail(email, {
+      redirectTo: "https://app.reliantsupport.net",
+    });
     if (inviteError) {
       const msg = inviteError.message?.toLowerCase() ?? "";
       if (msg.includes("already") || msg.includes("registered") || msg.includes("exists")) {
