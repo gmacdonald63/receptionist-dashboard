@@ -100,7 +100,7 @@ const App = () => {
     const hashParams = new URLSearchParams(window.location.hash.substring(1));
     const type = hashParams.get('type');
     
-    if (type === 'recovery') {
+    if (type === 'recovery' || type === 'invite') {
       setShowResetPassword(true);
       showResetPasswordRef.current = true;
       setAuthLoading(false);
@@ -131,6 +131,16 @@ const App = () => {
         setShowResetPassword(true);
         showResetPasswordRef.current = true;
         // Clear any existing user/client state so the recovery flow is clean
+        setUser(null);
+        setClientData(null);
+        return;
+      }
+
+      // Invite link clicked — user is auto-signed-in but has no password yet
+      // Show the set-password screen so they can establish their credentials
+      if (event === 'SIGNED_IN' && session?.user?.invited_at && !session.user.last_sign_in_at) {
+        setShowResetPassword(true);
+        showResetPasswordRef.current = true;
         setUser(null);
         setClientData(null);
         return;
