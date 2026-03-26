@@ -943,6 +943,8 @@ There is no router library. Navigation is handled entirely by state in `App.jsx`
 - Unauthenticated: renders `<Login />` or `<ResetPassword />`
 - Authenticated admin: renders `<Admin />` (client management) or the main dashboard
 - Main dashboard: bottom tab navigation between `appointments`, `customers`, `calls`, and `billing` tabs, rendered via `renderAppointments()`, `<Customers />`, `renderCallLogs()`, `renderBilling()`, and `renderSettings()` functions inside `App.jsx`
+- Role system: `admin | owner | dispatcher | tech` — resolved in a single `useEffect([user])` in `App.jsx`. Techs see `<TechDashboard />` (their own jobs only). Dispatchers see full dashboard without billing/settings.
+- Invite flow: `type=invite` in URL hash intercept shows `<ResetPassword />` (set-password screen). Also handled in `onAuthStateChange` SIGNED_IN event when user arrives via invite link.
 
 ### Key Files
 
@@ -951,6 +953,8 @@ There is no router library. Navigation is handled entirely by state in `App.jsx`
 - **`src/Admin.jsx`** — Admin-only view for managing client accounts, API key configuration, and sending email invitations.
 - **`src/retellService.js`** — Wrapper for the Retell AI API. Fetches call logs, extracts appointment info from call analysis/summaries, formats durations and outcomes.
 - **`src/supabaseClient.js`** — Initializes and exports the Supabase client. Credentials are hardcoded here (public anon key — expected for client-side Supabase usage).
+- **`src/TechDashboard.jsx`** — Technician-specific view. Shows jobs assigned to the logged-in tech only. Read-only job list with status updates.
+- **`src/TeamTab.jsx`** — Team management tab (owner/admin only). Add/invite techs, manage roles. Calls `invite-user` Edge Function which uses Supabase `inviteUserByEmail()`.
 
 ### Supabase Schema
 
@@ -960,6 +964,11 @@ Key tables:
 - `customers` — Customer profiles with tags, addresses, contact info
 - `customer_notes` — Notes linked to customers
 - `follow_up_reminders` — Reminders with due dates and completion status
+- `client_staff` — Dispatcher accounts per client. Columns: `id (uuid)`, `client_id`, `email`, `name`, `role` (default `'dispatcher'`), `active (bool)`, `invited_at`. Note: column is `active`, NOT `is_active`. No `user_id` column.
+- `technicians` — Field technicians per client. Columns: `id (int serial)`, `client_id`, `name`, `phone`, `color`, `email`, `is_active`. Note: column is `is_active`, NOT `active`.
+- `technician_permissions` — Per-tech feature toggles. Columns: `id`, `technician_id`, `client_id`, `feature`, `enabled`.
+
+**RLS CRITICAL:** All RLS policies must use `auth.email()` — NOT `(SELECT email FROM auth.users WHERE id = auth.uid())`. The authenticated role lacks direct access to `auth.users`; the subquery causes "permission denied for table users" at runtime. Migration `20260325005` enforces this across all tables.
 
 ### Data Flow
 
@@ -972,6 +981,8 @@ Key tables:
 ### Styling
 
 Tailwind CSS 3 with a dark theme. Custom color `gray-750` (`#2d3748`) is defined in `tailwind.config.js`. No component library — all UI is hand-built with Tailwind utilities.
+
+**Dynamic class warning:** Template literals like `` `grid-cols-${n}` `` are purged at build time — they work in dev but vanish in production. Always use static conditionals: `n === 4 ? 'grid-cols-4' : 'grid-cols-6'`.
 
 ### Environment Variables
 
@@ -988,8 +999,7 @@ Deployed on Vercel. `vercel.json` configures SPA rewrites so all routes resolve 
 Everything needed to pick up work in a new session without rediscovering anything.
 
 ### Git
-- **Working branch:** `claude/dashboard-repo-setup-UvgMs`
-- Always develop and push to this branch. Never push to main without explicit instruction.
+- All Phase 1 work merged to `main`. Default branch is `main` — push new work there or to a feature branch.
 
 ### Supabase
 - **Project ref:** `zmppdmfdhknnwzwdfhwf`
@@ -1013,6 +1023,13 @@ All functions are deployed with `--no-verify-jwt`. All require `apikey` + `Autho
 | `get-current-date` | Called by Retell agent at the start of every call to get today's date. Returns ISO date + human-readable string. |
 | `retell-webhook` | Post-call webhook called by Retell after every call ends. Saves call data and appointments to Supabase. |
 | `dynamic-api` | Unused scaffold — ignore. |
+| `invite-user` | Called by TeamTab to invite a new tech/staff member. Uses `supabase.auth.admin.inviteUserByEmail()` with `redirectTo: https://app.reliantsupport.net`. Handles "already registered" response gracefully. Deployed with `--no-verify-jwt`. |
+
+### Resend (Email)
+- **API key:** `re_79D5QfBH_7tc4rapZgmDwJ7DQoPQknaow`
+- Configured as Supabase custom SMTP — replaces built-in mailer. All auth emails (invites, password resets) route through Resend.
+- **From address:** `noreply@reliantsupport.net`
+- Built-in Supabase SMTP is rate-limited to ~2 emails/hour for invites and signups — Resend removes this limit permanently.
 
 ### Retell AI
 - **API key:** `key_5b24ef502d4c3cd538001a59694e` (also in `.env` as `VITE_RETELL_API_KEY`)
@@ -1031,11 +1048,15 @@ The `agent_id` is passed as a `const` parameter in each tool's JSON schema so Re
 - `customers` — Customer profiles linked to clients
 - `customer_notes` — Notes per customer
 - `follow_up_reminders` — Reminders with due dates
+- `client_staff` — Dispatcher accounts per client. Key columns: `id (uuid)`, `client_id`, `email`, `name`, `role` (default `'dispatcher'`), `active` (bool — NOT `is_active`)
+- `technicians` — Field technicians. Key columns: `id (int)`, `client_id`, `name`, `phone`, `color`, `email`, `is_active` (bool — NOT `active`)
+- `technician_permissions` — Per-tech feature flags. Key columns: `id`, `technician_id`, `client_id`, `feature`, `enabled`
 
 ### Session Start Checklist
-1. Confirm branch: `git status` — should be on `claude/dashboard-repo-setup-UvgMs`
+1. Confirm branch: `git status` — default is `main`
 2. User provides Supabase personal access token (needed for any function deployment)
 3. Read recent git log to catch up: `git log --oneline -10`
+4. If deploying Edge Functions: `SUPABASE_ACCESS_TOKEN=<token> npx supabase functions deploy <name> --project-ref zmppdmfdhknnwzwdfhwf --no-verify-jwt`
 
 ---
 
