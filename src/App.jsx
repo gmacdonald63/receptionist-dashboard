@@ -2188,7 +2188,7 @@ const App = () => {
 
       {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 z-30">
-        <div className={`grid grid-cols-${activeNavItems.length} gap-1`}>
+        <div className={`grid gap-1 ${role === 'dispatcher' ? 'grid-cols-4' : 'grid-cols-6'}`}>
           {activeNavItems.map(item => (
             <button
               key={item.id}
