@@ -1,6 +1,6 @@
 # Onboarding Flow Redesign — Design Spec
 **Date:** 2026-03-25
-**Status:** Draft (rev 3)
+**Status:** Draft (rev 4)
 
 ---
 
@@ -213,7 +213,7 @@ Since this template requires data from `clients` (not `deals`), `send-activation
 }
 ```
 
-The `send-notification` function's TypeScript `Template` union type must be updated to include `'activation_invite'`, and the handler must support the direct-payload path alongside the existing `deal_id`-based path.
+The `send-notification` function's TypeScript `Template` union type must be updated to include `'activation_invite'`, and the handler must support the direct-payload path alongside the existing `deal_id`-based path. Branch on `template === 'activation_invite'` (explicit template check, not `!deal_id`) to keep routing explicit and forward-compatible with future client-targeted templates.
 
 **Email content:**
 ```
@@ -242,6 +242,8 @@ If you have any questions, contact us at support@reliantsupport.net
 
 **Two steps rendered in sequence:**
 
+**Important:** Call `get-activation-data` on every component mount unconditionally — data is needed in both steps and the component remounts fresh after the Stripe redirect. Do not conditionally call it only for Step 1.
+
 #### Step 1 — Set Up Subscription
 
 On mount, calls `get-activation-data` with `{ activation_token }`.
@@ -255,7 +257,7 @@ On success, displays:
 - Brief: "Set up your subscription to activate your account."
 - CTA button: **"Set Up Subscription"**
 
-Clicking calls `create-subscription-checkout` → on success, redirects to Stripe checkout URL.
+Clicking calls `create-subscription-checkout` → on success, redirects to Stripe checkout URL. On error from `create-subscription-checkout`, show: "We couldn't start your subscription checkout. Please try again or contact support@reliantsupport.net."
 
 Stripe redirects back to `/?activate=<token>&paid=true` on success, or `/?activate=<token>` on cancel.
 
@@ -282,6 +284,7 @@ On submit:
 
 - Validates `activation_token` exists in `clients` table — return 404 if not found
 - Joins to `deals` via `deals.supabase_client_id = clients.id` (set by `send-activation-invite` — unambiguous, no multi-row risk)
+- `deals` columns used: `plan (text)`, `billing_cycle (text: 'monthly'|'annual')`, `client_email (text)`, `supabase_client_id (uuid FK to clients.id)`
 - Returns: `{ company_name, email, plan_name, monthly_price, billing_cycle }`
   - `plan_name` and `monthly_price` derived from `deal.plan`: `'standard'` → "Standard Plan", $495/mo; `'pro'` → "Pro Plan", $695/mo
 - No authentication required — `activation_token` is the access control
