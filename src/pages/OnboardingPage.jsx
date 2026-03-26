@@ -17,16 +17,19 @@ function defaultHours() {
 }
 
 export default function OnboardingPage({ token }) {
+  // Determine initial step from URL
   const params = new URLSearchParams(window.location.search);
-  const isSuccess = params.get('success') === 'true';
+  const isPaid = params.has('success'); // Stripe redirects back with ?success=true
 
-  const [phase, setPhase] = useState(isSuccess ? 'success' : 'loading');
-  const [deal, setDeal] = useState(null);
+  const [step, setStep] = useState(isPaid ? 'form' : 'payment');
+  // step: 'payment' | 'form' | 'thankyou' | 'loading' | 'error'
+
+  const [dealData, setDealData] = useState(null);
   const [error, setError] = useState(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [formErrors, setFormErrors] = useState({});
 
-  const [form, setForm] = useState({
+  const [formData, setFormData] = useState({
     business_name: '',
     address: '',
     city: '',
@@ -39,7 +42,7 @@ export default function OnboardingPage({ token }) {
 
   // Load deal details on mount
   useEffect(() => {
-    if (isSuccess || !token) return;
+    if (!token) return;
 
     async function loadDeal() {
       try {
@@ -54,85 +57,90 @@ export default function OnboardingPage({ token }) {
         const data = await res.json();
         if (!res.ok) {
           setError(data.error || 'Invalid onboarding link.');
-          setPhase('error');
+          setStep('error');
           return;
         }
-        setDeal(data);
-        setForm(f => ({ ...f, business_name: data.company_name || '' }));
-        setPhase('form');
+        setDealData(data);
+        setFormData(f => ({ ...f, business_name: data.company_name || '' }));
       } catch (e) {
         setError('Could not load onboarding details. Please try again.');
-        setPhase('error');
+        setStep('error');
       }
     }
     loadDeal();
   }, [token]);
 
   function setField(field, value) {
-    setForm(f => ({ ...f, [field]: value }));
+    setFormData(f => ({ ...f, [field]: value }));
     if (formErrors[field]) setFormErrors(e => ({ ...e, [field]: undefined }));
   }
 
   function setHours(day, field, value) {
-    setForm(f => ({
+    setFormData(f => ({
       ...f,
       hours: { ...f.hours, [day]: { ...f.hours[day], [field]: value } },
     }));
   }
 
-  async function handleSubmit(e) {
+  const handlePaySetupFee = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(
+        `${SUPABASE_URL}/functions/v1/create-onboarding-checkout`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY },
+          body: JSON.stringify({ token }),
+        }
+      );
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        setError(data.error || 'Failed to start payment. Please try again.');
+        setLoading(false);
+      }
+    } catch (err) {
+      setError('Something went wrong. Please try again.');
+      setLoading(false);
+    }
+  };
+
+  const handleSubmitForm = async (e) => {
     e.preventDefault();
-    const errors = validateOnboardingForm(form);
+    const errors = validateOnboardingForm(formData);
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
       return;
     }
 
-    setSubmitting(true);
+    setLoading(true);
     try {
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/create-onboarding-checkout`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': ANON_KEY,
-        },
-        body: JSON.stringify({ token, onboarding_data: form }),
-      });
+      const res = await fetch(
+        `${SUPABASE_URL}/functions/v1/save-onboarding-data`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY },
+          body: JSON.stringify({ token, onboarding_data: formData }),
+        }
+      );
       const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || 'Could not start payment. Please try again.');
-        setSubmitting(false);
-        return;
+      if (data.error === 'already_submitted') {
+        setStep('thankyou'); // Already submitted — show success
+      } else if (data.saved) {
+        setStep('thankyou');
+      } else {
+        setError(data.error || 'Failed to save. Please try again.');
       }
-      // Redirect to Stripe
-      window.location.href = data.url;
-    } catch (e) {
-      setError('Could not connect to payment service. Please try again.');
-      setSubmitting(false);
+    } catch (err) {
+      setError('Something went wrong. Please try again.');
+    } finally {
+      setLoading(false);
     }
-  }
-
-  // ── Success screen ──────────────────────────────────────────
-  if (phase === 'success') {
-    return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
-        <div className="bg-gray-800 rounded-xl border border-gray-700 p-8 max-w-md w-full text-center">
-          <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-          <h1 className="text-2xl font-bold text-white mb-3">Setup Request Received</h1>
-          <p className="text-gray-300">
-            Your setup request has been received. Greg will be in touch shortly with your account access link.
-          </p>
-        </div>
-      </div>
-    );
-  }
+  };
 
   // ── Error screen ────────────────────────────────────────────
-  if (phase === 'error') {
+  if (step === 'error') {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
         <div className="bg-gray-800 rounded-xl border border-red-700 p-8 max-w-md w-full text-center">
@@ -143,26 +151,65 @@ export default function OnboardingPage({ token }) {
     );
   }
 
-  // ── Loading screen ──────────────────────────────────────────
-  if (phase === 'loading') {
+  // ── Step 1: Payment ──────────────────────────────────────────
+  if (step === 'payment') {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <div className="text-gray-400 text-lg">Loading your setup form...</div>
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
+        <div className="max-w-lg mx-auto px-4 py-12 w-full">
+          <h1 className="text-2xl font-bold text-white mb-2">Complete Your Account Setup</h1>
+          <p className="text-gray-400 mb-6">
+            To get started, a one-time setup fee of $395 is required. This covers your
+            AI receptionist configuration.
+          </p>
+          {dealData && (
+            <p className="text-gray-300 mb-8 font-medium">{dealData.company_name}</p>
+          )}
+          {error && (
+            <div className="bg-red-900/30 rounded border border-red-700 p-3 mb-4">
+              <p className="text-red-300 text-sm">{error}</p>
+            </div>
+          )}
+          <button
+            onClick={handlePaySetupFee}
+            disabled={loading}
+            className="w-full py-3 px-6 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg disabled:opacity-50"
+          >
+            {loading ? 'Redirecting to payment...' : 'Pay Setup Fee — $395'}
+          </button>
+        </div>
       </div>
     );
   }
 
-  // ── Form ────────────────────────────────────────────────────
+  // ── Step 3: Thank You ────────────────────────────────────────
+  if (step === 'thankyou') {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
+        <div className="max-w-lg mx-auto px-4 py-12 text-center">
+          <div className="text-5xl mb-6">✓</div>
+          <h1 className="text-2xl font-bold text-white mb-4">
+            Thank You — Your Setup is Now in Progress!
+          </h1>
+          <p className="text-gray-400">
+            We've received your setup information. You'll receive an email from us
+            once your account is ready to activate.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Step 2: Business Info Form ───────────────────────────────
   return (
     <div className="min-h-screen bg-gray-900 py-10 px-4">
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-white mb-2">Reliant Support</h1>
-          <p className="text-gray-400">Complete your AI receptionist setup for <strong className="text-white">{deal?.company_name}</strong></p>
+          <p className="text-gray-400">Complete your AI receptionist setup for <strong className="text-white">{dealData?.company_name}</strong></p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmitForm} className="space-y-6">
 
           {/* Business Info */}
           <div className="bg-gray-800 rounded-xl border border-gray-700 p-6 space-y-4">
@@ -172,7 +219,7 @@ export default function OnboardingPage({ token }) {
               <label className="block text-sm font-medium text-gray-300 mb-1">Business Name *</label>
               <input
                 type="text"
-                value={form.business_name}
+                value={formData.business_name}
                 onChange={e => setField('business_name', e.target.value)}
                 className={`w-full px-3 py-2 bg-gray-700 border rounded text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 ${formErrors.business_name ? 'border-red-500' : 'border-gray-600'}`}
                 placeholder="Acme HVAC Services"
@@ -184,7 +231,7 @@ export default function OnboardingPage({ token }) {
               <label className="block text-sm font-medium text-gray-300 mb-1">Street Address *</label>
               <input
                 type="text"
-                value={form.address}
+                value={formData.address}
                 onChange={e => setField('address', e.target.value)}
                 className={`w-full px-3 py-2 bg-gray-700 border rounded text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 ${formErrors.address ? 'border-red-500' : 'border-gray-600'}`}
                 placeholder="123 Main Street"
@@ -197,7 +244,7 @@ export default function OnboardingPage({ token }) {
                 <label className="block text-sm font-medium text-gray-300 mb-1">City *</label>
                 <input
                   type="text"
-                  value={form.city}
+                  value={formData.city}
                   onChange={e => setField('city', e.target.value)}
                   className={`w-full px-3 py-2 bg-gray-700 border rounded text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 ${formErrors.city ? 'border-red-500' : 'border-gray-600'}`}
                 />
@@ -207,7 +254,7 @@ export default function OnboardingPage({ token }) {
                 <label className="block text-sm font-medium text-gray-300 mb-1">Province / State *</label>
                 <input
                   type="text"
-                  value={form.province}
+                  value={formData.province}
                   onChange={e => setField('province', e.target.value)}
                   className={`w-full px-3 py-2 bg-gray-700 border rounded text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 ${formErrors.province ? 'border-red-500' : 'border-gray-600'}`}
                   placeholder="AB"
@@ -220,7 +267,7 @@ export default function OnboardingPage({ token }) {
               <label className="block text-sm font-medium text-gray-300 mb-1">Postal / ZIP Code</label>
               <input
                 type="text"
-                value={form.postal_code}
+                value={formData.postal_code}
                 onChange={e => setField('postal_code', e.target.value)}
                 className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="T2P 1J9"
@@ -235,7 +282,7 @@ export default function OnboardingPage({ token }) {
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1">Services Offered *</label>
               <textarea
-                value={form.services}
+                value={formData.services}
                 onChange={e => setField('services', e.target.value)}
                 rows={3}
                 className={`w-full px-3 py-2 bg-gray-700 border rounded text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 ${formErrors.services ? 'border-red-500' : 'border-gray-600'}`}
@@ -247,7 +294,7 @@ export default function OnboardingPage({ token }) {
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1">Special Instructions for AI Receptionist</label>
               <textarea
-                value={form.special_instructions}
+                value={formData.special_instructions}
                 onChange={e => setField('special_instructions', e.target.value)}
                 rows={3}
                 className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -266,42 +313,35 @@ export default function OnboardingPage({ token }) {
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
-                      checked={form.hours[day].is_open}
+                      checked={formData.hours[day].is_open}
                       onChange={e => setHours(day, 'is_open', e.target.checked)}
                       className="rounded"
                     />
                     <span className="text-sm text-gray-300">Open</span>
                   </label>
-                  {form.hours[day].is_open && (
+                  {formData.hours[day].is_open && (
                     <div className="flex items-center gap-2 ml-2">
                       <input
                         type="time"
-                        value={form.hours[day].open_time}
+                        value={formData.hours[day].open_time}
                         onChange={e => setHours(day, 'open_time', e.target.value)}
                         className="px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm"
                       />
                       <span className="text-gray-500">-</span>
                       <input
                         type="time"
-                        value={form.hours[day].close_time}
+                        value={formData.hours[day].close_time}
                         onChange={e => setHours(day, 'close_time', e.target.value)}
                         className="px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm"
                       />
                     </div>
                   )}
-                  {!form.hours[day].is_open && (
+                  {!formData.hours[day].is_open && (
                     <span className="text-sm text-gray-500 ml-2">Closed</span>
                   )}
                 </div>
               ))}
             </div>
-          </div>
-
-          {/* Setup Fee Notice */}
-          <div className="bg-blue-900/30 rounded-xl border border-blue-700 p-4">
-            <p className="text-blue-300 text-sm">
-              <strong>Next step:</strong> After submitting this form, you'll be taken to a secure payment page to complete your <strong>$395 setup fee</strong>. Your AI receptionist will be configured within 1-2 business days.
-            </p>
           </div>
 
           {error && (
@@ -312,10 +352,10 @@ export default function OnboardingPage({ token }) {
 
           <button
             type="submit"
-            disabled={submitting}
+            disabled={loading}
             className="w-full py-3 px-6 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-colors"
           >
-            {submitting ? 'Redirecting to payment...' : 'Continue to Payment ->'}
+            {loading ? 'Saving...' : 'Send My Setup Information'}
           </button>
         </form>
       </div>
