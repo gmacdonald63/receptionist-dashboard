@@ -16,10 +16,10 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { token, onboarding_data } = await req.json();
+    const { token } = await req.json();
 
-    if (!token || !onboarding_data) {
-      return new Response(JSON.stringify({ error: "Missing token or onboarding_data" }), {
+    if (!token) {
+      return new Response(JSON.stringify({ error: "Missing token" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -53,31 +53,13 @@ Deno.serve(async (req) => {
       });
     }
 
-    // ── Save onboarding form data ────────────────────────────
-    const { error: updateError } = await supabase
-      .from("deals")
-      .update({ onboarding_data })
-      .eq("id", deal.id);
-
-    if (updateError) {
-      console.error("Failed to save onboarding data:", updateError);
-      // Non-fatal — continue to checkout anyway
-    }
-
     // ── Create Stripe Checkout session ($395 one-time) ───────
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       payment_method_types: ["card"],
       customer_creation: "always", // Ensures session.customer is set in the webhook
       line_items: [{
-        price_data: {
-          currency: "usd",
-          product_data: {
-            name: "Reliant Support — AI Receptionist Setup Fee",
-            description: `Account setup for ${deal.company_name}`,
-          },
-          unit_amount: 39500, // $395.00
-        },
+        price: "price_1TFNwcJ9Bes3rv7OPPxC0nHm",
         quantity: 1,
       }],
       metadata: {

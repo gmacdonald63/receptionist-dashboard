@@ -137,11 +137,11 @@ Deno.serve(async (req) => {
             break;
           }
 
-          // Update deal status → setup_in_progress
+          // Capture Stripe payment data only — status update and notifications
+          // are handled by save-onboarding-data after the client submits the form
           const { error: dealError } = await supabase
             .from("deals")
             .update({
-              status: "setup_in_progress",
               stripe_setup_payment_id: session.payment_intent as string,
               stripe_customer_id: session.customer as string,
             })
@@ -152,27 +152,7 @@ Deno.serve(async (req) => {
             break;
           }
 
-          console.log(`Setup fee paid for deal ${dealId} — status -> setup_in_progress`);
-
-          // Fire HubSpot sync
-          await fetch(`${supabaseUrl}/functions/v1/hubspot-sync`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ deal_id: dealId, action: "update" }),
-          }).catch(e => console.error("hubspot-sync call failed:", e));
-
-          // Fire notifications (Greg + rep)
-          await fetch(`${supabaseUrl}/functions/v1/send-notification`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ template: "setup_fee_paid_greg", deal_id: dealId }),
-          }).catch(e => console.error("send-notification (greg) failed:", e));
-
-          await fetch(`${supabaseUrl}/functions/v1/send-notification`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ template: "setup_fee_paid_rep", deal_id: dealId }),
-          }).catch(e => console.error("send-notification (rep) failed:", e));
+          console.log(`Setup fee paid for deal ${dealId} — Stripe IDs captured`);
 
           break;
         }

@@ -9,6 +9,7 @@ const corsHeaders = {
 
 type Template =
   | "onboarding_link_client"
+  | "activation_invite"
   | "setup_fee_paid_greg"
   | "setup_fee_paid_rep"
   | "client_active_greg"
@@ -18,7 +19,12 @@ type Template =
 
 interface NotificationRequest {
   template: Template;
-  deal_id: string;
+  deal_id?: string;
+  // Direct payload for client-targeted templates (e.g. activation_invite):
+  to?: string;
+  client_name?: string;
+  company_name?: string;
+  activation_token?: string;
 }
 
 async function sendEmail(apiKey: string, to: string, subject: string, html: string) {
@@ -58,7 +64,47 @@ Deno.serve(async (req) => {
 
     const ownerEmail = Deno.env.get("OWNER_EMAIL") || "gmacdonald63@gmail.com";
 
-    const { template, deal_id }: NotificationRequest = await req.json();
+    const body: NotificationRequest = await req.json();
+    const { template, deal_id } = body;
+
+    if (template === 'activation_invite') {
+      const { to, client_name, company_name, activation_token } = body;
+      if (!to || !client_name || !company_name || !activation_token) {
+        return new Response(JSON.stringify({ error: "Missing activation_invite fields" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const activationUrl = `https://app.reliantsupport.net/?activate=${activation_token}`;
+      const subject = `You're all set — activate your Reliant Support account`;
+      const html = `
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 32px; background: #111827; color: #f9fafb;">
+          <h1 style="color: #f9fafb; font-size: 24px; margin-bottom: 16px;">
+            You're all set, ${client_name}!
+          </h1>
+          <p style="color: #9ca3af; margin-bottom: 8px;">
+            Great news — your AI receptionist account for <strong style="color: #f9fafb;">${company_name}</strong>
+            is fully configured and ready to go.
+          </p>
+          <p style="color: #9ca3af; margin-bottom: 32px;">
+            Follow the link below to set up your subscription and create your password to access your dashboard:
+          </p>
+          <a href="${activationUrl}"
+             style="display: inline-block; background: #2563eb; color: #ffffff; padding: 14px 28px;
+                    border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">
+            Proceed
+          </a>
+          <p style="color: #6b7280; margin-top: 40px; font-size: 14px;">
+            — The Reliant Support Team<br/>
+            If you have any questions, contact us at
+            <a href="mailto:support@reliantsupport.net" style="color: #60a5fa;">support@reliantsupport.net</a>
+          </p>
+        </div>
+      `;
+      await sendEmail(resendKey, to, subject, html);
+      return new Response(JSON.stringify({ sent: true }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -103,9 +149,9 @@ Deno.serve(async (req) => {
            <p>Hi ${deal.client_name},</p>
            <p>Your sales representative has set up an account for <strong>${deal.company_name}</strong>.</p>
            <p>Please click the link below to complete your setup and pay the one-time setup fee of <strong>$395</strong>:</p>
-           <p><a href="${url}" style="background:#2563eb;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;">Complete Your Setup</a></p>
+           <p><a href="${url}" style="background:#2563eb;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;">Begin Your Setup</a></p>
            <p>Or copy this link into your browser:<br/>${url}</p>
-           <p>If you have any questions, reply to this email or contact your sales representative.</p>
+           <p>If you have any questions, contact us at <a href="mailto:support@reliantsupport.net">support@reliantsupport.net</a></p>
            <br/><p>— The Reliant Support Team</p>`
         );
         break;

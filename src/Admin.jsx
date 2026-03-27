@@ -13,6 +13,8 @@ const Admin = ({ onBack, session }) => {
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
   const [sendingInvite, setSendingInvite] = useState(null);
+  const [activationSending, setActivationSending] = useState({});
+  const [activationStatus, setActivationStatus] = useState({});
 
   // Client form state
   const [showClientForm, setShowClientForm] = useState(false);
@@ -118,7 +120,7 @@ const Admin = ({ onBack, session }) => {
             invite_sent: false,
           }]);
         if (error) throw error;
-        setSuccessMessage("Client added! Click 'Send Invite' to email them.");
+        setSuccessMessage("Client added successfully.");
       }
       resetClientForm();
       fetchAllRecords();
@@ -210,7 +212,7 @@ const Admin = ({ onBack, session }) => {
     }
   };
 
-  const handleSendInvite = async (record) => {
+  const handleSendRepInvite = async (record) => {
     setSendingInvite(record.id);
     setError(null);
     try {
@@ -241,17 +243,108 @@ const Admin = ({ onBack, session }) => {
     } finally { setSendingInvite(null); }
   };
 
-  const handleResendInvite = async (record) => {
+  const handleResendRepInvite = async (record) => {
     if (!confirm(`Resend invite to ${record.email}?`)) return;
-    await handleSendInvite(record);
+    await handleSendRepInvite(record);
+  };
+
+  const handleResendOnboardingLink = async (client) => {
+    setSendingInvite(client.id);
+    setError(null);
+    try {
+      const { data: deal, error: dealError } = await supabase
+        .from('deals')
+        .select('id')
+        .eq('client_email', client.email)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (dealError || !deal) {
+        setError(`No onboarding deal found for ${client.email}`);
+        return;
+      }
+
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL || 'https://zmppdmfdhknnwzwdfhwf.supabase.co'}/functions/v1/send-notification`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ template: 'onboarding_link_client', deal_id: deal.id }),
+        }
+      );
+      if (!res.ok) throw new Error('Failed to resend onboarding link');
+
+      await supabase
+        .from('clients')
+        .update({ invite_sent: true, invite_sent_at: new Date().toISOString() })
+        .eq('id', client.id);
+
+      setSuccessMessage(`Onboarding link resent to ${client.email}`);
+      fetchAllRecords();
+    } catch (err) {
+      console.error('Error resending onboarding link:', err);
+      setError(err.message || 'Failed to resend onboarding link');
+    } finally { setSendingInvite(null); }
+  };
+
+  const handleSendActivationInvite = async (client) => {
+    if (client.setup_complete) {
+      if (!window.confirm(`Resend activation invite to ${client.email}?`)) return;
+    }
+    setActivationSending(prev => ({ ...prev, [client.id]: true }));
+    setActivationStatus(prev => ({ ...prev, [client.id]: null }));
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL || 'https://zmppdmfdhknnwzwdfhwf.supabase.co'}/functions/v1/send-activation-invite`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ client_id: client.id }),
+        }
+      );
+      const data = await res.json();
+      if (data.sent) {
+        setActivationStatus(prev => ({ ...prev, [client.id]: 'sent' }));
+        fetchAllRecords();
+      } else if (data.error === 'setup_fee_not_paid') {
+        setActivationStatus(prev => ({ ...prev, [client.id]: 'fee_not_paid' }));
+      } else {
+        setActivationStatus(prev => ({ ...prev, [client.id]: 'error' }));
+      }
+    } catch (err) {
+      console.error('Activation invite error:', err);
+      setActivationStatus(prev => ({ ...prev, [client.id]: 'error' }));
+    } finally {
+      setActivationSending(prev => ({ ...prev, [client.id]: false }));
+    }
   };
 
   // ==================== RENDER HELPERS ====================
 
-  const renderInviteButton = (record) => (
-    !record.invite_sent ? (
+  const renderInviteButton = (record, type = 'rep') => {
+    if (type === 'client') {
+      return (
+        <button
+          onClick={() => handleResendOnboardingLink(record)}
+          disabled={sendingInvite === record.id}
+          className="flex items-center gap-1 px-3 py-2 bg-blue-700 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 text-sm"
+          title="Resend Onboarding Link"
+        >
+          {sendingInvite === record.id ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+          <span className="hidden sm:inline">Resend Onboarding Link</span>
+        </button>
+      );
+    }
+    // Rep invite
+    return !record.invite_sent ? (
       <button
-        onClick={() => handleSendInvite(record)}
+        onClick={() => handleSendRepInvite(record)}
         disabled={sendingInvite === record.id}
         className="flex items-center gap-1 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 text-sm"
         title="Send Invite"
@@ -261,15 +354,46 @@ const Admin = ({ onBack, session }) => {
       </button>
     ) : (
       <button
-        onClick={() => handleResendInvite(record)}
+        onClick={() => handleResendRepInvite(record)}
         disabled={sendingInvite === record.id}
         className="flex items-center gap-1 px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500 disabled:opacity-50 text-sm"
         title="Resend Invite"
       >
         {sendingInvite === record.id ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
-        <span className="hidden sm:inline">Resend</span>
+        <span className="hidden sm:inline">Resend Invite</span>
       </button>
-    )
+    );
+  };
+
+  const renderActivationButton = (client) => (
+    <div className="mt-2">
+      {!client.setup_complete ? (
+        <button
+          onClick={() => handleSendActivationInvite(client)}
+          disabled={activationSending[client.id]}
+          className="px-3 py-1 text-sm bg-green-700 hover:bg-green-600 text-white rounded disabled:opacity-50"
+        >
+          {activationSending[client.id] ? 'Sending...' : 'Send Activation Invite'}
+        </button>
+      ) : (
+        <button
+          onClick={() => handleSendActivationInvite(client)}
+          disabled={activationSending[client.id]}
+          className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 text-gray-300 rounded disabled:opacity-50"
+        >
+          {activationSending[client.id] ? 'Sending...' : 'Resend Activation'}
+        </button>
+      )}
+      {activationStatus[client.id] === 'sent' && (
+        <span className="text-green-400 text-xs ml-2">Invite sent!</span>
+      )}
+      {activationStatus[client.id] === 'fee_not_paid' && (
+        <span className="text-red-400 text-xs ml-2">Setup fee not yet paid</span>
+      )}
+      {activationStatus[client.id] === 'error' && (
+        <span className="text-red-400 text-xs ml-2">Error — try again</span>
+      )}
+    </div>
   );
 
   // ==================== MAIN RENDER ====================
@@ -426,7 +550,7 @@ const Admin = ({ onBack, session }) => {
             </div>
             {!editingClient && (
               <div className="mt-4 p-3 bg-blue-900/30 border border-blue-700 rounded-lg">
-                <p className="text-blue-300 text-xs">After adding the client, click "Send Invite" to email them a link to set their password.</p>
+                <p className="text-blue-300 text-xs">After adding the client, use "Resend Onboarding Link" to resend their onboarding email if needed.</p>
               </div>
             )}
           </div>
@@ -564,7 +688,7 @@ const Admin = ({ onBack, session }) => {
                   {client.retell_agent_id && <p className="text-xs text-gray-500 mt-1">Agent: {client.retell_agent_id}</p>}
                 </div>
                 <div className="flex gap-2">
-                  {renderInviteButton(client)}
+                  {renderInviteButton(client, 'client')}
                   <button onClick={() => handleEditClient(client)} className="p-2 hover:bg-gray-700 rounded-lg" title="Edit">
                     <Edit className="w-4 h-4 text-gray-400" />
                   </button>
@@ -579,6 +703,7 @@ const Admin = ({ onBack, session }) => {
                   <p className="text-xs text-gray-600">Invited: {new Date(client.invite_sent_at).toLocaleDateString()}</p>
                 )}
               </div>
+              {renderActivationButton(client)}
             </div>
           ))}
         </div>
