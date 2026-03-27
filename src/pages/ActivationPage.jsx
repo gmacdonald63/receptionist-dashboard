@@ -91,7 +91,8 @@ export default function ActivationPage({ activationToken, paid }) {
           access_token: data.access_token,
           refresh_token: data.refresh_token,
         });
-        // onAuthStateChange will fire → resolveRole() → redirect to dashboard
+        // Clear the activation URL params so App.jsx renders the main dashboard
+        window.location.href = '/';
       } else {
         setActionError(data.error || 'Something went wrong. Please try again.');
       }

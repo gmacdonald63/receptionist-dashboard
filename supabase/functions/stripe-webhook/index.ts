@@ -165,7 +165,7 @@ Deno.serve(async (req) => {
           const clientId = session.metadata?.client_id;
           const priceId = subscription.items?.data?.[0]?.price?.id || null;
           if (clientId) {
-            await supabase
+            const { error: subUpdateError } = await supabase
               .from("clients")
               .update({
                 stripe_customer_id: session.customer as string,
@@ -177,7 +177,11 @@ Deno.serve(async (req) => {
                 ).toISOString(),
               })
               .eq("id", parseInt(clientId));
-            console.log(`Client ${clientId} subscription activated: ${subscription.id} (price: ${priceId})`);
+            if (subUpdateError) {
+              console.error(`Failed to update client ${clientId} subscription:`, subUpdateError);
+            } else {
+              console.log(`Client ${clientId} subscription activated: ${subscription.id} (price: ${priceId})`);
+            }
           }
         }
         break;

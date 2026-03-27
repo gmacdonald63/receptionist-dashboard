@@ -103,11 +103,21 @@ Deno.serve(async (req) => {
     if (dealUpdate.error) throw new Error(`Failed to set supabase_client_id: ${dealUpdate.error.message}`);
 
     // ── Generate Supabase invite token (no email sent) ────────
-    const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+    // Try "invite" first (new users). Fall back to "recovery" if user already exists.
+    let { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
       type: "invite",
       email: targetClient.email,
       options: { redirectTo: "https://app.reliantsupport.net" },
     });
+
+    if (linkError) {
+      console.log("invite generateLink failed, trying recovery:", linkError.message);
+      ({ data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+        type: "recovery",
+        email: targetClient.email,
+        options: { redirectTo: "https://app.reliantsupport.net" },
+      }));
+    }
 
     if (linkError || !linkData?.properties?.hashed_token) {
       console.error("generateLink failed:", linkError);
