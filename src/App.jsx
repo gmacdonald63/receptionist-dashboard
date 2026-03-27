@@ -1298,16 +1298,24 @@ const App = () => {
     </div>
   );
 
-  // Plan definitions — price IDs must match Stripe Dashboard
+  // Plan definitions — priceId is the live monthly price (used for new subscriptions via billing tab)
   const PLANS = {
-    standard: { name: 'Standard Plan', price: 495, priceId: 'price_1T7BFxJVgG4IIGoFcnMC98UN', minutes: 1000 },
-    pro: { name: 'Pro Plan', price: 695, priceId: 'price_1T7BLkJVgG4IIGoFRdPuSpS9', minutes: 2000 },
+    standard: { name: 'Standard Plan', price: 495, priceId: 'price_1TFLt6J9Bes3rv7O0fWvfB3c', minutes: 1000 },
+    pro: { name: 'Pro Plan', price: 695, priceId: 'price_1TFLwtJ9Bes3rv7ObtuStIhj', minutes: 2000 },
+  };
+
+  // Recognizes live monthly, live annual, and test mode price IDs
+  const PRICE_ID_TO_PLAN = {
+    'price_1TFLt6J9Bes3rv7O0fWvfB3c': 'standard', // live monthly
+    'price_1TFLvoJ9Bes3rv7OjDasoy0A': 'standard', // live annual
+    'price_1TFNy4J9Bes3rv7OFFJPMWGh': 'standard', // test monthly
+    'price_1TFLwtJ9Bes3rv7ObtuStIhj': 'pro',       // live monthly
+    'price_1TFLyBJ9Bes3rv7OsQeTPkyI': 'pro',       // live annual
   };
 
   const getPlanFromPriceId = (priceId) => {
-    if (priceId === PLANS.standard.priceId) return 'standard';
-    if (priceId === PLANS.pro.priceId) return 'pro';
-    return null;
+    if (!priceId) return null;
+    return PRICE_ID_TO_PLAN[priceId] || null;
   };
 
   const handleStripeCheckout = async (plan = 'standard') => {

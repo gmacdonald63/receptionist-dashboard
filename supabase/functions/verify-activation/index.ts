@@ -49,13 +49,22 @@ Deno.serve(async (req) => {
     // verifyOtp response: { data: { user: User, session: Session }, error }
     // data.user.id  → used for updateUserById
     // data.session.access_token + data.session.refresh_token → returned to frontend
-    const { data: otpData, error: otpError } = await supabase.auth.admin.verifyOtp({
+    // Try "invite" type first, fall back to "recovery" for resent activations
+    let { data: otpData, error: otpError } = await supabase.auth.verifyOtp({
       token_hash: client.invite_token_hash,
       type: "invite",
-    } as Parameters<typeof supabase.auth.admin.verifyOtp>[0]);
+    });
 
     if (otpError || !otpData?.session) {
-      console.error("verifyOtp failed:", otpError);
+      console.log("verifyOtp invite failed, trying recovery:", otpError?.message);
+      ({ data: otpData, error: otpError } = await supabase.auth.verifyOtp({
+        token_hash: client.invite_token_hash,
+        type: "recovery",
+      }));
+    }
+
+    if (otpError || !otpData?.session) {
+      console.error("verifyOtp failed both types:", otpError);
       return new Response(JSON.stringify({ error: "token_expired" }), {
         status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
