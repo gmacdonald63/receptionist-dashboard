@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
       payment_method_types: ["card"],
       customer_creation: "always", // Ensures session.customer is set in the webhook
       line_items: [{
-        price: "price_1TFLrDJ9Bes3rv7OINJ2diqf",
+        price: "price_1TFNwcJ9Bes3rv7OPPxC0nHm",
         quantity: 1,
       }],
       metadata: {
