@@ -216,24 +216,22 @@ const Admin = ({ onBack, session }) => {
     setSendingInvite(record.id);
     setError(null);
     try {
-      const tempPassword = Math.random().toString(36).slice(-12) + 'A1!';
-      const { error: signUpError } = await supabase.auth.signUp({
-        email: record.email,
-        password: tempPassword,
-        options: { data: { company_name: record.company_name } }
-      });
-      if (signUpError && !signUpError.message.includes('already registered')) throw signUpError;
-
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(
-        record.email,
-        { redirectTo: `${window.location.origin}/reset-password` }
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Session expired. Please refresh and try again.');
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL || 'https://zmppdmfdhknnwzwdfhwf.supabase.co'}/functions/v1/invite-rep`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ client_id: record.id }),
+        }
       );
-      if (resetError) throw resetError;
-
-      await supabase
-        .from('clients')
-        .update({ invite_sent: true, invite_sent_at: new Date().toISOString() })
-        .eq('id', record.id);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to send invite');
 
       setSuccessMessage(`Invite sent to ${record.email}`);
       fetchAllRecords();

@@ -15,6 +15,7 @@ import UpdatePrompt from './UpdatePrompt';
 import AppointmentCalendar from './AppointmentCalendar';
 import OnboardingPage from './pages/OnboardingPage.jsx';
 import ActivationPage from './pages/ActivationPage.jsx';
+import RepSetPasswordPage from './pages/RepSetPasswordPage.jsx';
 import SalesRepDashboard from './pages/SalesRepDashboard.jsx';
 
 const SUPABASE_URL = 'https://zmppdmfdhknnwzwdfhwf.supabase.co';
@@ -123,6 +124,10 @@ const App = () => {
         return;
       }
       if (new URLSearchParams(window.location.search).get('activate')) {
+        setAuthLoading(false);
+        return;
+      }
+      if (new URLSearchParams(window.location.search).get('rep-invite')) {
         setAuthLoading(false);
         return;
       }
@@ -1711,6 +1716,11 @@ const App = () => {
   const _activateToken = _onboardParams.get('activate');
   if (_activateToken) {
     return <ActivationPage activationToken={_activateToken} paid={_onboardParams.has('paid')} />;
+  }
+
+  const _repInviteToken = _onboardParams.get('rep-invite');
+  if (_repInviteToken) {
+    return <RepSetPasswordPage repInviteToken={_repInviteToken} />;
   }
 
   // Show loading while checking auth or demo token
