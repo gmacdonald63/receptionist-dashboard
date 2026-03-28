@@ -113,7 +113,22 @@ CREATE TABLE tech_locations (
 );
 ```
 
-**Upsert guard:** `WHERE EXCLUDED.recorded_at > tech_locations.recorded_at` — prevents out-of-order delivery from overwriting a newer position with an older one.
+**Upsert guard** — prevents out-of-order delivery from overwriting a newer position with an older one:
+
+```sql
+INSERT INTO tech_locations (technician_id, client_id, lat, lng, accuracy_meters, heading, speed_kmh, non_job_status, recorded_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+ON CONFLICT (technician_id) DO UPDATE SET
+  lat             = EXCLUDED.lat,
+  lng             = EXCLUDED.lng,
+  accuracy_meters = EXCLUDED.accuracy_meters,
+  heading         = EXCLUDED.heading,
+  speed_kmh       = EXCLUDED.speed_kmh,
+  non_job_status  = EXCLUDED.non_job_status,
+  recorded_at     = EXCLUDED.recorded_at,
+  received_at     = now()
+WHERE EXCLUDED.recorded_at > tech_locations.recorded_at;
+```
 
 **Non-job status persistence:** When a tech selects a non-job destination, the client browser upserts `tech_locations` setting `non_job_status` to the selected label (e.g., `"Parts Supplier"`). Lat/lng are set to the tech's last known position. The dispatcher's Realtime subscription on `tech_locations` already covers this — no additional subscription needed. `non_job_status` is cleared (set to `null`) when GPS tracking starts on the next `en_route` job.
 
@@ -202,6 +217,7 @@ locationService.stopTracking()                     // called on "Mark Complete"
 - **Speed sanity check:** Discards readings implying >200 km/h movement (GPS noise in urban canyons)
 - **iOS watchdog timer:** Every 30 seconds, checks if the last GPS callback was >45 seconds ago. If so, tears down and re-registers `watchPosition`. Fixes silent iOS failure after phone calls or app switches.
 - **Stationary mode:** If speed <3 km/h for 60+ seconds, switches to `enableHighAccuracy: false` to reduce battery drain. Switches back on movement detection.
+- **`non_job_status` clearing:** `locationService.startTracking()` includes `non_job_status: null` in its first upsert to `tech_locations`, clearing any previously set non-job status label in the same write.
 - **Screen wakelock:** Requests `navigator.wakeLock.request('screen')` when tracking is active, with a user-visible "Keep screen on while navigating" indicator.
 
 ### Offline Queue
@@ -335,7 +351,7 @@ Triggered when tech taps "On My Way." The tech's browser calls the `generate-tra
 3. Returns the full tracking URL to the caller
 4. Calls the `send-sms` Edge Function with the tracking URL and the client's Twilio credentials
 
-If the dispatcher reassigns a job mid-route (tech A is en_route, dispatcher reassigns to tech B): the existing token for tech A is revoked (`revoked = true`), a new token is generated for tech B, and a new SMS is sent to the customer from the new tech's tracking link.
+If the dispatcher reassigns a job mid-route (tech A is en_route, dispatcher reassigns to tech B): the `generate-tracking-token` Edge Function revokes any existing token for that appointment (sets `revoked = true` on the existing row) before inserting the new token for tech B, then sends a new SMS to the customer.
 
 ### Token Validation (every request)
 The `TrackingPage` component calls a `get-tracking-data` Edge Function (service role key — no auth). The function validates:
@@ -354,6 +370,8 @@ If any check fails, returns 403 → page shows "This tracking link has expired."
 - Rough ETA if calculable from distance
 
 Note: The tracking token is only generated when status changes to `en_route`, so customers only ever open the link in this state. The token does not exist before "On My Way" is tapped.
+
+`TrackingPage` polls `get-tracking-data` every 30 seconds. When the response includes `status: "complete"`, the page transitions to State 2 without a 403 — the Edge Function returns a 200 with `status: "complete"` and no live location data. A 403 is only returned for invalid or revoked tokens.
 
 **State 2 — Complete**
 - Static map, grayed out
