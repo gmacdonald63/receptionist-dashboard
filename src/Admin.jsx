@@ -331,7 +331,7 @@ const Admin = ({ onBack, session }) => {
         <button
           onClick={() => handleResendOnboardingLink(record)}
           disabled={sendingInvite === record.id}
-          className="flex items-center gap-1 px-3 py-2 bg-blue-700 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 text-sm"
+          className="flex items-center gap-1 px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500 disabled:opacity-50 text-sm"
           title="Resend Onboarding Link"
         >
           {sendingInvite === record.id ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
@@ -739,7 +739,9 @@ const Admin = ({ onBack, session }) => {
                     <span className="px-2 py-0.5 bg-teal-900 text-teal-300 rounded text-xs">Sales Rep</span>
                     {!rep.invite_sent
                       ? <span className="px-2 py-0.5 bg-yellow-900 text-yellow-300 rounded text-xs">Not Invited</span>
-                      : <span className="px-2 py-0.5 bg-green-900 text-green-300 rounded text-xs">Invited</span>
+                      : rep.activation_token
+                        ? <span className="px-2 py-0.5 bg-green-900 text-green-300 rounded text-xs">Invited</span>
+                        : <span className="px-2 py-0.5 bg-teal-900 text-teal-300 rounded text-xs">Active</span>
                     }
                   </div>
                   <p className="text-sm text-gray-400">{rep.email}</p>

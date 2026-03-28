@@ -179,7 +179,7 @@ Deno.serve(async (req) => {
           `<h2>Welcome to Reliant Support!</h2>
            <p>Hi ${deal.client_name},</p>
            <p>Your sales representative has set up an account for <strong>${deal.company_name}</strong>.</p>
-           <p>Please click the link below to complete your setup and pay the one-time setup fee of <strong>$395</strong>:</p>
+           <p>Please click the link below to pay the one-time setup fee of <strong>$395</strong>, and provide the information on the form you will be directed to so that your setup can begin.</p>
            <p><a href="${url}" style="background:#2563eb;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;">Begin Your Setup</a></p>
            <p>Or copy this link into your browser:<br/>${url}</p>
            <p>If you have any questions, contact us at <a href="mailto:support@reliantsupport.net">support@reliantsupport.net</a></p>
@@ -211,14 +211,12 @@ Deno.serve(async (req) => {
       }
 
       case "setup_fee_paid_rep": {
-        await sendEmail(
-          resendKey,
-          deal.rep?.email,
-          `Setup fee received for ${deal.client_name}`,
-          `<h2>Setup Fee Received</h2>
+        const setupFeeSubject = `Setup fee received for ${deal.client_name}`;
+        const setupFeeHtml = `<h2>Setup Fee Received</h2>
            <p>${deal.client_name} at ${deal.company_name} has paid the $395 setup fee.</p>
-           <p>Greg is now configuring their AI receptionist. You'll be notified when they go live.</p>`
-        );
+           <p>Greg is now configuring their AI receptionist. You'll be notified when they go live.</p>`;
+        await sendEmail(resendKey, deal.rep?.email, setupFeeSubject, setupFeeHtml);
+        await sendEmail(resendKey, ownerEmail, setupFeeSubject, setupFeeHtml);
         break;
       }
 
