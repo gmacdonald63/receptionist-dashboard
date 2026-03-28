@@ -10,6 +10,7 @@ const corsHeaders = {
 type Template =
   | "onboarding_link_client"
   | "activation_invite"
+  | "rep_invite"
   | "setup_fee_paid_greg"
   | "setup_fee_paid_rep"
   | "client_active_greg"
@@ -20,11 +21,12 @@ type Template =
 interface NotificationRequest {
   template: Template;
   deal_id?: string;
-  // Direct payload for client-targeted templates (e.g. activation_invite):
+  // Direct payload for client-targeted templates (e.g. activation_invite, rep_invite):
   to?: string;
   client_name?: string;
   company_name?: string;
   activation_token?: string;
+  rep_name?: string;
 }
 
 async function sendEmail(apiKey: string, to: string, subject: string, html: string) {
@@ -98,6 +100,35 @@ Deno.serve(async (req) => {
             If you have any questions, contact us at
             <a href="mailto:support@reliantsupport.net" style="color: #60a5fa;">support@reliantsupport.net</a>
           </p>
+        </div>
+      `;
+      await sendEmail(resendKey, to, subject, html);
+      return new Response(JSON.stringify({ sent: true }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (template === 'rep_invite') {
+      const { to, rep_name, activation_token } = body;
+      // `rep_name` is not validated as strictly required here because:
+      // (1) `invite-rep` always supplies it as `company_name || email`, so it will never be absent in normal use.
+      // (2) The spec provides an explicit display-level fallback: if empty/null, fall back to `to` (the email).
+      // Validating it would add a hard failure for a field that has a safe fallback and is always provided by the caller.
+      if (!to || !activation_token) {
+        return new Response(JSON.stringify({ error: "Missing rep_invite fields" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const displayName = rep_name || to;
+      const repInviteUrl = `https://app.reliantsupport.net/?rep-invite=${activation_token}`;
+      const subject = `You've been invited to Reliant Support`;
+      const html = `
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 32px; background: #111827; color: #f9fafb;">
+          <h1 style="color: #f9fafb; font-size: 24px; margin-bottom: 8px;">Welcome to Reliant Support</h1>
+          <p style="color: #9ca3af; margin-bottom: 24px;">Hi ${displayName},</p>
+          <p style="color: #9ca3af; margin-bottom: 24px;">You've been added as a sales rep. Click below to set your password and access your dashboard.</p>
+          <a href="${repInviteUrl}" style="display: inline-block; background: #2563eb; color: #ffffff; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; margin-bottom: 24px;">Set My Password</a>
+          <p style="color: #6b7280; font-size: 14px;">This link expires in 7 days. If you have any questions, contact us at <a href="mailto:support@reliantsupport.net" style="color: #60a5fa;">support@reliantsupport.net</a></p>
         </div>
       `;
       await sendEmail(resendKey, to, subject, html);
