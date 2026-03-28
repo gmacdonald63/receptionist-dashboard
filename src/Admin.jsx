@@ -217,6 +217,7 @@ const Admin = ({ onBack, session }) => {
     setError(null);
     try {
       const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Session expired. Please refresh and try again.');
       const res = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL || 'https://zmppdmfdhknnwzwdfhwf.supabase.co'}/functions/v1/invite-rep`,
         {
