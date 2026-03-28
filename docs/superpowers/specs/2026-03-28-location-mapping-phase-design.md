@@ -67,6 +67,15 @@ Tech dashboard enhancements (Stage 4) have no dependencies on the GPS/map stack 
 | `src/pages/TrackingPage.jsx` | Public customer tracking page (no auth required) |
 | `src/components/DispatcherMap.jsx` | Leaflet map component for dispatcher view |
 
+### New Edge Functions
+
+| Function | Purpose |
+|---|---|
+| `supabase/functions/generate-tracking-token/index.ts` | Generates tracking token + triggers SMS. Called client-side when tech taps "On My Way." Uses service role key. |
+| `supabase/functions/get-tracking-data/index.ts` | Validates token + returns live tech location data. Called by TrackingPage. Uses service role key. Public (no-verify-jwt). |
+| `supabase/functions/geocode-appointments/index.ts` | Geocodes appointment address → writes `job_lat`/`job_lng` back to the row. Called on appointment insert/update. |
+| `supabase/functions/send-sms/index.ts` | Dedicated Twilio SMS dispatcher. Separate from `send-notification` (email). Accepts `{ to, from, body, twilio_account_sid, twilio_auth_token }`. |
+
 ### Modified Files
 
 | File | Change |
@@ -74,7 +83,13 @@ Tech dashboard enhancements (Stage 4) have no dependencies on the GPS/map stack 
 | `src/App.jsx` | Reduced to auth + role-based routing only (~400 lines) |
 | `src/TechDashboard.jsx` | Day navigation, new job cards, detail sheet, non-job status |
 | `src/TeamTab.jsx` | New permission toggles for tech data access |
-| `supabase/functions/send-notification/index.ts` | Add `tracking_sms` template |
+
+### Environment Variables / Secrets (new)
+
+| Key | Where stored | Purpose |
+|---|---|---|
+| `GOOGLE_GEOCODING_API_KEY` | Supabase secret | Used by `geocode-appointments` Edge Function |
+| `STADIA_MAPS_API_KEY` | Vite env / Vercel env var | Appended to Stadia tile URL for production (`?api_key=...`) |
 
 ---
 
@@ -90,8 +105,9 @@ CREATE TABLE tech_locations (
   lat             NUMERIC(10,7) NOT NULL,
   lng             NUMERIC(10,7) NOT NULL,
   accuracy_meters NUMERIC(6,1),
-  heading         NUMERIC(5,2),   -- degrees 0–360, null when stationary
-  speed_kmh       NUMERIC(6,2),   -- null when stationary
+  heading         NUMERIC(5,2),     -- degrees 0–360, null when stationary
+  speed_kmh       NUMERIC(6,2),     -- null when stationary
+  non_job_status  TEXT,             -- e.g. "Parts Supplier", "Office" — set by non-job status dropdown; cleared on next job en_route
   recorded_at     TIMESTAMPTZ   NOT NULL,  -- when device captured the fix
   received_at     TIMESTAMPTZ   NOT NULL DEFAULT now()
 );
@@ -99,20 +115,26 @@ CREATE TABLE tech_locations (
 
 **Upsert guard:** `WHERE EXCLUDED.recorded_at > tech_locations.recorded_at` — prevents out-of-order delivery from overwriting a newer position with an older one.
 
+**Non-job status persistence:** When a tech selects a non-job destination, the client browser upserts `tech_locations` setting `non_job_status` to the selected label (e.g., `"Parts Supplier"`). Lat/lng are set to the tech's last known position. The dispatcher's Realtime subscription on `tech_locations` already covers this — no additional subscription needed. `non_job_status` is cleared (set to `null`) when GPS tracking starts on the next `en_route` job.
+
 ### New Table: `tracking_tokens`
 One token per appointment. Used to gate the customer tracking page.
+
+`appointments.id` is confirmed `UUID` (verified against live schema). The foreign key below is correct.
 
 ```sql
 CREATE TABLE tracking_tokens (
   token           TEXT        PRIMARY KEY DEFAULT gen_random_uuid()::text,
   appointment_id  UUID        NOT NULL REFERENCES appointments(id) ON DELETE CASCADE,
   technician_id   INT         NOT NULL REFERENCES technicians(id) ON DELETE CASCADE,
-  client_id       INT         NOT NULL,
+  client_id       INT         NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
   expires_at      TIMESTAMPTZ NOT NULL,  -- appointment end_time + 2 hours
   revoked         BOOL        NOT NULL DEFAULT false
 );
 ```
+
+**Token generation** is performed exclusively by the `generate-tracking-token` Edge Function using the service role key. Client browsers never insert directly into this table. RLS on this table is therefore: no direct client access (all reads/writes go through service-role Edge Functions).
 
 ### New Table: `client_destinations`
 Client-configurable non-job status options shown to techs in the status dropdown.
@@ -127,7 +149,7 @@ CREATE TABLE client_destinations (
 );
 ```
 
-Default rows inserted for each new client: "Parts Supplier", "Office", "Lunch", "Done for the Day".
+Default rows seeded via the same migration that creates the table — a `DO $$ BEGIN ... END $$` block inserts four rows for all existing clients. For new clients created after this migration, the `clients` insert trigger (or the `Admin.jsx` create-client flow) inserts the same four defaults: "Parts Supplier", "Office", "Lunch", "Done for the Day".
 
 ### Modified Table: `appointments`
 Add geocoded coordinates for job pins on the dispatcher map.
@@ -180,7 +202,7 @@ locationService.stopTracking()                     // called on "Mark Complete"
 - **Speed sanity check:** Discards readings implying >200 km/h movement (GPS noise in urban canyons)
 - **iOS watchdog timer:** Every 30 seconds, checks if the last GPS callback was >45 seconds ago. If so, tears down and re-registers `watchPosition`. Fixes silent iOS failure after phone calls or app switches.
 - **Stationary mode:** If speed <3 km/h for 60+ seconds, switches to `enableHighAccuracy: false` to reduce battery drain. Switches back on movement detection.
-- **Screen wakelock:** Requests `navigator.wakeLock.requestWakelock('screen')` when tracking is active, with a user-visible "Keep screen on while navigating" indicator.
+- **Screen wakelock:** Requests `navigator.wakeLock.request('screen')` when tracking is active, with a user-visible "Keep screen on while navigating" indicator.
 
 ### Offline Queue
 
@@ -189,6 +211,8 @@ Location fixes that fail to reach Supabase are queued in `IndexedDB`. On network
 ### Write Pattern
 
 Direct Supabase JS client upsert from the tech's browser, gated by RLS. No Edge Function required for location writes.
+
+**Auth session requirement:** Techs log in via the Supabase Auth invite flow (same as dispatchers — they receive an invite email, set a password via `RepSetPasswordPage`-equivalent, and thereafter have a full Supabase auth session). `auth.email()` in RLS policies will equal `technicians.email` for any authenticated tech. This is confirmed by App.jsx's role resolution step 3, which reads the tech's row from `technicians` by `auth.email()`.
 
 ---
 
@@ -240,8 +264,9 @@ Persistent "Set Status" button at the bottom of the screen (outside job cards). 
 
 ### Map Stack
 - **Library:** Leaflet 1.x + React-Leaflet 4.x
-- **Tiles:** Stadia.OSMBright (`https://tiles.stadiamaps.com/tiles/osm_bright/{z}/{x}/{y}{r}.png`)
-- **Account:** Stadia Maps — $20/month Starter plan (commercial use)
+- **Tiles:** Stadia.OSMBright — tile URL: `https://tiles.stadiamaps.com/tiles/osm_bright/{z}/{x}/{y}{r}.png?api_key={STADIA_MAPS_API_KEY}`
+- **API key:** `STADIA_MAPS_API_KEY` stored as a Vite env variable (`VITE_STADIA_API_KEY`) and set in Vercel environment variables for production
+- **Account:** Stadia Maps — $20/month Starter plan (commercial use required; free tier is non-commercial)
 - **Map container:** `calc(100vh - 56px - 56px)` height (full bleed minus header and bottom nav)
 
 ### New Tab
@@ -304,11 +329,13 @@ Collapsible card (top-right). Each row: color dot + tech name + status badge. Co
 Handled in App.jsx URL routing (same pattern as `?activate=` and `?rep-invite=`). Renders `<TrackingPage token={token} />` with no auth check.
 
 ### Token Generation
-Triggered server-side when tech taps "On My Way." An Edge Function (`generate-tracking-token`) is called client-side which:
+Triggered when tech taps "On My Way." The tech's browser calls the `generate-tracking-token` Edge Function (service role key) which:
 1. Inserts a row into `tracking_tokens`
 2. Sets `expires_at = appointment.end_time + 2 hours`
-3. Returns the full tracking URL
-4. Triggers SMS via `send-notification` with `tracking_sms` template
+3. Returns the full tracking URL to the caller
+4. Calls the `send-sms` Edge Function with the tracking URL and the client's Twilio credentials
+
+If the dispatcher reassigns a job mid-route (tech A is en_route, dispatcher reassigns to tech B): the existing token for tech A is revoked (`revoked = true`), a new token is generated for tech B, and a new SMS is sent to the customer from the new tech's tracking link.
 
 ### Token Validation (every request)
 The `TrackingPage` component calls a `get-tracking-data` Edge Function (service role key — no auth). The function validates:
@@ -320,17 +347,15 @@ If any check fails, returns 403 → page shows "This tracking link has expired."
 
 ### Three States
 
-**State 1 — Confirmed (tech not yet en route)**
-- Static map centered on job address (single marker)
-- "Your technician is scheduled to arrive between [start_time] – [end_time]"
-
-**State 2 — En Route (live tracking)**
+**State 1 — En Route (live tracking, entry state via SMS link)**
 - Live map: tech's colored dot moving, job destination pin static
 - Tech's first name only (no last name, no phone)
 - "Mike is on the way!"
 - Rough ETA if calculable from distance
 
-**State 3 — Complete**
+Note: The tracking token is only generated when status changes to `en_route`, so customers only ever open the link in this state. The token does not exist before "On My Way" is tapped.
+
+**State 2 — Complete**
 - Static map, grayed out
 - Green checkmark: "Your service is complete. Thank you for choosing [Company Name]."
 - No live data served after this state
@@ -348,11 +373,12 @@ If any check fails, returns 403 → page shows "This tracking link has expired."
 ❌ Business internal IDs, API keys, or configuration
 
 ### SMS Delivery
-- Sent from client's `twilio_from_number` (same number as Retell receptionist)
-- Via `send-notification` Edge Function with new `tracking_sms` template
+- Sent from client's `twilio_from_number` (same number as Retell receptionist agent)
+- Via the new `send-sms` Edge Function (separate from `send-notification` which is email-only)
+- `send-sms` accepts: `{ to, body, twilio_account_sid, twilio_auth_token, twilio_from_number }`
 - Message format: *"Hi [Customer Name], your technician [Tech First Name] is on the way! Track their location: {tracking_url}"*
-- Requires `twilio_account_sid`, `twilio_auth_token`, `twilio_from_number` configured on the client's row
-- Admin panel gets a "SMS Configuration" section for these fields
+- Twilio credentials (`twilio_account_sid`, `twilio_auth_token`, `twilio_from_number`) are stored on the client's row in the `clients` table
+- Admin panel gets a "SMS Configuration" section for configuring these fields per client
 
 ---
 
@@ -364,8 +390,7 @@ If any check fails, returns 403 → page shows "This tracking link has expired."
 - **Public:** No access — customer tracking goes through Edge Function with service role key
 
 ### `tracking_tokens`
-- **Owners/dispatchers:** INSERT (token generation)
-- **Public:** No direct access — validated only through Edge Function
+- **No direct client access.** All inserts and reads go through service-role Edge Functions (`generate-tracking-token`, `get-tracking-data`). RLS is enabled with no permissive policies for authenticated or anonymous roles — only the service role key bypasses it.
 
 ### `client_destinations`
 - **Owners:** Full CRUD
