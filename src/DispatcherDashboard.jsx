@@ -28,9 +28,20 @@ const SmsConfigForm = ({ clientData }) => {
   });
   const [saving, setSaving] = useState(false);
   const [saved,  setSaved]  = useState(false);
+  const [saveError, setSaveError] = useState(null);
+
+  // Sync form when clientData changes (e.g. demo mode toggle)
+  useEffect(() => {
+    setForm({
+      twilio_account_sid:  clientData?.twilio_account_sid  || '',
+      twilio_auth_token:   clientData?.twilio_auth_token   || '',
+      twilio_from_number:  clientData?.twilio_from_number  || '',
+    });
+  }, [clientData?.id]);
 
   const save = async () => {
     setSaving(true);
+    setSaveError(null);
     const { error } = await supabase.from('clients').update({
       twilio_account_sid:  form.twilio_account_sid  || null,
       twilio_auth_token:   form.twilio_auth_token   || null,
@@ -38,6 +49,7 @@ const SmsConfigForm = ({ clientData }) => {
     }).eq('id', clientData.id);
     setSaving(false);
     if (!error) { setSaved(true); setTimeout(() => setSaved(false), 3000); }
+    else { setSaveError('Save failed. Please try again.'); }
   };
 
   const fields = [
@@ -62,6 +74,7 @@ const SmsConfigForm = ({ clientData }) => {
         className="w-full py-2 bg-blue-600 text-white rounded-lg text-sm font-medium disabled:opacity-50">
         {saving ? 'Saving...' : saved ? 'Saved!' : 'Save SMS Settings'}
       </button>
+      {saveError && <p className="text-red-400 text-xs mt-1">{saveError}</p>}
     </div>
   );
 };
