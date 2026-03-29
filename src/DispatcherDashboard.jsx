@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Phone, Calendar, FileText, Clock, DollarSign, Download, Play, Pause, Search, RefreshCw, ChevronRight, LogOut, Settings, Plus, X, Users } from 'lucide-react';
+import { Phone, Calendar, FileText, Clock, DollarSign, Download, Play, Pause, Search, RefreshCw, ChevronRight, LogOut, Settings, Plus, X, Users, MapPin } from 'lucide-react';
 import { retellService } from './retellService';
 import { supabase } from './supabaseClient';
 import Customers from './Customers';
@@ -8,6 +8,7 @@ import TeamTab from './TeamTab';
 import InstallPrompt from './InstallPrompt';
 import UpdatePrompt from './UpdatePrompt';
 import AppointmentCalendar from './AppointmentCalendar';
+import DispatcherMap from './components/DispatcherMap.jsx';
 import logo from './assets/RELIANT SUPPORT LOGO.svg';
 
 const SUPABASE_FUNCTIONS_URL = 'https://zmppdmfdhknnwzwdfhwf.supabase.co/functions/v1';
@@ -1327,6 +1328,7 @@ const DispatcherDashboard = ({
     { id: 'customers', label: 'Customers', icon: Users },
     { id: 'calls', label: 'Calls', icon: Phone },
     teamTab,
+    { id: 'map', label: 'Map', icon: MapPin },
     { id: 'billing', label: 'Billing', icon: DollarSign },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
@@ -1336,6 +1338,7 @@ const DispatcherDashboard = ({
     { id: 'customers', label: 'Customers', icon: Users },
     { id: 'calls', label: 'Calls', icon: Phone },
     teamTab,
+    { id: 'map', label: 'Map', icon: MapPin },
   ];
 
   const activeNavItems = role === 'dispatcher' ? dispatcherNavItems : ownerNavItems;
@@ -1751,11 +1754,20 @@ const DispatcherDashboard = ({
             <TeamTab clientData={clientData} role={role} />
           </>
         )}
+        {activeTab === 'map' && (
+          <div style={{ height: 'calc(100vh - 56px - 56px)' }}>
+            <DispatcherMap
+              clientId={effectiveClientData.id}
+              technicians={technicians}
+              jobs={appointments.filter(a => a.date === new Date().toISOString().split('T')[0])}
+            />
+          </div>
+        )}
       </main>
 
       {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 z-30">
-        <div className={`grid gap-1 ${role === 'dispatcher' ? 'grid-cols-4' : 'grid-cols-6'}`}>
+        <div className={`grid gap-1 ${role === 'dispatcher' ? 'grid-cols-5' : 'grid-cols-7'}`}>
           {activeNavItems.map(item => (
             <button
               key={item.id}
