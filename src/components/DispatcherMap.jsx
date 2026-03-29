@@ -168,7 +168,7 @@ const DispatcherMap = ({ clientId, technicians, jobs }) => {
       {techLocations.length === 0 && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[500]">
           <div className="bg-gray-800/90 text-gray-300 text-sm px-4 py-3 rounded-lg text-center max-w-xs">
-            Locations appear here when techs tap "On My Way"
+            No techs currently active
           </div>
         </div>
       )}
