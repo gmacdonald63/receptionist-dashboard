@@ -1,6 +1,6 @@
 // src/TechDashboard.jsx
 import React, { useState, useEffect } from 'react';
-import { MapPin, CheckCircle, Navigation, RefreshCw, LogOut, ChevronRight, X } from 'lucide-react';
+import { MapPin, CheckCircle, Navigation, RefreshCw, LogOut, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import logo from './assets/RELIANT SUPPORT LOGO.svg';
 
@@ -24,7 +24,7 @@ const buildMapsUrl = (apt) => {
 };
 
 // ── Job Detail Bottom Sheet ──────────────────────────────────────────────────
-const JobDetail = ({ apt, permissions, updatingId, onClose, onUpdateStatus }) => {
+const JobDetail = ({ apt, permissions, updatingId, onClose, onUpdateStatus, isPastDay }) => {
   const sc = STATUS_CONFIG[apt.status] || STATUS_CONFIG.confirmed;
   const canOnMyWay  = isAllowed(permissions, 'on_my_way');
   const canComplete = isAllowed(permissions, 'mark_complete');
@@ -81,46 +81,52 @@ const JobDetail = ({ apt, permissions, updatingId, onClose, onUpdateStatus }) =>
         )}
 
         {/* Action buttons */}
-        <div className="space-y-3">
-          {/* Navigate — always shown */}
-          <a
-            href={buildMapsUrl(apt)}
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center justify-center gap-2 w-full py-4 bg-blue-600 text-white rounded-xl font-medium text-base min-h-[56px]"
-          >
-            <Navigation className="w-5 h-5" />
-            Navigate
-          </a>
-
-          {/* On My Way — shown if permitted AND status is confirmed */}
-          {canOnMyWay && apt.status === 'confirmed' && (
-            <button
-              onClick={() => onUpdateStatus(apt, 'en_route')}
-              disabled={updatingId === apt.id}
-              className="flex items-center justify-center gap-2 w-full py-4 bg-amber-600 text-white rounded-xl font-medium text-base min-h-[56px] disabled:opacity-50"
+        {isPastDay ? (
+          <div className="text-center py-3">
+            <span className="text-xs text-gray-500 bg-gray-700 px-3 py-1 rounded-full">View Only</span>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {/* Navigate — always shown */}
+            <a
+              href={buildMapsUrl(apt)}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center justify-center gap-2 w-full py-4 bg-blue-600 text-white rounded-xl font-medium text-base min-h-[56px]"
             >
-              {updatingId === apt.id
-                ? <RefreshCw className="w-5 h-5 animate-spin" />
-                : <MapPin className="w-5 h-5" />}
-              On My Way
-            </button>
-          )}
+              <Navigation className="w-5 h-5" />
+              Navigate
+            </a>
 
-          {/* Mark Complete — shown if permitted AND not already complete */}
-          {canComplete && apt.status !== 'complete' && (
-            <button
-              onClick={() => onUpdateStatus(apt, 'complete')}
-              disabled={updatingId === apt.id}
-              className="flex items-center justify-center gap-2 w-full py-4 bg-green-600 text-white rounded-xl font-medium text-base min-h-[56px] disabled:opacity-50"
-            >
-              {updatingId === apt.id
-                ? <RefreshCw className="w-5 h-5 animate-spin" />
-                : <CheckCircle className="w-5 h-5" />}
-              Mark Complete
-            </button>
-          )}
-        </div>
+            {/* On My Way — shown if permitted AND status is confirmed */}
+            {canOnMyWay && apt.status === 'confirmed' && (
+              <button
+                onClick={() => onUpdateStatus(apt, 'en_route')}
+                disabled={updatingId === apt.id}
+                className="flex items-center justify-center gap-2 w-full py-4 bg-amber-600 text-white rounded-xl font-medium text-base min-h-[56px] disabled:opacity-50"
+              >
+                {updatingId === apt.id
+                  ? <RefreshCw className="w-5 h-5 animate-spin" />
+                  : <MapPin className="w-5 h-5" />}
+                On My Way
+              </button>
+            )}
+
+            {/* Mark Complete — shown if permitted AND not already complete */}
+            {canComplete && apt.status !== 'complete' && (
+              <button
+                onClick={() => onUpdateStatus(apt, 'complete')}
+                disabled={updatingId === apt.id}
+                className="flex items-center justify-center gap-2 w-full py-4 bg-green-600 text-white rounded-xl font-medium text-base min-h-[56px] disabled:opacity-50"
+              >
+                {updatingId === apt.id
+                  ? <RefreshCw className="w-5 h-5 animate-spin" />
+                  : <CheckCircle className="w-5 h-5" />}
+                Mark Complete
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -137,6 +143,17 @@ const TechDashboard = ({ techData }) => {
   const [toast, setToast]           = useState(null);
 
   const todayISO = new Date().toISOString().split('T')[0];
+  const [selectedDate, setSelectedDate] = useState(todayISO);
+
+  const formatDisplayDate = (iso) =>
+    new Date(iso + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+
+  const isPastDate = selectedDate < todayISO;
+  const shiftDate = (days) => {
+    const d = new Date(selectedDate + 'T00:00:00');
+    d.setDate(d.getDate() + days);
+    setSelectedDate(d.toISOString().split('T')[0]);
+  };
 
   const fetchJobs = async () => {
     setError(null);
@@ -147,7 +164,7 @@ const TechDashboard = ({ techData }) => {
           .select('*')
           .eq('client_id', techData.client_id)   // defense-in-depth; RLS also filters
           .eq('technician_id', techData.id)
-          .eq('date', todayISO)
+          .eq('date', selectedDate)
           .in('status', ['confirmed', 'en_route', 'complete'])
           .order('start_time', { ascending: true }),
         supabase
@@ -166,7 +183,7 @@ const TechDashboard = ({ techData }) => {
     }
   };
 
-  useEffect(() => { fetchJobs(); }, []);
+  useEffect(() => { fetchJobs(); }, [selectedDate]);
 
   const showToast = (msg) => {
     setToast(msg);
@@ -250,6 +267,7 @@ const TechDashboard = ({ techData }) => {
           updatingId={updatingId}
           onClose={() => setSelectedJob(null)}
           onUpdateStatus={updateStatus}
+          isPastDay={isPastDate}
         />
       )}
 
@@ -258,9 +276,39 @@ const TechDashboard = ({ techData }) => {
         <div className="flex items-center justify-between">
           <div>
             <img src={logo} alt="Reliant Support" style={{ height: '26px', width: 'auto' }} />
-            <p className="text-xs text-gray-400 mt-0.5">
-              {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-            </p>
+            <div className="flex items-center gap-1 mt-1">
+              <button
+                onClick={() => shiftDate(-1)}
+                className="p-2 hover:bg-gray-700 rounded-lg min-w-[48px] min-h-[48px] flex items-center justify-center"
+                aria-label="Previous day"
+              >
+                <ChevronLeft className="w-5 h-5 text-gray-400" />
+              </button>
+              <button
+                onClick={() => document.getElementById('tech-date-picker').showPicker?.()}
+                className="flex-1 text-center text-sm text-gray-300 py-2"
+              >
+                {formatDisplayDate(selectedDate)}
+                {selectedDate === todayISO && (
+                  <span className="ml-1 inline-block w-1.5 h-1.5 bg-blue-500 rounded-full align-middle" />
+                )}
+                {isPastDate && <span className="ml-1 text-gray-500 text-xs">(past)</span>}
+              </button>
+              <input
+                id="tech-date-picker"
+                type="date"
+                value={selectedDate}
+                onChange={e => setSelectedDate(e.target.value)}
+                className="sr-only"
+              />
+              <button
+                onClick={() => shiftDate(1)}
+                className="p-2 hover:bg-gray-700 rounded-lg min-w-[48px] min-h-[48px] flex items-center justify-center"
+                aria-label="Next day"
+              >
+                <ChevronRight className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -280,13 +328,13 @@ const TechDashboard = ({ techData }) => {
       {/* Jobs list */}
       <div className="p-4">
         <h2 className="text-lg font-semibold text-white mb-3">
-          {techData.name} — Today's Jobs
+          {techData.name} — {selectedDate === todayISO ? "Today's Jobs" : formatDisplayDate(selectedDate)}
         </h2>
 
         {jobs.length === 0 ? (
           <div className="bg-gray-800 rounded-lg p-8 text-center border border-gray-700">
             <CheckCircle className="w-10 h-10 text-gray-600 mx-auto mb-3" />
-            <p className="text-gray-400">No jobs scheduled for today.</p>
+            <p className="text-gray-400">No jobs scheduled for {selectedDate === todayISO ? 'today' : formatDisplayDate(selectedDate)}.</p>
           </div>
         ) : (
           <div className="space-y-3">
