@@ -5,7 +5,7 @@ import 'leaflet/dist/leaflet.css';  // Scoped here only — do NOT import in mai
 import { supabase } from '../supabaseClient';
 import { X, Users } from 'lucide-react';
 
-const STADIA_URL = `https://tiles.stadiamaps.com/tiles/osm_bright/{z}/{x}/{y}{r}.png?api_key=${import.meta.env.VITE_STADIA_API_KEY || ''}`;
+const STADIA_URL = 'https://tiles.stadiamaps.com/tiles/osm_bright/{z}/{x}/{y}{r}.png';
 const STADIA_ATTR = '&copy; <a href="https://stadiamaps.com/">Stadia Maps</a>, &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors';
 
 const STATUS_COLORS = { confirmed: '#EAB308', en_route: '#3B82F6', complete: '#22C55E' };

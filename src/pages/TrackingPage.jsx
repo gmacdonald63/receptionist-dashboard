@@ -7,11 +7,7 @@ import logo from '../assets/RELIANT SUPPORT LOGO.svg';
 
 const FN_URL = 'https://zmppdmfdhknnwzwdfhwf.supabase.co/functions/v1';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InptcHBkbWZkaGtubnd6d2RmaHdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk4MzQyMDYsImV4cCI6MjA4NTQxMDIwNn0.mXfuz8mEZhizFen78gUaakBDbrzANn4ZM1a7KuDiKJs';
-const STADIA = `https://tiles.stadiamaps.com/tiles/osm_bright/{z}/{x}/{y}{r}.png?api_key=${import.meta.env.VITE_STADIA_API_KEY || ''}`;
-
-if (import.meta.env.DEV && !import.meta.env.VITE_STADIA_API_KEY) {
-  console.warn('TrackingPage: VITE_STADIA_API_KEY is not set — map tiles will fail');
-}
+const STADIA = 'https://tiles.stadiamaps.com/tiles/osm_bright/{z}/{x}/{y}{r}.png';
 
 // Re-centers the map when the tech's location updates
 const Recenter = ({ lat, lng }) => {
