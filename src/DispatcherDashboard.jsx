@@ -403,6 +403,8 @@ const DispatcherDashboard = ({
       resolvedTechId = parseInt(formData.technicianId, 10);
     }
 
+    let savedAptId = null;
+
     if (formData.appointmentId) {
       // UPDATE existing appointment
       const { error } = await supabase
@@ -427,9 +429,10 @@ const DispatcherDashboard = ({
         .eq('id', formData.appointmentId);
 
       if (error) throw error;
+      savedAptId = formData.appointmentId;
     } else {
       // INSERT new appointment
-      const { error } = await supabase
+      const { data: insertedRows, error } = await supabase
         .from('appointments')
         .insert({
           client_id: effectiveClientData.id,
@@ -450,9 +453,25 @@ const DispatcherDashboard = ({
           status: 'confirmed',
           technician_id: resolvedTechId,
           duration: formData.duration || 60,
-        });
+        })
+        .select('id');
 
       if (error) throw error;
+      savedAptId = insertedRows?.[0]?.id ?? null;
+    }
+
+    // Fire-and-forget geocoding — don't await, don't block the UX
+    if (savedAptId) {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        fetch(`${SUPABASE_FUNCTIONS_URL}/geocode-appointments`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token}`,
+          },
+          body: JSON.stringify({ appointment_id: savedAptId }),
+        }).catch(() => {});
+      });
     }
 
     // Navigate to the week of the appointment
