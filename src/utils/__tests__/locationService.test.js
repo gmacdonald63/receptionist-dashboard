@@ -34,4 +34,7 @@ describe('isSaneSpeed', () => {
   it('returns true for 0 km/h', () => { expect(isSaneSpeed(0)).toBe(true); });
   it('returns true for 120 km/h (highway)', () => { expect(isSaneSpeed(120)).toBe(true); });
   it('returns false for 201 km/h (GPS noise)', () => { expect(isSaneSpeed(201)).toBe(false); });
+  it('returns false for negative speed', () => {
+    expect(isSaneSpeed(-1)).toBe(false);
+  });
 });
