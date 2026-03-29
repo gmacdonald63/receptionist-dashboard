@@ -142,8 +142,29 @@ const TechDashboard = ({ techData }) => {
   const [updatingId, setUpdatingId] = useState(null);
   const [toast, setToast]           = useState(null);
 
-  const todayISO = new Date().toISOString().split('T')[0];
-  const [selectedDate, setSelectedDate] = useState(todayISO);
+  const getTodayISO = () => new Date().toISOString().split('T')[0];
+  const [todayISO, setTodayISO] = useState(getTodayISO);
+
+  // Refresh todayISO at midnight so the "today" indicator stays accurate
+  useEffect(() => {
+    const msUntilMidnight = () => {
+      const now = new Date();
+      const midnight = new Date(now);
+      midnight.setHours(24, 0, 0, 0);
+      return midnight - now;
+    };
+    let timeoutId;
+    const scheduleMidnightReset = () => {
+      timeoutId = setTimeout(() => {
+        setTodayISO(getTodayISO());
+        scheduleMidnightReset(); // reschedule for the next midnight
+      }, msUntilMidnight());
+    };
+    scheduleMidnightReset();
+    return () => clearTimeout(timeoutId);
+  }, []);
+
+  const [selectedDate, setSelectedDate] = useState(getTodayISO);
 
   const formatDisplayDate = (iso) =>
     new Date(iso + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
@@ -287,6 +308,7 @@ const TechDashboard = ({ techData }) => {
               <button
                 onClick={() => document.getElementById('tech-date-picker').showPicker?.()}
                 className="flex-1 text-center text-sm text-gray-300 py-2"
+                aria-label={`Open date picker, currently ${formatDisplayDate(selectedDate)}`}
               >
                 {formatDisplayDate(selectedDate)}
                 {selectedDate === todayISO && (
