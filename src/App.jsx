@@ -10,6 +10,7 @@ import OnboardingPage from './pages/OnboardingPage.jsx';
 import ActivationPage from './pages/ActivationPage.jsx';
 import RepSetPasswordPage from './pages/RepSetPasswordPage.jsx';
 import SalesRepDashboard from './pages/SalesRepDashboard.jsx';
+import TrackingPage from './pages/TrackingPage.jsx';
 
 const SUPABASE_URL = 'https://zmppdmfdhknnwzwdfhwf.supabase.co';
 
@@ -232,6 +233,10 @@ const App = () => {
     // If a sales rep triggered demo, exiting returns them to SalesRepDashboard.
     // Public demo viewers are just unauthenticated — no action needed.
   };
+
+  // ── Public tracking route (no auth required) ──────────────
+  const trackToken = new URLSearchParams(window.location.search).get('track');
+  if (trackToken) return <TrackingPage token={trackToken} />;
 
   // ── Public onboarding route (no auth required) ──────────────
   const _onboardParams = new URLSearchParams(window.location.search);

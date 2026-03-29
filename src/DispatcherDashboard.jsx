@@ -20,6 +20,52 @@ const formatPhone = (raw) => {
   return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
 };
 
+const SmsConfigForm = ({ clientData }) => {
+  const [form, setForm] = useState({
+    twilio_account_sid:  clientData?.twilio_account_sid  || '',
+    twilio_auth_token:   clientData?.twilio_auth_token   || '',
+    twilio_from_number:  clientData?.twilio_from_number  || '',
+  });
+  const [saving, setSaving] = useState(false);
+  const [saved,  setSaved]  = useState(false);
+
+  const save = async () => {
+    setSaving(true);
+    const { error } = await supabase.from('clients').update({
+      twilio_account_sid:  form.twilio_account_sid  || null,
+      twilio_auth_token:   form.twilio_auth_token   || null,
+      twilio_from_number:  form.twilio_from_number  || null,
+    }).eq('id', clientData.id);
+    setSaving(false);
+    if (!error) { setSaved(true); setTimeout(() => setSaved(false), 3000); }
+  };
+
+  const fields = [
+    { key: 'twilio_account_sid',  label: 'Account SID',  placeholder: 'ACxxxxxxxx' },
+    { key: 'twilio_auth_token',   label: 'Auth Token',   placeholder: '••••••••', type: 'password' },
+    { key: 'twilio_from_number',  label: 'From Number',  placeholder: '+15551234567' },
+  ];
+
+  return (
+    <div className="space-y-3">
+      {fields.map(({ key, label, placeholder, type }) => (
+        <div key={key}>
+          <label className="text-xs text-gray-400 block mb-1">{label}</label>
+          <input type={type || 'text'} value={form[key]}
+            onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+            placeholder={placeholder}
+            className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm border border-gray-600 focus:border-blue-500 outline-none"
+          />
+        </div>
+      ))}
+      <button onClick={save} disabled={saving}
+        className="w-full py-2 bg-blue-600 text-white rounded-lg text-sm font-medium disabled:opacity-50">
+        {saving ? 'Saving...' : saved ? 'Saved!' : 'Save SMS Settings'}
+      </button>
+    </div>
+  );
+};
+
 const DispatcherDashboard = ({
   user,
   clientData,
@@ -958,6 +1004,17 @@ const DispatcherDashboard = ({
           </div>
         </div>
       </div>
+
+      {role === 'owner' && (
+        <div className="bg-gray-800 rounded-lg p-4 border border-gray-700 mb-4">
+          <h3 className="text-white font-medium mb-1">SMS Configuration</h3>
+          <p className="text-gray-400 text-xs mb-4">
+            Enables automatic tracking link SMS to customers when a tech taps "On My Way."
+            Uses your existing Twilio number (same as your AI receptionist).
+          </p>
+          <SmsConfigForm clientData={effectiveClientData} />
+        </div>
+      )}
     </div>
   );
 

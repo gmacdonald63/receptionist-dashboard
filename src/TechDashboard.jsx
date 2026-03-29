@@ -377,7 +377,23 @@ const TechDashboard = ({ techData }) => {
 
       if (newStatus === 'en_route') {
         locationService.startTracking(techData.id, techData.client_id);
-        // Token generation wired in Task 17
+
+        // Generate tracking token + send customer SMS (fire-and-forget, non-blocking)
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          fetch(`${SUPABASE_FUNCTIONS_URL}/generate-tracking-token`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InptcHBkbWZkaGtubnd6d2RmaHdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk4MzQyMDYsImV4cCI6MjA4NTQxMDIwNn0.mXfuz8mEZhizFen78gUaakBDbrzANn4ZM1a7KuDiKJs',
+              'Authorization': `Bearer ${session?.access_token}`,
+            },
+            body: JSON.stringify({ appointment_id: apt.id, technician_id: techData.id }),
+          })
+          .then(r => r.json())
+          .then(d => { if (d.tracking_url) console.log('[TechDashboard] Tracking URL:', d.tracking_url); })
+          .catch(err => console.error('[TechDashboard] Token generation failed:', err));
+        });
+
         showToast("Status updated — on your way!");
       }
       if (newStatus === 'complete') {
