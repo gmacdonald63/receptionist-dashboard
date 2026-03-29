@@ -1,13 +1,13 @@
 // supabase/functions/send-sms/index.ts
-const cors = {
+const corsOnly = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "Authorization, Content-Type, apikey",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Content-Type": "application/json",
 };
+const cors = { ...corsOnly, "Content-Type": "application/json" };
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: cors });
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsOnly });
   if (req.method !== "POST") return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405, headers: cors });
 
   const authHeader = req.headers.get("Authorization");

@@ -11,12 +11,25 @@ const APP_URL = "https://app.reliantsupport.net";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
+
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: cors });
+  }
+
   try {
     const { appointment_id, technician_id } = await req.json();
     if (!appointment_id || !technician_id)
       return new Response(JSON.stringify({ error: "missing appointment_id or technician_id" }), { status: 400, headers: cors });
 
     const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+
+    // Validate user is authenticated
+    const jwt = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: authError } = await sb.auth.getUser(jwt);
+    if (authError || !user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: cors });
+    }
 
     const { data: apt } = await sb.from("appointments")
       .select("caller_name, caller_phone, end_time, service_type, client_id, date")
