@@ -61,7 +61,7 @@ const JobDetail = ({ apt, permissions, updatingId, onClose, onUpdateStatus, isPa
           {(apt.address || apt.city) && (
             <div>
               <p className="text-xs text-gray-500 uppercase tracking-wide">Address</p>
-              <p className="text-gray-300 text-sm">{apt.address}</p>
+              {apt.address && <p className="text-gray-300 text-sm">{apt.address}</p>}
               {(apt.city || apt.state || apt.zip) && (
                 <p className="text-gray-400 text-xs mt-0.5">
                   {[apt.city, apt.state, apt.zip].filter(Boolean).join(', ')}
