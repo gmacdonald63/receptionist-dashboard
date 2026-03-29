@@ -5,6 +5,7 @@ const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "Authorization, Content-Type, apikey",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Content-Type": "application/json",
 };
 const APP_URL = "https://app.reliantsupport.net";
 
@@ -30,8 +31,9 @@ Deno.serve(async (req) => {
     const techFirst = tech?.name?.split(' ')[0] || 'Your technician';
 
     // Revoke existing tokens for this appointment
-    await sb.from("tracking_tokens").update({ revoked: true })
+    const { error: revokeError } = await sb.from("tracking_tokens").update({ revoked: true })
       .eq("appointment_id", appointment_id).eq("revoked", false);
+    if (revokeError) console.error("Failed to revoke tokens:", revokeError.message);
 
     // expires_at = appointment end_time + 2 hours (fallback: now + 4h)
     let expiresAt: string;
@@ -44,18 +46,23 @@ Deno.serve(async (req) => {
       expiresAt = d.toISOString();
     }
 
-    const { data: tokenRow } = await sb.from("tracking_tokens")
+    const { data: tokenRow, error: insertError } = await sb.from("tracking_tokens")
       .insert({ appointment_id, technician_id, client_id: apt.client_id, expires_at: expiresAt })
       .select("token").single();
 
-    const trackingUrl = `${APP_URL}/?track=${tokenRow!.token}`;
+    if (insertError || !tokenRow)
+      return new Response(JSON.stringify({ error: "Failed to create tracking token" }), { status: 500, headers: cors });
+
+    const trackingUrl = `${APP_URL}/?track=${tokenRow.token}`;
 
     // Send SMS if Twilio configured and customer has a phone
+    let smsSent = false;
     if (client?.twilio_account_sid && client?.twilio_from_number && apt.caller_phone) {
-      await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/send-sms`, {
+      const smsRes = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/send-sms`, {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
+          "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+          "apikey": Deno.env.get("SUPABASE_ANON_KEY")!,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -66,10 +73,16 @@ Deno.serve(async (req) => {
           twilio_from_number: client.twilio_from_number,
         }),
       });
+      smsSent = smsRes.ok;
+      if (!smsRes.ok) {
+        const smsErr = await smsRes.json().catch(() => ({}));
+        console.error("SMS send failed:", smsErr);
+      }
     }
 
-    return new Response(JSON.stringify({ ok: true, tracking_url: trackingUrl }), { headers: cors });
+    return new Response(JSON.stringify({ ok: true, tracking_url: trackingUrl, sms_sent: smsSent }), { headers: cors });
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: cors });
+    const message = err instanceof Error ? err.message : String(err);
+    return new Response(JSON.stringify({ error: message }), { status: 500, headers: cors });
   }
 });
