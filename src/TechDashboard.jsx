@@ -3,6 +3,9 @@ import React, { useState, useEffect } from 'react';
 import { MapPin, CheckCircle, Navigation, RefreshCw, LogOut, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import logo from './assets/RELIANT SUPPORT LOGO.svg';
+import locationService from './utils/locationService.js';
+
+const SUPABASE_FUNCTIONS_URL = 'https://zmppdmfdhknnwzwdfhwf.supabase.co/functions/v1';
 
 const STATUS_CONFIG = {
   confirmed: { label: 'PENDING',   color: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' },
@@ -11,7 +14,11 @@ const STATUS_CONFIG = {
 };
 
 // Phase 1 features default on when row is absent; Phase 2 features default off
-const PHASE2_FEATURES = ['gps_tracking', 'customer_sms', 'customer_tracking_link'];
+const PHASE2_FEATURES = [
+  'gps_tracking', 'customer_sms', 'customer_tracking_link',
+  'view_customer_history', 'view_customer_notes',
+  'view_call_transcript', 'view_call_recording',
+];
 const isAllowed = (permissions, feature) => {
   const row = permissions.find(p => p.feature === feature);
   if (row) return row.enabled;
@@ -21,6 +28,107 @@ const isAllowed = (permissions, feature) => {
 const buildMapsUrl = (apt) => {
   const addr = [apt.address, apt.city, apt.state, apt.zip].filter(Boolean).join(' ');
   return `https://maps.google.com/?daddr=${encodeURIComponent(addr)}`;
+};
+
+// Customer history: last 5 prior appointments for this customer
+const CustomerHistorySection = ({ apt }) => {
+  const [history, setHistory] = useState(null);
+  useEffect(() => {
+    if (!apt.caller_name) return;
+    supabase
+      .from('appointments')
+      .select('date, start_time, service_type, status')
+      .eq('client_id', apt.client_id)
+      .eq('caller_name', apt.caller_name)
+      .neq('id', apt.id)
+      .order('date', { ascending: false })
+      .limit(5)
+      .then(({ data }) => setHistory(data || []));
+  }, [apt.id]);
+  if (!history || history.length === 0) return null;
+  return (
+    <div className="mb-5">
+      <p className="text-xs text-gray-500 uppercase tracking-wide mb-2">Prior Visits</p>
+      <div className="space-y-1">
+        {history.map((h, i) => (
+          <div key={i} className="flex justify-between text-xs text-gray-400 bg-gray-900 rounded px-3 py-2">
+            <span>{h.date} {h.start_time?.slice(0, 5)}</span>
+            <span className="text-gray-500">{h.service_type || '—'}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// Fetches notes from customer_notes table (not apt.notes — that's job_notes' responsibility)
+const CustomerNotesSection = ({ apt }) => {
+  const [notes, setNotes] = useState(null);
+  useEffect(() => {
+    if (!apt.caller_name) return;
+    supabase
+      .from('customers')
+      .select('id')
+      .eq('client_id', apt.client_id)
+      .ilike('name', apt.caller_name)
+      .limit(1)
+      .single()
+      .then(({ data: customer }) => {
+        if (!customer) { setNotes([]); return; }
+        return supabase
+          .from('customer_notes')
+          .select('note, created_at')
+          .eq('customer_id', customer.id)
+          .order('created_at', { ascending: false })
+          .limit(5);
+      })
+      .then(res => setNotes(res?.data || []));
+  }, [apt.id]);
+  if (!notes || notes.length === 0) return null;
+  return (
+    <div className="mb-5">
+      <p className="text-xs text-gray-500 uppercase tracking-wide mb-2">Customer Notes</p>
+      <div className="space-y-2">
+        {notes.map((n, i) => (
+          <p key={i} className="text-gray-300 text-sm bg-gray-900 rounded-lg px-3 py-2 border border-gray-600">
+            {n.note}
+          </p>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const CallTranscriptSection = ({ callId }) => {
+  const [transcript, setTranscript] = useState(null);
+  useEffect(() => {
+    supabase.from('calls').select('transcript').eq('call_id', callId).single()
+      .then(({ data }) => setTranscript(data?.transcript || null));
+  }, [callId]);
+  if (!transcript) return null;
+  return (
+    <div className="mb-5">
+      <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Call Transcript</p>
+      <p className="text-gray-300 text-sm bg-gray-900 rounded-lg p-3 border border-gray-600 max-h-40 overflow-y-auto whitespace-pre-wrap">
+        {transcript}
+      </p>
+    </div>
+  );
+};
+
+const CallRecordingSection = ({ callId }) => {
+  const [url, setUrl] = useState(null);
+  useEffect(() => {
+    supabase.from('calls').select('recording_url').eq('call_id', callId).single()
+      .then(({ data }) => setUrl(data?.recording_url || null));
+  }, [callId]);
+  if (!url) return null;
+  return (
+    <div className="mb-5">
+      <p className="text-xs text-gray-500 uppercase tracking-wide mb-2">Call Recording</p>
+      <audio controls src={url} className="w-full" />
+    </div>
+  );
 };
 
 // ── Job Detail Bottom Sheet ──────────────────────────────────────────────────
@@ -89,6 +197,20 @@ const JobDetail = ({ apt, permissions, updatingId, onClose, onUpdateStatus, isPa
           </div>
         )}
 
+        {/* Permission-gated sub-sections */}
+        {isAllowed(permissions, 'view_customer_history') && (
+          <CustomerHistorySection apt={apt} />
+        )}
+        {isAllowed(permissions, 'view_customer_notes') && (
+          <CustomerNotesSection apt={apt} />
+        )}
+        {isAllowed(permissions, 'view_call_transcript') && apt.call_id && (
+          <CallTranscriptSection callId={apt.call_id} />
+        )}
+        {isAllowed(permissions, 'view_call_recording') && apt.call_id && (
+          <CallRecordingSection callId={apt.call_id} />
+        )}
+
         {/* Action buttons */}
         {isPastDay ? (
           <div className="text-center py-3">
@@ -150,6 +272,8 @@ const TechDashboard = ({ techData }) => {
   const [selectedJob, setSelectedJob] = useState(null);
   const [updatingId, setUpdatingId] = useState(null);
   const [toast, setToast]           = useState(null);
+  const [destinations, setDestinations] = useState([]);
+  const [showStatusModal, setShowStatusModal] = useState(false);
 
   const getTodayISO = () => new Date().toISOString().split('T')[0];
   const [todayISO, setTodayISO] = useState(getTodayISO);
@@ -215,6 +339,16 @@ const TechDashboard = ({ techData }) => {
 
   useEffect(() => { fetchJobs(); }, [selectedDate]);
 
+  useEffect(() => {
+    supabase
+      .from('client_destinations')
+      .select('id, label, sort_order')
+      .eq('client_id', techData.client_id)
+      .eq('is_active', true)
+      .order('sort_order')
+      .then(({ data }) => setDestinations(data || []));
+  }, []);
+
   const showToast = (msg) => {
     setToast(msg);
     setTimeout(() => setToast(null), 3000);
@@ -233,14 +367,48 @@ const TechDashboard = ({ techData }) => {
       setJobs(prev => prev.map(j => j.id === apt.id ? { ...j, status: newStatus } : j));
       if (selectedJob?.id === apt.id) setSelectedJob(prev => ({ ...prev, status: newStatus }));
 
-      if (newStatus === 'complete')  showToast('Job marked complete!');
-      if (newStatus === 'en_route')  showToast("Status updated — on your way!");
+      if (newStatus === 'en_route') {
+        locationService.startTracking(techData.id, techData.client_id);
+        // Token generation wired in Task 17
+        showToast("Status updated — on your way!");
+      }
+      if (newStatus === 'complete') {
+        locationService.stopTracking();
+        // Revoke any active tracking token for this appointment
+        // RLS policy (Task 3 migration) allows authenticated techs to set revoked=true on their own rows
+        supabase.from('tracking_tokens')
+          .update({ revoked: true })
+          .eq('technician_id', techData.id)
+          .eq('appointment_id', apt.id)
+          .eq('revoked', false)
+          .then(() => {});  // fire-and-forget
+        showToast('Job marked complete!');
+      }
     } catch (err) {
       console.error('Status update error:', err);
       showToast('Failed to update status. Please try again.');
     } finally {
       setUpdatingId(null);
     }
+  };
+
+  const setNonJobStatus = async (label) => {
+    setShowStatusModal(false);
+    // Use a recorded_at 2 minutes in the past so the upsert guard does not block
+    // the first real GPS fix when the tech later taps "On My Way".
+    const pastTimestamp = new Date(Date.now() - 120000).toISOString();
+    await supabase.rpc('upsert_tech_location', {
+      p_technician_id:  techData.id,
+      p_client_id:      techData.client_id,
+      p_lat:            0,
+      p_lng:            0,
+      p_accuracy:       null,
+      p_heading:        null,
+      p_speed_kmh:      null,
+      p_non_job_status: label,
+      p_recorded_at:    pastTimestamp,
+    });
+    showToast(`Status: ${label}`);
   };
 
   const handleLogout = async () => {
@@ -406,7 +574,42 @@ const TechDashboard = ({ techData }) => {
             })}
           </div>
         )}
+
+        {destinations.length > 0 && (
+          <div className="mt-4">
+            <button
+              onClick={() => setShowStatusModal(true)}
+              className="w-full py-3 bg-gray-700 text-gray-300 rounded-xl text-sm border border-gray-600"
+            >
+              Set Status
+            </button>
+          </div>
+        )}
       </div>
+
+      {showStatusModal && (
+        <div className="fixed inset-0 bg-black/80 z-40 flex flex-col justify-end">
+          <div className="bg-gray-800 rounded-t-2xl p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-white">Set Status</h3>
+              <button onClick={() => setShowStatusModal(false)} className="p-2 hover:bg-gray-700 rounded-lg">
+                <X className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+            <div className="space-y-2">
+              {destinations.map(d => (
+                <button
+                  key={d.id}
+                  onClick={() => setNonJobStatus(d.label)}
+                  className="w-full py-4 bg-gray-700 text-white rounded-xl font-medium text-left px-4"
+                >
+                  {d.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
