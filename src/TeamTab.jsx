@@ -21,6 +21,14 @@ const PHASE1_FEATURES = [
   { key: 'mark_complete', label: 'Mark Complete', description: 'Can mark jobs complete'        },
 ];
 
+// Phase 2 permission features — default OFF (must not be added to PHASE1_FEATURES)
+const PHASE2_FEATURES_DISPLAY = [
+  { key: 'view_customer_history', label: 'Customer History',  description: 'Can view prior appointments in job detail' },
+  { key: 'view_customer_notes',   label: 'Customer Notes',    description: 'Can view customer notes in job detail'     },
+  { key: 'view_call_transcript',  label: 'Call Transcript',   description: 'Can view AI call transcript in job detail' },
+  { key: 'view_call_recording',   label: 'Call Recording',    description: 'Can play AI call recording in job detail'  },
+];
+
 const formatPhone = (raw) => {
   const digits = raw.replace(/\D/g, '').slice(0, 10);
   if (digits.length < 4) return digits;
@@ -172,7 +180,7 @@ const TeamTab = ({ clientData, role }) => {
         if (error) throw error;
         techId = data.id;
 
-        // Insert default permissions for all 6 features
+        // Insert default permissions for all 10 features
         await supabase.from('technician_permissions').insert([
           { technician_id: techId, client_id: clientData.id, feature: 'job_notes',              enabled: true  },
           { technician_id: techId, client_id: clientData.id, feature: 'on_my_way',              enabled: true  },
@@ -180,6 +188,10 @@ const TeamTab = ({ clientData, role }) => {
           { technician_id: techId, client_id: clientData.id, feature: 'gps_tracking',           enabled: false },
           { technician_id: techId, client_id: clientData.id, feature: 'customer_sms',           enabled: false },
           { technician_id: techId, client_id: clientData.id, feature: 'customer_tracking_link', enabled: false },
+          { technician_id: techId, client_id: clientData.id, feature: 'view_customer_history',  enabled: false },
+          { technician_id: techId, client_id: clientData.id, feature: 'view_customer_notes',    enabled: false },
+          { technician_id: techId, client_id: clientData.id, feature: 'view_call_transcript',   enabled: false },
+          { technician_id: techId, client_id: clientData.id, feature: 'view_call_recording',    enabled: false },
         ]);
       }
 
@@ -464,6 +476,27 @@ const TeamTab = ({ clientData, role }) => {
                       {PHASE1_FEATURES.map(feat => {
                         const permRow = techPerms.find(p => p.feature === feat.key);
                         const enabled = permRow ? permRow.enabled : true; // Phase 1 default on
+                        return (
+                          <div key={feat.key} className="flex items-center justify-between gap-3">
+                            <div className="flex-1">
+                              <p className="text-sm text-white">{feat.label}</p>
+                              <p className="text-xs text-gray-500">{feat.description}</p>
+                            </div>
+                            <button
+                              onClick={() => handleTogglePermission(tech.id, feat.key, enabled)}
+                              disabled={savingPermTechId === tech.id}
+                              className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none ${enabled ? 'bg-blue-600' : 'bg-gray-600'} disabled:opacity-50`}
+                            >
+                              <span
+                                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${enabled ? 'translate-x-6' : 'translate-x-1'}`}
+                              />
+                            </button>
+                          </div>
+                        );
+                      })}
+                      {PHASE2_FEATURES_DISPLAY.map(feat => {
+                        const permRow = techPerms.find(p => p.feature === feat.key);
+                        const enabled = permRow ? permRow.enabled : false; // Phase 2 defaults OFF
                         return (
                           <div key={feat.key} className="flex items-center justify-between gap-3">
                             <div className="flex-1">
