@@ -38,6 +38,27 @@ const DispatcherDashboard = ({
   // The effective client data — uses demo client when in demo mode
   const effectiveClientData = demoMode && demoClientData ? demoClientData : clientData;
 
+  const getTodayStr = () => new Date().toISOString().split('T')[0];
+  const [todayStr, setTodayStr] = useState(getTodayStr);
+
+  useEffect(() => {
+    const msUntilMidnight = () => {
+      const now = new Date();
+      const midnight = new Date(now);
+      midnight.setHours(24, 0, 0, 0);
+      return midnight - now;
+    };
+    let timeoutId;
+    const scheduleMidnightReset = () => {
+      timeoutId = setTimeout(() => {
+        setTodayStr(getTodayStr());
+        scheduleMidnightReset();
+      }, msUntilMidnight());
+    };
+    scheduleMidnightReset();
+    return () => clearTimeout(timeoutId);
+  }, []);
+
   const [activeTab, setActiveTab] = useState('appointments');
   const [selectedCall, setSelectedCall] = useState(null);
   const [playingRecording, setPlayingRecording] = useState(null);
@@ -1754,12 +1775,12 @@ const DispatcherDashboard = ({
             <TeamTab clientData={clientData} role={role} />
           </>
         )}
-        {activeTab === 'map' && (
+        {activeTab === 'map' && effectiveClientData?.id && (
           <div style={{ height: 'calc(100vh - 56px - 56px)' }}>
             <DispatcherMap
               clientId={effectiveClientData.id}
               technicians={technicians}
-              jobs={appointments.filter(a => a.date === new Date().toISOString().split('T')[0])}
+              jobs={appointments.filter(a => a.date === todayStr)}
             />
           </div>
         )}
