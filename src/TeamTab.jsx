@@ -16,9 +16,10 @@ const TECH_COLORS = [
 
 // Phase 1 permission features shown in the toggle panel
 const PHASE1_FEATURES = [
-  { key: 'job_notes',     label: 'Job Notes',     description: 'Can view job notes on device' },
-  { key: 'on_my_way',     label: 'On My Way',     description: 'Can set status to En Route'   },
-  { key: 'mark_complete', label: 'Mark Complete', description: 'Can mark jobs complete'        },
+  { key: 'job_notes',    label: 'Job Notes',    description: 'Can view job notes on device'                        },
+  { key: 'on_my_way',   label: 'On My Way',    description: 'Can set status to En Route'                          },
+  { key: 'mark_complete', label: 'Mark Complete', description: 'Can mark jobs complete'                           },
+  { key: 'gps_tracking', label: 'GPS Tracking', description: 'Location visible to dispatcher while app is open'   },
 ];
 
 // Phase 2 permission features — default OFF (must not be added to PHASE1_FEATURES)

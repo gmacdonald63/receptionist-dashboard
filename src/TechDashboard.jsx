@@ -347,6 +347,16 @@ const TechDashboard = ({ techData }) => {
 
   useEffect(() => { fetchJobs(); }, [selectedDate]);
 
+  // Start GPS as soon as permissions load and gps_tracking is enabled.
+  // Stop GPS when TechDashboard unmounts (tech closes app / logs out).
+  useEffect(() => {
+    if (loading) return;
+    if (isAllowed(permissions, 'gps_tracking')) {
+      locationService.startTracking(techData.id, techData.client_id);
+    }
+    return () => { locationService.stopTracking(); };
+  }, [loading]);
+
   useEffect(() => {
     supabase
       .from('client_destinations')
@@ -376,8 +386,7 @@ const TechDashboard = ({ techData }) => {
       if (selectedJob?.id === apt.id) setSelectedJob(prev => ({ ...prev, status: newStatus }));
 
       if (newStatus === 'en_route') {
-        locationService.startTracking(techData.id, techData.client_id);
-
+        // GPS is already running (started on mount) — just generate token + SMS
         // Generate tracking token + send customer SMS (fire-and-forget, non-blocking)
         supabase.auth.getSession().then(({ data: { session } }) => {
           if (!session?.access_token) {
@@ -401,7 +410,7 @@ const TechDashboard = ({ techData }) => {
         showToast("Status updated — on your way!");
       }
       if (newStatus === 'complete') {
-        locationService.stopTracking();
+        // GPS keeps running until tech closes the app (unmount cleanup handles stopTracking)
         // Revoke any active tracking token for this appointment
         // RLS policy (Task 3 migration) allows authenticated techs to set revoked=true on their own rows
         supabase.from('tracking_tokens')
