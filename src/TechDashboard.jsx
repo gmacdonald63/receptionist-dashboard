@@ -35,6 +35,7 @@ const CustomerHistorySection = ({ apt }) => {
   const [history, setHistory] = useState(null);
   useEffect(() => {
     if (!apt.caller_name) return;
+    let cancelled = false;
     supabase
       .from('appointments')
       .select('date, start_time, service_type, status')
@@ -43,7 +44,8 @@ const CustomerHistorySection = ({ apt }) => {
       .neq('id', apt.id)
       .order('date', { ascending: false })
       .limit(5)
-      .then(({ data }) => setHistory(data || []));
+      .then(({ data }) => { if (!cancelled) setHistory(data || []); });
+    return () => { cancelled = true; };
   }, [apt.id]);
   if (!history || history.length === 0) return null;
   return (
@@ -51,7 +53,7 @@ const CustomerHistorySection = ({ apt }) => {
       <p className="text-xs text-gray-500 uppercase tracking-wide mb-2">Prior Visits</p>
       <div className="space-y-1">
         {history.map((h, i) => (
-          <div key={i} className="flex justify-between text-xs text-gray-400 bg-gray-900 rounded px-3 py-2">
+          <div key={`${h.date}-${h.start_time}-${i}`} className="flex justify-between text-xs text-gray-400 bg-gray-900 rounded px-3 py-2">
             <span>{h.date} {h.start_time?.slice(0, 5)}</span>
             <span className="text-gray-500">{h.service_type || '—'}</span>
           </div>
@@ -66,23 +68,25 @@ const CustomerNotesSection = ({ apt }) => {
   const [notes, setNotes] = useState(null);
   useEffect(() => {
     if (!apt.caller_name) return;
-    supabase
-      .from('customers')
-      .select('id')
-      .eq('client_id', apt.client_id)
-      .ilike('name', apt.caller_name)
-      .limit(1)
-      .single()
-      .then(({ data: customer }) => {
-        if (!customer) { setNotes([]); return; }
-        return supabase
-          .from('customer_notes')
-          .select('note, created_at')
-          .eq('customer_id', customer.id)
-          .order('created_at', { ascending: false })
-          .limit(5);
-      })
-      .then(res => setNotes(res?.data || []));
+    let cancelled = false;
+    (async () => {
+      const { data: customer } = await supabase
+        .from('customers')
+        .select('id')
+        .eq('client_id', apt.client_id)
+        .ilike('name', apt.caller_name)
+        .limit(1)
+        .single();
+      if (!customer || cancelled) { setNotes([]); return; }
+      const { data } = await supabase
+        .from('customer_notes')
+        .select('note, created_at')
+        .eq('customer_id', customer.id)
+        .order('created_at', { ascending: false })
+        .limit(5);
+      if (!cancelled) setNotes(data || []);
+    })();
+    return () => { cancelled = true; };
   }, [apt.id]);
   if (!notes || notes.length === 0) return null;
   return (
@@ -90,7 +94,7 @@ const CustomerNotesSection = ({ apt }) => {
       <p className="text-xs text-gray-500 uppercase tracking-wide mb-2">Customer Notes</p>
       <div className="space-y-2">
         {notes.map((n, i) => (
-          <p key={i} className="text-gray-300 text-sm bg-gray-900 rounded-lg px-3 py-2 border border-gray-600">
+          <p key={`${n.created_at}-${i}`} className="text-gray-300 text-sm bg-gray-900 rounded-lg px-3 py-2 border border-gray-600">
             {n.note}
           </p>
         ))}
@@ -102,8 +106,10 @@ const CustomerNotesSection = ({ apt }) => {
 const CallTranscriptSection = ({ callId }) => {
   const [transcript, setTranscript] = useState(null);
   useEffect(() => {
+    let cancelled = false;
     supabase.from('calls').select('transcript').eq('call_id', callId).single()
-      .then(({ data }) => setTranscript(data?.transcript || null));
+      .then(({ data }) => { if (!cancelled) setTranscript(data?.transcript || null); });
+    return () => { cancelled = true; };
   }, [callId]);
   if (!transcript) return null;
   return (
@@ -119,8 +125,10 @@ const CallTranscriptSection = ({ callId }) => {
 const CallRecordingSection = ({ callId }) => {
   const [url, setUrl] = useState(null);
   useEffect(() => {
+    let cancelled = false;
     supabase.from('calls').select('recording_url').eq('call_id', callId).single()
-      .then(({ data }) => setUrl(data?.recording_url || null));
+      .then(({ data }) => { if (!cancelled) setUrl(data?.recording_url || null); });
+    return () => { cancelled = true; };
   }, [callId]);
   if (!url) return null;
   return (
