@@ -31,6 +31,10 @@ const DispatcherMap = ({ clientId, technicians, jobs }) => {
       .channel(`tech-locations:${clientId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tech_locations', filter: `client_id=eq.${clientId}` },
         (payload) => setTechLocations(prev => {
+          if (payload.eventType === 'DELETE') {
+            return prev.filter(l => l.technician_id !== payload.old?.technician_id);
+          }
+          if (!payload.new?.technician_id) return prev;
           const idx = prev.findIndex(l => l.technician_id === payload.new.technician_id);
           if (idx >= 0) { const n = [...prev]; n[idx] = payload.new; return n; }
           return [...prev, payload.new];
@@ -54,6 +58,7 @@ const DispatcherMap = ({ clientId, technicians, jobs }) => {
 
   const techById = Object.fromEntries(technicians.map(t => [t.id, t]));
   const selectedTechLoc = techLocations.find(l => l.technician_id === selectedTechId);
+  const selectedTechAge = selectedTechLoc ? minsAgo(selectedTechLoc.received_at) : null;
   const selectedJob = jobs.find(j => j.id === selectedJobId);
   // Active job for the tapped tech — shown in tech detail panel per spec
   const selectedTechJob = jobs.find(j =>
@@ -103,7 +108,7 @@ const DispatcherMap = ({ clientId, technicians, jobs }) => {
                 <p className="text-white font-medium">{techById[selectedTechLoc.technician_id]?.name || 'Unknown'}</p>
                 {selectedTechLoc.non_job_status && <p className="text-amber-400 text-xs">{selectedTechLoc.non_job_status}</p>}
                 <p className="text-gray-500 text-xs">
-                  {minsAgo(selectedTechLoc.received_at) != null ? `Updated ${minsAgo(selectedTechLoc.received_at)} min ago` : 'Unknown'}
+                  {selectedTechAge != null ? `Updated ${selectedTechAge} min ago` : 'Unknown'}
                 </p>
               </div>
             </div>
@@ -176,7 +181,7 @@ const JobPanel = ({ job, technicians, clientId, onClose }) => {
 
   const reassign = async (techId) => {
     setReassigning(false);
-    await supabase.from('appointments').update({ technician_id: parseInt(techId) }).eq('id', job.id);
+    await supabase.from('appointments').update({ technician_id: parseInt(techId) }).eq('id', job.id).eq('client_id', clientId);
     onClose();
   };
 
