@@ -52,12 +52,21 @@ const JobDetail = ({ apt, permissions, updatingId, onClose, onUpdateStatus, isPa
             <p className="text-xs text-gray-500 uppercase tracking-wide">Customer</p>
             <p className="text-white font-medium">{apt.caller_name || 'Customer'}</p>
           </div>
+          {apt.service_type && (
+            <div>
+              <p className="text-xs text-gray-500 uppercase tracking-wide">Service Type</p>
+              <p className="text-white font-medium">{apt.service_type}</p>
+            </div>
+          )}
           {(apt.address || apt.city) && (
             <div>
               <p className="text-xs text-gray-500 uppercase tracking-wide">Address</p>
-              <p className="text-gray-300 text-sm">
-                {[apt.address, apt.city, apt.state, apt.zip].filter(Boolean).join(', ')}
-              </p>
+              <p className="text-gray-300 text-sm">{apt.address}</p>
+              {(apt.city || apt.state || apt.zip) && (
+                <p className="text-gray-400 text-xs mt-0.5">
+                  {[apt.city, apt.state, apt.zip].filter(Boolean).join(', ')}
+                </p>
+              )}
             </div>
           )}
           {(apt.start_time || apt.end_time) && (
@@ -371,13 +380,17 @@ const TechDashboard = ({ techData }) => {
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
                       <p className="text-white font-medium truncate">{apt.caller_name || 'Customer'}</p>
-                      <p className="text-gray-400 text-sm mt-0.5">
+                      {apt.service_type && (
+                        <p className="text-blue-400 text-xs mt-0.5 truncate">{apt.service_type}</p>
+                      )}
+                      <p className="text-gray-400 text-sm mt-1">
                         {apt.start_time ? apt.start_time.slice(0, 5) : '—'}
-                        {apt.end_time ? ` – ${apt.end_time.slice(0, 5)}` : ''}
+                        {apt.end_time   ? ` – ${apt.end_time.slice(0, 5)}` : ''}
                       </p>
-                      {apt.address && (
+                      {(apt.address || apt.city) && (
                         <p className="text-gray-500 text-xs mt-1 truncate">
-                          <MapPin className="w-3 h-3 inline mr-1" />{apt.address}
+                          <MapPin className="w-3 h-3 inline mr-1" />
+                          {[apt.address, apt.city].filter(Boolean).join(', ')}
                         </p>
                       )}
                     </div>
