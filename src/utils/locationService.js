@@ -126,9 +126,11 @@ function handlePositionError(err) {
 
 function _registerWatch(highAccuracy) {
   if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+  // No timeout: Chrome Android silently hangs watchPosition when a finite timeout is set.
+  // The watchdog timer (45s silence threshold) handles re-registration if GPS goes quiet.
   watchId = navigator.geolocation.watchPosition(
     handlePosition, handlePositionError,
-    { enableHighAccuracy: highAccuracy, maximumAge: GPS_MAX_AGE_MS, timeout: GPS_TIMEOUT_MS }
+    { enableHighAccuracy: highAccuracy, maximumAge: GPS_MAX_AGE_MS }
   );
 }
 
@@ -151,6 +153,14 @@ const locationService = {
     lastCallbackAt = Date.now(); isStationary = false; stationaryStart = null;
 
     _registerWatch(true);
+
+    // Warmup: get an immediate first fix via getCurrentPosition (works on Android where
+    // watchPosition with a timeout silently hangs before the first callback fires).
+    navigator.geolocation.getCurrentPosition(
+      handlePosition,
+      (err) => console.warn('[locationService] warmup getCurrentPosition failed:', err.code, err.message),
+      { enableHighAccuracy: true, maximumAge: GPS_MAX_AGE_MS, timeout: GPS_TIMEOUT_MS }
+    );
 
     window.addEventListener('online', _onReconnect);
 

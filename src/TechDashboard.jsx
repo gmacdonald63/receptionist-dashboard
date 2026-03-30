@@ -290,6 +290,7 @@ const TechDashboard = ({ techData }) => {
   const [destinations, setDestinations] = useState([]);
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [gpsStatus, setGpsStatus] = useState({ isTracking: false, hasPosition: false, lastError: null });
+  const [gpsDebug, setGpsDebug] = useState(null);
 
   const getTodayISO = () => {
     const d = new Date();
@@ -564,11 +565,22 @@ const TechDashboard = ({ techData }) => {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {/* GPS status dot */}
+            {/* GPS status dot — tap for debug info */}
             {isAllowed(permissions, 'gps_tracking') && (
-              <div
-                title={gpsStatus.lastError ? `GPS error: ${gpsStatus.lastError}` : gpsStatus.hasPosition ? 'GPS active' : 'GPS waiting for signal...'}
-                className={`w-2.5 h-2.5 rounded-full ${gpsStatus.hasPosition ? 'bg-green-400' : gpsStatus.lastError ? 'bg-red-500' : 'bg-yellow-400 animate-pulse'}`}
+              <button
+                onClick={() => {
+                  const svc = locationService.getStatus();
+                  const geo = !!navigator?.geolocation;
+                  setGpsDebug(`svc: tracking=${svc.isTracking} pos=${svc.hasPosition} err=${svc.lastError||'none'} | geo API: ${geo}`);
+                  if (!geo) return;
+                  navigator.geolocation.getCurrentPosition(
+                    (p) => setGpsDebug(`✅ getCurrentPosition OK: ${p.coords.latitude.toFixed(5)}, ${p.coords.longitude.toFixed(5)} acc=${Math.round(p.coords.accuracy)}m`),
+                    (e) => setGpsDebug(`❌ getCurrentPosition ERR: code=${e.code} msg=${e.message}`),
+                    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+                  );
+                }}
+                className={`w-4 h-4 rounded-full flex-shrink-0 ${gpsStatus.hasPosition ? 'bg-green-400' : gpsStatus.lastError ? 'bg-red-500' : 'bg-yellow-400 animate-pulse'}`}
+                title="Tap to run GPS diagnostic"
               />
             )}
             <button
@@ -584,6 +596,14 @@ const TechDashboard = ({ techData }) => {
           </div>
         </div>
       </div>
+
+      {/* GPS debug output — temporary, remove after diagnosis */}
+      {gpsDebug && (
+        <div className="bg-gray-950 border-b border-yellow-600 px-4 py-2">
+          <p className="text-yellow-300 text-xs font-mono break-all">{gpsDebug}</p>
+          <button onClick={() => setGpsDebug(null)} className="text-gray-500 text-xs mt-1">dismiss</button>
+        </div>
+      )}
 
       {/* Jobs list */}
       <div className="p-4">
