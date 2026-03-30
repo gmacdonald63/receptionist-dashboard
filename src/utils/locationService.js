@@ -40,7 +40,7 @@ let watchId = null, lastLat = null, lastLng = null, lastWrittenAt = null;
 let heartbeatTimer = null, watchdogTimer = null, lastCallbackAt = null;
 let wakeLock = null, activeTechId = null, activeClientId = null;
 let isTracking = false, isStationary = false, stationaryStart = null;
-let lastGpsError = null;
+let lastGpsError = null, lastWriteError = null;
 
 // In-memory offline queue (spec: IndexedDB with 200-entry cap).
 // In-memory is sufficient for most network blips; IndexedDB persistence is a post-launch upgrade.
@@ -89,7 +89,8 @@ async function writeLocation(lat, lng, accuracy, heading, speedKmh, nonJobStatus
     // Flush any queued fixes now that we're back online
     if (offlineQueue.length > 0) flushOfflineQueue().catch(() => {});
   } catch (err) {
-    console.error('[locationService] write failed, queuing:', err.message);
+    lastWriteError = err.message ?? String(err);
+    console.error('[locationService] write failed, queuing:', lastWriteError);
     if (offlineQueue.length < MAX_QUEUE) {
       offlineQueue.push([lat, lng, accuracy, heading, speedKmh, nonJobStatus, recordedAt]);
     }
@@ -141,6 +142,8 @@ const locationService = {
       hasPosition: lastLat !== null,
       lastWrittenAt,
       lastError: lastGpsError,
+      lastWriteError,
+      queueLength: offlineQueue.length,
     };
   },
 

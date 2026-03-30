@@ -571,11 +571,12 @@ const TechDashboard = ({ techData }) => {
                 onClick={() => {
                   const svc = locationService.getStatus();
                   const geo = !!navigator?.geolocation;
-                  setGpsDebug(`svc: tracking=${svc.isTracking} pos=${svc.hasPosition} err=${svc.lastError||'none'} | geo API: ${geo}`);
+                  const line1 = `tracking=${svc.isTracking} pos=${svc.hasPosition} queue=${svc.queueLength} | gpsErr=${svc.lastError||'none'} | writeErr=${svc.lastWriteError||'none'}`;
+                  setGpsDebug(line1);
                   if (!geo) return;
                   navigator.geolocation.getCurrentPosition(
-                    (p) => setGpsDebug(`✅ getCurrentPosition OK: ${p.coords.latitude.toFixed(5)}, ${p.coords.longitude.toFixed(5)} acc=${Math.round(p.coords.accuracy)}m`),
-                    (e) => setGpsDebug(`❌ getCurrentPosition ERR: code=${e.code} msg=${e.message}`),
+                    (p) => setGpsDebug(`${line1}\n✅ GPS OK: ${p.coords.latitude.toFixed(5)},${p.coords.longitude.toFixed(5)} acc=${Math.round(p.coords.accuracy)}m`),
+                    (e) => setGpsDebug(`${line1}\n❌ GPS ERR: code=${e.code} msg=${e.message}`),
                     { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
                   );
                 }}
@@ -600,7 +601,7 @@ const TechDashboard = ({ techData }) => {
       {/* GPS debug output — temporary, remove after diagnosis */}
       {gpsDebug && (
         <div className="bg-gray-950 border-b border-yellow-600 px-4 py-2">
-          <p className="text-yellow-300 text-xs font-mono break-all">{gpsDebug}</p>
+          <p className="text-yellow-300 text-xs font-mono break-all whitespace-pre-wrap">{gpsDebug}</p>
           <button onClick={() => setGpsDebug(null)} className="text-gray-500 text-xs mt-1">dismiss</button>
         </div>
       )}
