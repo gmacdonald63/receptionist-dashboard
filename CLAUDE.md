@@ -1031,6 +1031,21 @@ All functions are deployed with `--no-verify-jwt`. All require `apikey` + `Autho
 - **From address:** `noreply@reliantsupport.net`
 - Built-in Supabase SMTP is rate-limited to ~2 emails/hour for invites and signups — Resend removes this limit permanently.
 
+### Telnyx (SMS)
+- **Purpose:** Send SMS to customers with technician tracking links ("On My Way" flow)
+- **Phone number:** +1-503-245-4131
+- **Messaging profile:** Reliant Support SMS
+- **API key:** `KEY019D3C73D26C4AD4B5E8C4F56D47E56B_i7FXnjwCzZWVdgIP5nRCDe`
+- Replaces Twilio — Greg's Twilio numbers are owned by Retell AI, not by him
+- Credentials stored **per-client** in `clients` table: `telnyx_api_key`, `telnyx_from_number`
+- Used by: `send-sms` Edge Function, `generate-tracking-token` Edge Function
+
+### Stadia Maps (Map Tiles)
+- **Purpose:** Leaflet map tiles for the dispatcher tech-location map
+- **Auth:** Domain authentication — no API key in code; tiles authorized by domain whitelist
+- **Authorized domain:** `app.reliantsupport.net` (subdomains allowed)
+- Free plan; upgrade as usage scales
+
 ### Retell AI
 - **API key:** `key_5b24ef502d4c3cd538001a59694e` (also in `.env` as `VITE_RETELL_API_KEY`)
 - **Agent:** HVAC Receptionist — `agent_3bec4ff7311350d9b19b93db05` → client_id `1` (gmacdonald63@gmail.com)
@@ -1051,6 +1066,11 @@ The `agent_id` is passed as a `const` parameter in each tool's JSON schema so Re
 - `client_staff` — Dispatcher accounts per client. Key columns: `id (uuid)`, `client_id`, `email`, `name`, `role` (default `'dispatcher'`), `is_active` (bool)
 - `technicians` — Field technicians. Key columns: `id (int)`, `client_id`, `name`, `phone`, `color`, `email`, `is_active (bool)`
 - `technician_permissions` — Per-tech feature flags. Key columns: `id`, `technician_id`, `client_id`, `feature`, `enabled`
+- `tech_locations` — Live technician GPS positions. Key columns: `technician_id`, `client_id`, `lat`, `lng`, `accuracy`, `heading`, `speed_kmh`, `non_job_status`, `recorded_at`
+- `tracking_tokens` — One-time tokens for customer-facing tracking page. Key columns: `token (uuid)`, `appointment_id`, `technician_id`, `client_id`, `expires_at`, `revoked`
+- `client_destinations` — Custom non-job status options per client (e.g. "At Warehouse", "On Break"). Key columns: `id`, `client_id`, `label`
+- `clients` also has: `telnyx_api_key`, `telnyx_from_number` (for SMS), `twilio_*` columns (unused — Telnyx replaced Twilio)
+- `appointments` also has: `job_lat`, `job_lng`, `geocode_status`, `assigned_tech_id`, `tracking_token`
 
 ### Session Start Checklist
 1. Confirm branch: `git status` — default is `main`
