@@ -40,6 +40,7 @@ let watchId = null, lastLat = null, lastLng = null, lastWrittenAt = null;
 let heartbeatTimer = null, watchdogTimer = null, lastCallbackAt = null;
 let wakeLock = null, activeTechId = null, activeClientId = null;
 let isTracking = false, isStationary = false, stationaryStart = null;
+let lastGpsError = null;
 
 // In-memory offline queue (spec: IndexedDB with 200-entry cap).
 // In-memory is sufficient for most network blips; IndexedDB persistence is a post-launch upgrade.
@@ -119,6 +120,7 @@ function handlePosition(pos) {
 
 function handlePositionError(err) {
   console.warn('[locationService] GPS error:', err.code, err.message);
+  lastGpsError = err.message;
   if (err.code === 3 && !isStationary) _registerWatch(false); // TIMEOUT → low accuracy fallback
 }
 
@@ -131,6 +133,15 @@ function _registerWatch(highAccuracy) {
 }
 
 const locationService = {
+  getStatus() {
+    return {
+      isTracking,
+      hasPosition: lastLat !== null,
+      lastWrittenAt,
+      lastError: lastGpsError,
+    };
+  },
+
   async startTracking(techId, clientId) {
     if (!navigator?.geolocation) { console.warn('[locationService] Geolocation not available'); return; }
     if (isTracking) locationService.stopTracking();

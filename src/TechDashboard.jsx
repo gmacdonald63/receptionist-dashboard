@@ -282,6 +282,7 @@ const TechDashboard = ({ techData }) => {
   const [toast, setToast]           = useState(null);
   const [destinations, setDestinations] = useState([]);
   const [showStatusModal, setShowStatusModal] = useState(false);
+  const [gpsStatus, setGpsStatus] = useState({ isTracking: false, hasPosition: false, lastError: null });
 
   const getTodayISO = () => new Date().toISOString().split('T')[0];
   const [todayISO, setTodayISO] = useState(getTodayISO);
@@ -356,6 +357,12 @@ const TechDashboard = ({ techData }) => {
     }
     return () => { locationService.stopTracking(); };
   }, [loading]);
+
+  // Poll GPS status every 5s so the header dot reflects reality
+  useEffect(() => {
+    const poll = setInterval(() => setGpsStatus(locationService.getStatus()), 5000);
+    return () => clearInterval(poll);
+  }, []);
 
   useEffect(() => {
     supabase
@@ -547,6 +554,13 @@ const TechDashboard = ({ techData }) => {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {/* GPS status dot */}
+            {isAllowed(permissions, 'gps_tracking') && (
+              <div
+                title={gpsStatus.lastError ? `GPS error: ${gpsStatus.lastError}` : gpsStatus.hasPosition ? 'GPS active' : 'GPS waiting for signal...'}
+                className={`w-2.5 h-2.5 rounded-full ${gpsStatus.hasPosition ? 'bg-green-400' : gpsStatus.lastError ? 'bg-red-500' : 'bg-yellow-400 animate-pulse'}`}
+              />
+            )}
             <button
               onClick={() => { setLoading(true); fetchJobs(); }}
               className="p-2 hover:bg-gray-700 rounded-lg"
