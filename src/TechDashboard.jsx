@@ -25,6 +25,13 @@ const isAllowed = (permissions, feature) => {
   return !PHASE2_FEATURES.includes(feature);
 };
 
+const formatTime = (t) => {
+  if (!t) return '';
+  const [h, m] = t.split(':');
+  const hour = parseInt(h, 10);
+  return `${hour % 12 || 12}:${m} ${hour >= 12 ? 'PM' : 'AM'}`;
+};
+
 const buildMapsUrl = (apt) => {
   const addr = [apt.address, apt.city, apt.state, apt.zip].filter(Boolean).join(' ');
   return `https://maps.google.com/?daddr=${encodeURIComponent(addr)}`;
@@ -287,12 +294,6 @@ const TechDashboard = ({ techData }) => {
   const getTodayISO = () => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-  };
-  const formatTime = (t) => {
-    if (!t) return '';
-    const [h, m] = t.split(':');
-    const hour = parseInt(h, 10);
-    return `${hour % 12 || 12}:${m} ${hour >= 12 ? 'PM' : 'AM'}`;
   };
   const [todayISO, setTodayISO] = useState(getTodayISO);
 
