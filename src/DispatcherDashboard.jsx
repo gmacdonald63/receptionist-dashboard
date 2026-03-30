@@ -22,9 +22,8 @@ const formatPhone = (raw) => {
 
 const SmsConfigForm = ({ clientData }) => {
   const [form, setForm] = useState({
-    twilio_account_sid:  clientData?.twilio_account_sid  || '',
-    twilio_auth_token:   clientData?.twilio_auth_token   || '',
-    twilio_from_number:  clientData?.twilio_from_number  || '',
+    telnyx_api_key:     clientData?.telnyx_api_key     || '',
+    telnyx_from_number: clientData?.telnyx_from_number || '',
   });
   const [saving, setSaving] = useState(false);
   const [saved,  setSaved]  = useState(false);
@@ -33,9 +32,8 @@ const SmsConfigForm = ({ clientData }) => {
   // Sync form when clientData changes (e.g. demo mode toggle)
   useEffect(() => {
     setForm({
-      twilio_account_sid:  clientData?.twilio_account_sid  || '',
-      twilio_auth_token:   clientData?.twilio_auth_token   || '',
-      twilio_from_number:  clientData?.twilio_from_number  || '',
+      telnyx_api_key:     clientData?.telnyx_api_key     || '',
+      telnyx_from_number: clientData?.telnyx_from_number || '',
     });
   }, [clientData?.id]);
 
@@ -43,9 +41,8 @@ const SmsConfigForm = ({ clientData }) => {
     setSaving(true);
     setSaveError(null);
     const { error } = await supabase.from('clients').update({
-      twilio_account_sid:  form.twilio_account_sid  || null,
-      twilio_auth_token:   form.twilio_auth_token   || null,
-      twilio_from_number:  form.twilio_from_number  || null,
+      telnyx_api_key:     form.telnyx_api_key     || null,
+      telnyx_from_number: form.telnyx_from_number || null,
     }).eq('id', clientData.id);
     setSaving(false);
     if (!error) { setSaved(true); setTimeout(() => setSaved(false), 3000); }
@@ -53,9 +50,8 @@ const SmsConfigForm = ({ clientData }) => {
   };
 
   const fields = [
-    { key: 'twilio_account_sid',  label: 'Account SID',  placeholder: 'ACxxxxxxxx' },
-    { key: 'twilio_auth_token',   label: 'Auth Token',   placeholder: '••••••••', type: 'password' },
-    { key: 'twilio_from_number',  label: 'From Number',  placeholder: '+15551234567' },
+    { key: 'telnyx_api_key',     label: 'Telnyx API Key',   placeholder: 'KEY...', type: 'password' },
+    { key: 'telnyx_from_number', label: 'From Number',       placeholder: '+15032454131' },
   ];
 
   return (
@@ -1022,8 +1018,7 @@ const DispatcherDashboard = ({
         <div className="bg-gray-800 rounded-lg p-4 border border-gray-700 mb-4">
           <h3 className="text-white font-medium mb-1">SMS Configuration</h3>
           <p className="text-gray-400 text-xs mb-4">
-            Enables automatic tracking link SMS to customers when a tech taps "On My Way."
-            Uses your existing Twilio number (same as your AI receptionist).
+            Enables automatic tracking link SMS to customers when a tech taps "On My Way." Powered by Telnyx.
           </p>
           <SmsConfigForm clientData={effectiveClientData} />
         </div>

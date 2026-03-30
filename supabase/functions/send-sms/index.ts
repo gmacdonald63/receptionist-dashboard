@@ -16,32 +16,22 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { to, body, twilio_account_sid, twilio_auth_token, twilio_from_number } = await req.json();
-    if (!to || !body || !twilio_account_sid || !twilio_auth_token || !twilio_from_number)
+    const { to, body, telnyx_api_key, telnyx_from_number } = await req.json();
+    if (!to || !body || !telnyx_api_key || !telnyx_from_number)
       return new Response(JSON.stringify({ error: "Missing required fields" }), { status: 400, headers: cors });
 
-    if (!/^AC[a-f0-9]{32}$/.test(twilio_account_sid))
-      return new Response(JSON.stringify({ error: "Invalid account SID format" }), { status: 400, headers: cors });
+    const res = await fetch("https://api.telnyx.com/v2/messages", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${telnyx_api_key}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ from: telnyx_from_number, to, text: body }),
+    });
 
-    const formData = new URLSearchParams();
-    formData.append("To", to);
-    formData.append("From", twilio_from_number);
-    formData.append("Body", body);
-
-    const res = await fetch(
-      `https://api.twilio.com/2010-04-01/Accounts/${twilio_account_sid}/Messages.json`,
-      {
-        method: "POST",
-        headers: {
-          "Authorization": `Basic ${btoa(`${twilio_account_sid}:${twilio_auth_token}`)}`,
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: formData.toString(),
-      }
-    );
     const result = await res.json();
-    if (!res.ok) return new Response(JSON.stringify({ error: result.message, code: result.code }), { status: res.status, headers: cors });
-    return new Response(JSON.stringify({ ok: true, sid: result.sid }), { headers: cors });
+    if (!res.ok) return new Response(JSON.stringify({ error: result.errors?.[0]?.detail || "SMS failed" }), { status: res.status, headers: cors });
+    return new Response(JSON.stringify({ ok: true, id: result.data?.id }), { headers: cors });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return new Response(JSON.stringify({ error: message }), { status: 500, headers: cors });

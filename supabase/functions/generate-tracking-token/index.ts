@@ -37,7 +37,7 @@ Deno.serve(async (req) => {
     if (!apt) return new Response(JSON.stringify({ error: "appointment not found" }), { status: 404, headers: cors });
 
     const { data: client } = await sb.from("clients")
-      .select("twilio_account_sid, twilio_auth_token, twilio_from_number")
+      .select("telnyx_api_key, telnyx_from_number")
       .eq("id", apt.client_id).single();
 
     const { data: tech } = await sb.from("technicians").select("name").eq("id", technician_id).single();
@@ -68,9 +68,9 @@ Deno.serve(async (req) => {
 
     const trackingUrl = `${APP_URL}/?track=${tokenRow.token}`;
 
-    // Send SMS if Twilio configured and customer has a phone
+    // Send SMS if Telnyx configured and customer has a phone
     let smsSent = false;
-    if (client?.twilio_account_sid && client?.twilio_from_number && apt.caller_phone) {
+    if (client?.telnyx_api_key && client?.telnyx_from_number && apt.caller_phone) {
       const smsRes = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/send-sms`, {
         method: "POST",
         headers: {
@@ -81,9 +81,8 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           to: apt.caller_phone,
           body: `Hi ${apt.caller_name || 'there'}, ${techFirst} is on the way! Track their location: ${trackingUrl}`,
-          twilio_account_sid: client.twilio_account_sid,
-          twilio_auth_token: client.twilio_auth_token,
-          twilio_from_number: client.twilio_from_number,
+          telnyx_api_key: client.telnyx_api_key,
+          telnyx_from_number: client.telnyx_from_number,
         }),
       });
       smsSent = smsRes.ok;
