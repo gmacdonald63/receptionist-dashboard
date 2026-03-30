@@ -54,7 +54,7 @@ const CustomerHistorySection = ({ apt }) => {
       <div className="space-y-1">
         {history.map((h, i) => (
           <div key={`${h.date}-${h.start_time}-${i}`} className="flex justify-between text-xs text-gray-400 bg-gray-900 rounded px-3 py-2">
-            <span>{h.date} {h.start_time?.slice(0, 5)}</span>
+            <span>{h.date} {formatTime(h.start_time)}</span>
             <span className="text-gray-500">{h.service_type || '—'}</span>
           </div>
         ))}
@@ -189,7 +189,7 @@ const JobDetail = ({ apt, permissions, updatingId, onClose, onUpdateStatus, isPa
             <div>
               <p className="text-xs text-gray-500 uppercase tracking-wide">Time</p>
               <p className="text-gray-300 text-sm">
-                {apt.start_time?.slice(0, 5)}{apt.end_time ? ` – ${apt.end_time.slice(0, 5)}` : ''}
+                {formatTime(apt.start_time)}{apt.end_time ? ` – ${formatTime(apt.end_time)}` : ''}
               </p>
             </div>
           )}
@@ -284,7 +284,16 @@ const TechDashboard = ({ techData }) => {
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [gpsStatus, setGpsStatus] = useState({ isTracking: false, hasPosition: false, lastError: null });
 
-  const getTodayISO = () => new Date().toISOString().split('T')[0];
+  const getTodayISO = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  };
+  const formatTime = (t) => {
+    if (!t) return '';
+    const [h, m] = t.split(':');
+    const hour = parseInt(h, 10);
+    return `${hour % 12 || 12}:${m} ${hour >= 12 ? 'PM' : 'AM'}`;
+  };
   const [todayISO, setTodayISO] = useState(getTodayISO);
 
   // Refresh todayISO at midnight so the "today" indicator stays accurate
@@ -315,7 +324,7 @@ const TechDashboard = ({ techData }) => {
   const shiftDate = (days) => {
     const d = new Date(selectedDate + 'T00:00:00');
     d.setDate(d.getDate() + days);
-    setSelectedDate(d.toISOString().split('T')[0]);
+    setSelectedDate(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
   };
 
   const fetchJobs = async () => {
@@ -603,8 +612,8 @@ const TechDashboard = ({ techData }) => {
                         <p className="text-blue-400 text-xs mt-0.5 truncate">{apt.service_type}</p>
                       )}
                       <p className="text-gray-400 text-sm mt-1">
-                        {apt.start_time ? apt.start_time.slice(0, 5) : '—'}
-                        {apt.end_time   ? ` – ${apt.end_time.slice(0, 5)}` : ''}
+                        {apt.start_time ? formatTime(apt.start_time) : '—'}
+                        {apt.end_time   ? ` – ${formatTime(apt.end_time)}` : ''}
                       </p>
                       {(apt.address || apt.city) && (
                         <p className="text-gray-500 text-xs mt-1 truncate">

@@ -97,7 +97,7 @@ const DispatcherDashboard = ({
   // The effective client data — uses demo client when in demo mode
   const effectiveClientData = demoMode && demoClientData ? demoClientData : clientData;
 
-  const getTodayStr = () => new Date().toISOString().split('T')[0];
+  const getTodayStr = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
   const [todayStr, setTodayStr] = useState(getTodayStr);
 
   useEffect(() => {
