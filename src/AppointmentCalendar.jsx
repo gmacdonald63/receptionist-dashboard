@@ -323,7 +323,7 @@ const AppointmentCalendar = ({
 
   const startDragIntent = useCallback((e, apt) => {
     // Left mouse or touch only
-    if (e.button !== undefined && e.button !== 0) return;
+    if (e.button !== 0) return;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const rect = e.currentTarget.getBoundingClientRect();
@@ -375,6 +375,8 @@ const AppointmentCalendar = ({
         const dy = Math.abs(clientY - intent.startY);
         if (dx < DRAG_THRESHOLD && dy < DRAG_THRESHOLD) return;
         intent.activated = true;
+        document.body.style.cursor = 'grabbing';
+        document.body.style.userSelect = 'none';
         e.preventDefault(); // prevent scroll — threshold confirmed
         setDragState({ apt: intent.apt, grabOffsetY: intent.grabOffsetY, pointerX: clientX, pointerY: clientY });
       } else {
@@ -426,6 +428,8 @@ const AppointmentCalendar = ({
         }
       }
 
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
       dragIntentRef.current = null;
       setDragState(null);
       setDropPreview(null);
@@ -435,12 +439,14 @@ const AppointmentCalendar = ({
     document.addEventListener('touchmove', onMove, { passive: false });
     document.addEventListener('mouseup', onEnd);
     document.addEventListener('touchend', onEnd);
+    document.addEventListener('pointercancel', onEnd);
 
     return () => {
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('touchmove', onMove);
       document.removeEventListener('mouseup', onEnd);
       document.removeEventListener('touchend', onEnd);
+      document.removeEventListener('pointercancel', onEnd);
     };
   }, [computeDropPreview, onSaveAppointment]);
 
@@ -525,6 +531,7 @@ const AppointmentCalendar = ({
         }`}
         style={blockStyle}
         onPointerDown={(e) => startDragIntent(e, apt)}
+        onContextMenu={(e) => e.preventDefault()}
         onPointerUp={(e) => {
           // Only open side panel if this was a tap/click (drag threshold not exceeded)
           if (!dragIntentRef.current?.activated) {
@@ -711,7 +718,7 @@ const AppointmentCalendar = ({
   const renderDesktopGrid = () => (
     <div
       ref={scrollContainerRef}
-      className="flex-1 overflow-auto border-2 border-gray-500 rounded-lg bg-gray-900"
+      className={`flex-1 overflow-auto border-2 border-gray-500 rounded-lg bg-gray-900${dragState ? ' select-none' : ''}`}
     >
       <div
         className="grid min-w-0"
@@ -1352,7 +1359,7 @@ const AppointmentCalendar = ({
             }}
           >
             {dragState.apt.name || 'Appointment'}
-            <p className="text-gray-300 text-[10px] leading-tight mt-0.5">
+            <p className="text-gray-300 text-[10px] leading-tight mt-0.5 truncate">
               {dropPreview
                 ? `${formatTime12(fromMinutes(dropPreview.snappedStartMin))} → ${formatTime12(fromMinutes(dropPreview.snappedEndMin))}`
                 : formatTime12(dragState.apt.start_time)}
