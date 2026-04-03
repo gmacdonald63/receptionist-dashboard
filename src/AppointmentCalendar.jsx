@@ -475,6 +475,10 @@ const AppointmentCalendar = ({
               } border-b-gray-700/20`}
               style={{ height: `${SLOT_HEIGHT}px` }}
               onClick={!closed ? () => handleSlotClick(dateStr, slotTime, sc.id) : undefined}
+              data-droptarget="true"
+              data-datestr={dateStr}
+              data-techid={String(sc.id)}
+              data-slottime={slotTime}
             />
           );
         })}
@@ -523,6 +527,10 @@ const AppointmentCalendar = ({
               }`}
               style={{ height: `${SLOT_HEIGHT}px` }}
               onClick={slotClickable ? () => handleSlotClick(dateStr, slotTime) : undefined}
+              data-droptarget="true"
+              data-datestr={dateStr}
+              data-techid="null"
+              data-slottime={slotTime}
             />
           );
         })}
@@ -903,6 +911,10 @@ const AppointmentCalendar = ({
                     } border-gray-700/20`}
                     style={{ height: `${SLOT_HEIGHT}px` }}
                     onClick={!closed ? () => handleSlotClick(dateStr, slotTime) : undefined}
+                    data-droptarget="true"
+                    data-datestr={dateStr}
+                    data-techid="null"
+                    data-slottime={slotTime}
                   />
                 );
               })}
