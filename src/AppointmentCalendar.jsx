@@ -324,8 +324,8 @@ const AppointmentCalendar = ({
   const startDragIntent = useCallback((e, apt) => {
     // Left mouse or touch only
     if (e.button !== 0) return;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.clientY;
+    const clientX = e.clientX;
     const rect = e.currentTarget.getBoundingClientRect();
     dragIntentRef.current = {
       apt,
@@ -1093,6 +1093,17 @@ const AppointmentCalendar = ({
               })}
               {(filteredAppointmentsByDate[dateStr] || []).map((apt) =>
                 renderAppointmentBlock(apt, dayOfWeek, dateStr)
+              )}
+              {/* Drop preview ghost (drag-and-drop) */}
+              {dragState && dropPreview?.dateStr === dateStr && (dropPreview?.techId == null) && (
+                <div
+                  className="absolute left-0.5 right-0.5 border-2 border-dashed border-yellow-400 bg-yellow-500/10 rounded pointer-events-none"
+                  style={{
+                    top: `${((dropPreview.snappedStartMin - gridStartMin) / 30) * SLOT_HEIGHT}px`,
+                    height: `${Math.max(((dropPreview.snappedEndMin - dropPreview.snappedStartMin) / 30) * SLOT_HEIGHT, 20)}px`,
+                    zIndex: 8,
+                  }}
+                />
               )}
               {renderPreviewBlock(dateStr)}
             </div>
