@@ -95,6 +95,14 @@ const AppointmentCalendar = ({
   const scrollContainerRef = useRef(null);
   const touchStartXRef = useRef(null);
 
+  // ─── Drag-and-drop state ─────────────────────────────────────────────────────
+  // dragIntentRef: synchronous, tracks whether a drag has activated (threshold passed)
+  const dragIntentRef = useRef(null);
+  // dragState drives the floating overlay render (set to state so it re-renders)
+  const [dragState, setDragState] = useState(null);
+  // dropPreview: the current hovered drop target during drag
+  const [dropPreview, setDropPreview] = useState(null);
+
   const weekDates = useMemo(() => getWeekDates(currentWeekStart), [currentWeekStart]);
 
   // Only show columns for days that are configured as open (or all 7 if no config loaded yet)
@@ -311,6 +319,130 @@ const AppointmentCalendar = ({
     newDate.setDate(newDate.getDate() + 7);
     onWeekChange(newDate);
   }, [currentWeekStart, onWeekChange]);
+
+  const DRAG_THRESHOLD = 8; // px — movement before drag activates
+
+  const startDragIntent = useCallback((e, apt) => {
+    // Left mouse or touch only
+    if (e.button !== undefined && e.button !== 0) return;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const rect = e.currentTarget.getBoundingClientRect();
+    dragIntentRef.current = {
+      apt,
+      startX: clientX,
+      startY: clientY,
+      grabOffsetY: clientY - rect.top,
+      activated: false,
+    };
+  }, []);
+
+  const computeDropPreview = useCallback((clientX, clientY, apt) => {
+    // pointer-events:none on the overlay means elementFromPoint sees the slot cell behind it
+    const el = document.elementFromPoint(clientX, clientY);
+    const slotEl = el ? el.closest('[data-droptarget]') : null;
+    if (!slotEl) return null;
+
+    const dateStr = slotEl.dataset.datestr;
+    const rawTechId = slotEl.dataset.techid;
+    const techId = rawTechId === 'null' ? null : Number(rawTechId);
+    const slotStartMin = toMinutes(slotEl.dataset.slottime);
+
+    // 15-min snap: top half of slot = on-the-hour/quarter, bottom half = +15
+    const slotRect = slotEl.getBoundingClientRect();
+    const yInSlot = clientY - slotRect.top;
+    const snapOffset = yInSlot < slotRect.height / 2 ? 0 : 15;
+    const snappedStartMin = slotStartMin + snapOffset;
+
+    const startMin = toMinutes(apt.start_time);
+    const endMin = apt.end_time && apt.end_time !== apt.start_time
+      ? toMinutes(apt.end_time)
+      : startMin + 60;
+    const duration = endMin - startMin;
+
+    return { dateStr, techId, snappedStartMin, snappedEndMin: snappedStartMin + duration };
+  }, []);
+
+  useEffect(() => {
+    const onMove = (e) => {
+      const intent = dragIntentRef.current;
+      if (!intent) return;
+      e.preventDefault(); // prevent scroll while dragging on touch
+
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+
+      if (!intent.activated) {
+        const dx = Math.abs(clientX - intent.startX);
+        const dy = Math.abs(clientY - intent.startY);
+        if (dx < DRAG_THRESHOLD && dy < DRAG_THRESHOLD) return;
+        intent.activated = true;
+        setDragState({ apt: intent.apt, grabOffsetY: intent.grabOffsetY, pointerX: clientX, pointerY: clientY });
+      } else {
+        setDragState(prev => prev ? { ...prev, pointerX: clientX, pointerY: clientY } : null);
+      }
+
+      const preview = computeDropPreview(clientX, clientY, intent.apt);
+      setDropPreview(preview);
+    };
+
+    const onEnd = (e) => {
+      const intent = dragIntentRef.current;
+      if (!intent) return;
+
+      if (intent.activated) {
+        const clientY = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
+        const clientX = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
+        const preview = computeDropPreview(clientX, clientY, intent.apt);
+
+        if (preview) {
+          const apt = intent.apt;
+          const startMin = toMinutes(apt.start_time);
+          const endMin = apt.end_time && apt.end_time !== apt.start_time
+            ? toMinutes(apt.end_time)
+            : startMin + 60;
+          const duration = endMin - startMin;
+
+          const nameParts = (apt.name || '').trim().split(' ');
+          const firstName = apt.first_name || nameParts[0] || '';
+          const lastName = apt.last_name || nameParts.slice(1).join(' ') || '';
+
+          onSaveAppointment({
+            appointmentId: apt.id,
+            firstName,
+            lastName,
+            phone: apt.caller_number || '',
+            address: apt.address || '',
+            city: apt.city || '',
+            state: apt.state || '',
+            zip: apt.zip || '',
+            notes: apt.notes || '',
+            serviceType: apt.service_type || null,
+            date: preview.dateStr,
+            time: fromMinutes(preview.snappedStartMin),
+            duration,
+            technicianId: preview.techId,
+          });
+        }
+      }
+
+      dragIntentRef.current = null;
+      setDragState(null);
+      setDropPreview(null);
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('mouseup', onEnd);
+    document.addEventListener('touchend', onEnd);
+
+    return () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('mouseup', onEnd);
+      document.removeEventListener('touchend', onEnd);
+    };
+  }, [computeDropPreview, onSaveAppointment]);
 
   // ─── Auto-scroll to current time on mount ───────────────────────────────────
 
