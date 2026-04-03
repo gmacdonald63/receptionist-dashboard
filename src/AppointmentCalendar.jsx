@@ -359,8 +359,12 @@ const AppointmentCalendar = ({
       : startMin + 60;
     const duration = endMin - startMin;
 
-    return { dateStr, techId, snappedStartMin, snappedEndMin: snappedStartMin + duration };
-  }, []);
+    const clampedStart = Math.max(
+      gridStartMin,
+      Math.min(snappedStartMin, gridStartMin + timeSlots.length * 30 - duration)
+    );
+    return { dateStr, techId, snappedStartMin: clampedStart, snappedEndMin: clampedStart + duration };
+  }, [gridStartMin, timeSlots]);
 
   useEffect(() => {
     const onMove = (e) => {
@@ -392,7 +396,7 @@ const AppointmentCalendar = ({
       const intent = dragIntentRef.current;
       if (!intent) return;
 
-      if (intent.activated) {
+      if (intent.activated && e.type !== 'pointercancel') {
         const clientY = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
         const clientX = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
         const preview = computeDropPreview(clientX, clientY, intent.apt);
