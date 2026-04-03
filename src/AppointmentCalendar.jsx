@@ -56,6 +56,7 @@ function formatDayName(date) {
 const SLOT_HEIGHT = 40; // px per 30-min slot
 const DEFAULT_OPEN = '07:00';
 const DEFAULT_CLOSE = '18:00';
+const DRAG_THRESHOLD = 8; // px — movement before drag activates
 
 // ─── Component ──────────────────────────────────────────────────────────────────
 
@@ -320,8 +321,6 @@ const AppointmentCalendar = ({
     onWeekChange(newDate);
   }, [currentWeekStart, onWeekChange]);
 
-  const DRAG_THRESHOLD = 8; // px — movement before drag activates
-
   const startDragIntent = useCallback((e, apt) => {
     // Left mouse or touch only
     if (e.button !== undefined && e.button !== 0) return;
@@ -367,7 +366,6 @@ const AppointmentCalendar = ({
     const onMove = (e) => {
       const intent = dragIntentRef.current;
       if (!intent) return;
-      e.preventDefault(); // prevent scroll while dragging on touch
 
       const clientY = e.touches ? e.touches[0].clientY : e.clientY;
       const clientX = e.touches ? e.touches[0].clientX : e.clientX;
@@ -377,8 +375,10 @@ const AppointmentCalendar = ({
         const dy = Math.abs(clientY - intent.startY);
         if (dx < DRAG_THRESHOLD && dy < DRAG_THRESHOLD) return;
         intent.activated = true;
+        e.preventDefault(); // prevent scroll — threshold confirmed
         setDragState({ apt: intent.apt, grabOffsetY: intent.grabOffsetY, pointerX: clientX, pointerY: clientY });
       } else {
+        e.preventDefault(); // prevent scroll — already dragging
         setDragState(prev => prev ? { ...prev, pointerX: clientX, pointerY: clientY } : null);
       }
 
