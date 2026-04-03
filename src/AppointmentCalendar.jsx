@@ -513,19 +513,26 @@ const AppointmentCalendar = ({
     }
 
     const isSelected = selectedAppointment && selectedAppointment.id === apt.id;
+    const isDragging = dragState?.apt?.id === apt.id;
 
     return (
       <div
         key={apt.id}
-        className={`rounded-r-md cursor-pointer transition-all overflow-hidden px-1.5 py-0.5 ${
+        className={`rounded-r-md transition-all overflow-hidden px-1.5 py-0.5 ${
           !tech ? 'border-l-4 border-gray-500 bg-gray-600/20' : ''
-        } ${isSelected ? 'ring-2 ring-blue-400 brightness-125' : 'hover:brightness-125'}`}
+        } ${isSelected ? 'ring-2 ring-blue-400 brightness-125' : 'hover:brightness-125'} ${
+          isDragging ? 'opacity-30 cursor-grabbing' : 'cursor-grab'
+        }`}
         style={blockStyle}
-        onClick={(e) => {
-          e.stopPropagation();
-          handleAppointmentClick(apt);
+        onPointerDown={(e) => startDragIntent(e, apt)}
+        onPointerUp={(e) => {
+          // Only open side panel if this was a tap/click (drag threshold not exceeded)
+          if (!dragIntentRef.current?.activated) {
+            e.stopPropagation();
+            handleAppointmentClick(apt);
+          }
         }}
-        title={`${apt.name || 'Appointment'} - ${formatTime12(apt.start_time)}${apt.end_time ? ' to ' + formatTime12(apt.end_time) : ''}`}
+        title={`${apt.name || 'Appointment'} — ${formatTime12(apt.start_time)}${apt.end_time ? ' to ' + formatTime12(apt.end_time) : ''} — drag to reschedule`}
       >
         <div className="flex items-center gap-1 min-w-0">
           <span className="text-white text-[11px] font-medium truncate leading-tight">
