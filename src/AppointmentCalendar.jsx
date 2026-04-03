@@ -625,6 +625,17 @@ const AppointmentCalendar = ({
         {subColApts.map((apt) => renderAppointmentBlock(apt, dayOfWeek, dateStr))}
         {/* Preview block (only for matching sub-column) */}
         {renderPreviewBlock(dateStr, sc.id)}
+        {/* Drop preview ghost */}
+        {dragState && dropPreview?.dateStr === dateStr && dropPreview?.techId === sc.id && (
+          <div
+            className="absolute left-0.5 right-0.5 border-2 border-dashed border-yellow-400 bg-yellow-500/10 rounded pointer-events-none"
+            style={{
+              top: `${((dropPreview.snappedStartMin - gridStartMin) / 30) * SLOT_HEIGHT}px`,
+              height: `${Math.max(((dropPreview.snappedEndMin - dropPreview.snappedStartMin) / 30) * SLOT_HEIGHT, 20)}px`,
+              zIndex: 8,
+            }}
+          />
+        )}
       </div>
     );
   };
@@ -676,6 +687,18 @@ const AppointmentCalendar = ({
 
         {/* Appointment blocks (absolute positioned) */}
         {dayAppointments.map((apt) => renderAppointmentBlock(apt, dayOfWeek, dateStr))}
+
+        {/* Drop preview ghost (drag-and-drop) */}
+        {dragState && dropPreview?.dateStr === dateStr && (dropPreview?.techId == null) && (
+          <div
+            className="absolute left-0.5 right-0.5 border-2 border-dashed border-yellow-400 bg-yellow-500/10 rounded pointer-events-none"
+            style={{
+              top: `${((dropPreview.snappedStartMin - gridStartMin) / 30) * SLOT_HEIGHT}px`,
+              height: `${Math.max(((dropPreview.snappedEndMin - dropPreview.snappedStartMin) / 30) * SLOT_HEIGHT, 20)}px`,
+              zIndex: 8,
+            }}
+          />
+        )}
 
         {/* Preview block */}
         {renderPreviewBlock(dateStr)}
@@ -1300,6 +1323,40 @@ const AppointmentCalendar = ({
             <Calendar className="w-12 h-12 text-gray-600 mx-auto mb-4" />
             <p className="text-gray-400 mb-2">No appointments booked yet</p>
             <p className="text-gray-500 text-sm">Click any time slot to add one</p>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Drag overlay: floating appointment card ───────────────────────── */}
+      {dragState && (
+        <div
+          className="fixed pointer-events-none z-[9999] opacity-90 shadow-2xl"
+          style={{
+            left: dragState.pointerX - 60,
+            top: dragState.pointerY - dragState.grabOffsetY,
+            width: '120px',
+            transform: 'rotate(1.5deg)',
+          }}
+        >
+          <div
+            className="rounded-r-md px-1.5 py-0.5 border-l-4 text-white text-[11px] font-medium truncate"
+            style={{
+              borderLeftColor: (() => {
+                const tech = technicians?.find(t => t.id === dragState.apt.technician_id);
+                return tech?.color || '#6b7280';
+              })(),
+              backgroundColor: (() => {
+                const tech = technicians?.find(t => t.id === dragState.apt.technician_id);
+                return tech ? `${tech.color}30` : '#4b556330';
+              })(),
+            }}
+          >
+            {dragState.apt.name || 'Appointment'}
+            <p className="text-gray-300 text-[10px] leading-tight mt-0.5">
+              {dropPreview
+                ? `${formatTime12(fromMinutes(dropPreview.snappedStartMin))} → ${formatTime12(fromMinutes(dropPreview.snappedEndMin))}`
+                : formatTime12(dragState.apt.start_time)}
+            </p>
           </div>
         </div>
       )}
