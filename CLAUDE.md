@@ -1035,7 +1035,7 @@ All functions are deployed with `--no-verify-jwt`. All require `apikey` + `Autho
 - **Purpose:** Send SMS to customers with technician tracking links ("On My Way" flow)
 - **Phone number:** +1-503-245-4131
 - **Messaging profile:** Reliant Support SMS
-- **API key:** `KEY019D3C73D26C4AD4B5E8C4F56D47E56B_i7FXnjwCzZWVdgIP5nRCDe`
+- **API key:** _(stored in Supabase `clients.telnyx_api_key` — do not commit to git)_
 - Replaces Twilio — Greg's Twilio numbers are owned by Retell AI, not by him
 - Credentials stored **per-client** in `clients` table: `telnyx_api_key`, `telnyx_from_number`
 - Used by: `send-sms` Edge Function, `generate-tracking-token` Edge Function
