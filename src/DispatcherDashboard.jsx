@@ -318,6 +318,7 @@ const DispatcherDashboard = ({
     if (!cid) return;
     setSavingHours(true);
     try {
+      // 1. Save to Supabase (used by check-availability and book-appointment Edge Functions)
       const rows = settingsHoursForm.map(h => ({
         client_id: cid,
         day_of_week: h.day_of_week,
@@ -330,12 +331,53 @@ const DispatcherDashboard = ({
         .upsert(rows, { onConflict: 'client_id,day_of_week' });
       if (error) throw error;
       await fetchBusinessHours();
+
+      // 2. Update the Retell LLM prompt so the AI knows the hours conversationally
+      const agentId = effectiveClientData?.retell_agent_id;
+      if (agentId && !demoMode) {
+        const agent = await retellService.getAgent(agentId);
+        const llmId = agent?.response_engine?.llm_id;
+        if (llmId) {
+          const llm = await retellService.getLLM(llmId);
+          if (llm?.general_prompt) {
+            const newHoursBlock = buildHoursTextForPrompt(settingsHoursForm);
+            const updatedPrompt = llm.general_prompt.replace(
+              /## BUSINESS HOURS\n[\s\S]*?\n## SERVICE AREA/,
+              `## BUSINESS HOURS\n${newHoursBlock}\n\n## SERVICE AREA`
+            );
+            if (updatedPrompt !== llm.general_prompt) {
+              await retellService.updateLLM(llmId, { general_prompt: updatedPrompt });
+            }
+          }
+        }
+      }
     } catch (err) {
       console.error('Failed to save business hours:', err);
       alert('Failed to save hours. Please try again.');
     } finally {
       setSavingHours(false);
     }
+  };
+
+  // Format "08:00" → "8 AM", "18:30" → "6:30 PM"
+  const formatTimeForPrompt = (time24) => {
+    const [h, m] = time24.split(':').map(Number);
+    const period = h >= 12 ? 'PM' : 'AM';
+    const h12 = h % 12 || 12;
+    return m === 0 ? `${h12} ${period}` : `${h12}:${String(m).padStart(2, '0')} ${period}`;
+  };
+
+  // Build the ## BUSINESS HOURS block text from the settings form
+  const buildHoursTextForPrompt = (hoursForm) => {
+    const lines = hoursForm.map(day => {
+      if (!day.is_open) {
+        const isWeekend = day.day_of_week === 0 || day.day_of_week === 6;
+        return `${day.name}: ${isWeekend ? 'Closed - Emergency calls only' : 'Closed'}`;
+      }
+      return `${day.name}: ${formatTimeForPrompt(day.open_time)} – ${formatTimeForPrompt(day.close_time)}`;
+    });
+    lines.push('Emergency Service: Available 24/7');
+    return lines.join('\n');
   };
 
   const fetchTechnicians = async () => {
