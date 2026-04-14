@@ -54,6 +54,40 @@ export const retellService = {
     }
   },
 
+  // Get agent config (includes begin_message / greeting)
+  async getAgent(agentId) {
+    try {
+      const response = await fetch(`${RETELL_API_BASE}/get-agent/${agentId}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${RETELL_API_KEY}`,
+        }
+      });
+      if (!response.ok) throw new Error(`API Error: ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching agent:', error);
+      return null;
+    }
+  },
+
+  // Update the agent's greeting (begin_message)
+  async updateAgentGreeting(agentId, beginMessage) {
+    const response = await fetch(`${RETELL_API_BASE}/update-agent/${agentId}`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${RETELL_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ begin_message: beginMessage })
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`API Error: ${response.status} - ${text}`);
+    }
+    return await response.json();
+  },
+
   // Get a specific call by ID
   async getCall(callId) {
     try {

@@ -147,6 +147,12 @@ const DispatcherDashboard = ({
   const [settingsHoursForm, setSettingsHoursForm] = useState([]);
   const [savingHours, setSavingHours] = useState(false);
 
+  // Greeting message state
+  const [greetingMessage, setGreetingMessage] = useState('');
+  const [savingGreeting, setSavingGreeting] = useState(false);
+  const [savedGreeting, setSavedGreeting] = useState(false);
+  const [greetingError, setGreetingError] = useState(null);
+
   // Billing / Stripe state
   const [billingLoading, setBillingLoading] = useState(false);
   const [billingAction, setBillingAction] = useState(null); // 'checkout' | 'portal'
@@ -211,6 +217,31 @@ const DispatcherDashboard = ({
     });
     setSettingsHoursForm(form);
   }, [businessHours]);
+
+  // Load current greeting from Retell when agent ID is available (skip in demo mode)
+  useEffect(() => {
+    const agentId = effectiveClientData?.retell_agent_id;
+    if (!agentId || demoMode) return;
+    retellService.getAgent(agentId).then(agent => {
+      if (agent?.begin_message != null) setGreetingMessage(agent.begin_message);
+    });
+  }, [effectiveClientData?.retell_agent_id, demoMode]);
+
+  const handleSaveGreeting = async () => {
+    const agentId = effectiveClientData?.retell_agent_id;
+    if (!agentId) return;
+    setSavingGreeting(true);
+    setGreetingError(null);
+    try {
+      await retellService.updateAgentGreeting(agentId, greetingMessage);
+      setSavedGreeting(true);
+      setTimeout(() => setSavedGreeting(false), 3000);
+    } catch (err) {
+      setGreetingError('Failed to save. Please try again.');
+    } finally {
+      setSavingGreeting(false);
+    }
+  };
 
   const handleDemoDataRefresh = () => {
     fetchData();
@@ -940,14 +971,23 @@ const DispatcherDashboard = ({
     <div className="space-y-4">
       <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
         <h3 className="text-lg font-semibold mb-4 text-white">Greeting Message</h3>
+        <p className="text-xs text-gray-400 mb-3">This is the first thing your AI receptionist says when it answers the phone.</p>
         <textarea
           className="w-full h-32 p-3 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 text-sm"
-          placeholder="Enter your custom greeting message..."
-          defaultValue="Thank you for calling ABC Medical Services. How may I help you today?"
+          placeholder="e.g. Thank you for calling. How can I help you today?"
+          value={greetingMessage}
+          onChange={e => setGreetingMessage(e.target.value)}
+          disabled={demoMode}
         />
-        <button className="mt-3 w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-          Save Changes
+        {greetingError && <p className="text-red-400 text-xs mt-1">{greetingError}</p>}
+        <button
+          onClick={handleSaveGreeting}
+          disabled={savingGreeting || demoMode}
+          className="mt-3 w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+        >
+          {savingGreeting ? 'Saving...' : savedGreeting ? 'Saved!' : 'Save Changes'}
         </button>
+        {demoMode && <p className="text-yellow-500 text-xs mt-2 text-center">Greeting changes are disabled in demo mode.</p>}
       </div>
 
       <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
