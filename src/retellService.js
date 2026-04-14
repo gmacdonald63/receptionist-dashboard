@@ -105,13 +105,18 @@ export const retellService = {
 
   // Update the agent's greeting (begin_message)
   async updateAgentGreeting(agentId, beginMessage) {
+    return this.updateAgent(agentId, { begin_message: beginMessage });
+  },
+
+  // Update any agent fields (voice_id, begin_message, etc.)
+  async updateAgent(agentId, updates) {
     const response = await fetch(`${RETELL_API_BASE}/update-agent/${agentId}`, {
       method: 'PATCH',
       headers: {
         'Authorization': `Bearer ${RETELL_API_KEY}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ begin_message: beginMessage })
+      body: JSON.stringify(updates)
     });
     if (!response.ok) {
       const text = await response.text();

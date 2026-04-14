@@ -153,6 +153,16 @@ const DispatcherDashboard = ({
   const [savedGreeting, setSavedGreeting] = useState(false);
   const [greetingError, setGreetingError] = useState(null);
 
+  // Voice selection state
+  const VOICE_OPTIONS = [
+    { id: '11labs-Kate', label: 'Female', name: 'Kate' },
+    { id: '11labs-Jason', label: 'Male', name: 'Jason' },
+  ];
+  const [selectedVoice, setSelectedVoice] = useState('11labs-Kate');
+  const [savingVoice, setSavingVoice] = useState(false);
+  const [savedVoice, setSavedVoice] = useState(false);
+  const [voiceError, setVoiceError] = useState(null);
+
   // Billing / Stripe state
   const [billingLoading, setBillingLoading] = useState(false);
   const [billingAction, setBillingAction] = useState(null); // 'checkout' | 'portal'
@@ -218,12 +228,13 @@ const DispatcherDashboard = ({
     setSettingsHoursForm(form);
   }, [businessHours]);
 
-  // Load current greeting from Retell when agent ID is available (skip in demo mode)
+  // Load current greeting and voice from Retell when agent ID is available (skip in demo mode)
   useEffect(() => {
     const agentId = effectiveClientData?.retell_agent_id;
     if (!agentId || demoMode) return;
     retellService.getAgent(agentId).then(agent => {
       if (agent?.begin_message != null) setGreetingMessage(agent.begin_message);
+      if (agent?.voice_id) setSelectedVoice(agent.voice_id);
     });
   }, [effectiveClientData?.retell_agent_id, demoMode]);
 
@@ -240,6 +251,22 @@ const DispatcherDashboard = ({
       setGreetingError('Failed to save. Please try again.');
     } finally {
       setSavingGreeting(false);
+    }
+  };
+
+  const handleSaveVoice = async () => {
+    const agentId = effectiveClientData?.retell_agent_id;
+    if (!agentId) return;
+    setSavingVoice(true);
+    setVoiceError(null);
+    try {
+      await retellService.updateAgent(agentId, { voice_id: selectedVoice });
+      setSavedVoice(true);
+      setTimeout(() => setSavedVoice(false), 3000);
+    } catch (err) {
+      setVoiceError('Failed to save. Please try again.');
+    } finally {
+      setSavingVoice(false);
     }
   };
 
@@ -1030,6 +1057,37 @@ const DispatcherDashboard = ({
           {savingGreeting ? 'Saving...' : savedGreeting ? 'Saved!' : 'Save Changes'}
         </button>
         {demoMode && <p className="text-yellow-500 text-xs mt-2 text-center">Greeting changes are disabled in demo mode.</p>}
+      </div>
+
+      <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+        <h3 className="text-lg font-semibold mb-1 text-white">Receptionist Voice</h3>
+        <p className="text-xs text-gray-400 mb-4">Choose the voice your AI receptionist uses on calls.</p>
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          {VOICE_OPTIONS.map(v => (
+            <button
+              key={v.id}
+              onClick={() => !demoMode && setSelectedVoice(v.id)}
+              disabled={demoMode}
+              className={`p-4 rounded-lg border-2 text-left transition-colors ${
+                selectedVoice === v.id
+                  ? 'border-blue-500 bg-blue-900/30'
+                  : 'border-gray-600 bg-gray-750 hover:border-gray-500'
+              } disabled:opacity-50`}
+            >
+              <p className="text-white font-medium">{v.label}</p>
+              <p className="text-gray-400 text-sm">{v.name}</p>
+            </button>
+          ))}
+        </div>
+        {voiceError && <p className="text-red-400 text-xs mb-2">{voiceError}</p>}
+        <button
+          onClick={handleSaveVoice}
+          disabled={savingVoice || demoMode}
+          className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+        >
+          {savingVoice ? 'Saving...' : savedVoice ? 'Saved!' : 'Save Voice'}
+        </button>
+        {demoMode && <p className="text-yellow-500 text-xs mt-2 text-center">Voice changes are disabled in demo mode.</p>}
       </div>
 
       <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
