@@ -1997,7 +1997,7 @@ const DispatcherDashboard = ({
             reviewEnabled={!!(effectiveClientData?.google_review_url)}
             reviewMode={effectiveClientData?.review_request_mode || 'manual'}
             onSendReviewRequest={handleSendReviewRequest}
-            headerLeft={<img src={logo} alt="Reliant Support" style={{ height: '26px', width: 'auto' }} />
+            headerLeft={<img src={logo} alt="Reliant Support" style={{ height: '26px', width: 'auto' }} />}
             headerRight={
               <div className="flex items-center gap-1">
                 {clientData?.is_admin && (
