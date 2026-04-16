@@ -163,6 +163,13 @@ const DispatcherDashboard = ({
   const [savedVoice, setSavedVoice] = useState(false);
   const [voiceError, setVoiceError] = useState(null);
 
+  // Review request state
+  const [reviewUrl, setReviewUrl] = useState('');
+  const [reviewMode, setReviewMode] = useState('manual');
+  const [savingReview, setSavingReview] = useState(false);
+  const [savedReview, setSavedReview] = useState(false);
+  const [reviewSaveError, setReviewSaveError] = useState(null);
+
   // Billing / Stripe state
   const [billingLoading, setBillingLoading] = useState(false);
   const [billingAction, setBillingAction] = useState(null); // 'checkout' | 'portal'
@@ -237,6 +244,12 @@ const DispatcherDashboard = ({
       if (agent?.voice_id) setSelectedVoice(agent.voice_id);
     });
   }, [effectiveClientData?.retell_agent_id, demoMode]);
+
+  // Sync review request settings from client data
+  useEffect(() => {
+    setReviewUrl(effectiveClientData?.google_review_url || '');
+    setReviewMode(effectiveClientData?.review_request_mode || 'manual');
+  }, [effectiveClientData?.id]);
 
   const handleSaveGreeting = async () => {
     const agentId = effectiveClientData?.retell_agent_id;
@@ -318,6 +331,7 @@ const DispatcherDashboard = ({
           source: apt.source, // 'ai' or 'manual'
           technician_id: apt.technician_id || null,
           service_type: apt.service_type || null,
+          review_sms_sent_at: apt.review_sms_sent_at || null,
         })));
       }
     } catch (err) {
@@ -384,6 +398,47 @@ const DispatcherDashboard = ({
     } finally {
       setSavingHours(false);
     }
+  };
+
+  const handleSaveReview = async () => {
+    const cid = effectiveClientData?.id;
+    if (!cid) return;
+    setSavingReview(true);
+    setReviewSaveError(null);
+    const { error } = await supabase.from('clients').update({
+      google_review_url: reviewUrl.trim() || null,
+      review_request_mode: reviewMode,
+    }).eq('id', cid);
+    setSavingReview(false);
+    if (!error) {
+      setSavedReview(true);
+      setTimeout(() => setSavedReview(false), 3000);
+      if (onSetClientData) onSetClientData({ ...clientData, google_review_url: reviewUrl.trim() || null, review_request_mode: reviewMode });
+    } else {
+      setReviewSaveError('Save failed. Please try again.');
+    }
+  };
+
+  const handleSendReviewRequest = async (apt) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return { error: 'Not authenticated' };
+    const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InptcHBkbWZkaGtubnd6d2RmaHdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk4MzQyMDYsImV4cCI6MjA4NTQxMDIwNn0.mXfuz8mEZhizFen78gUaakBDbrzANn4ZM1a7KuDiKJs';
+    const res = await fetch(`${SUPABASE_FUNCTIONS_URL}/send-review-sms`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': ANON_KEY,
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ appointment_id: apt.id, source: 'manual' }),
+    });
+    const result = await res.json();
+    if (result.ok && !result.skipped) {
+      setAppointments(prev => prev.map(a =>
+        a.id === apt.id ? { ...a, review_sms_sent_at: new Date().toISOString() } : a
+      ));
+    }
+    return result;
   };
 
   // Format "08:00" → "8 AM", "18:30" → "6:30 PM"
@@ -1163,6 +1218,67 @@ const DispatcherDashboard = ({
           <SmsConfigForm clientData={effectiveClientData} />
         </div>
       )}
+
+      <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+        <h3 className="text-lg font-semibold mb-1 text-white">Review Requests</h3>
+        <p className="text-xs text-gray-400 mb-4">
+          Send customers a text message asking for a Google review after their job is complete. Leave the URL blank to disable.
+        </p>
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-gray-400 block mb-1">Google Review URL</label>
+            <input
+              type="url"
+              value={reviewUrl}
+              onChange={e => setReviewUrl(e.target.value)}
+              placeholder="https://g.page/r/your-business/review"
+              className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm border border-gray-600 focus:border-blue-500 outline-none"
+            />
+          </div>
+
+          {reviewUrl.trim() && (
+            <div>
+              <label className="text-xs text-gray-400 block mb-2">Send Mode</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setReviewMode('manual')}
+                  className={`py-2.5 rounded-lg border-2 text-sm font-medium transition-colors ${
+                    reviewMode === 'manual'
+                      ? 'border-blue-500 bg-blue-900/30 text-white'
+                      : 'border-gray-600 bg-gray-750 text-gray-400 hover:border-gray-500'
+                  }`}
+                >
+                  Manual
+                </button>
+                <button
+                  onClick={() => setReviewMode('auto')}
+                  className={`py-2.5 rounded-lg border-2 text-sm font-medium transition-colors ${
+                    reviewMode === 'auto'
+                      ? 'border-blue-500 bg-blue-900/30 text-white'
+                      : 'border-gray-600 bg-gray-750 text-gray-400 hover:border-gray-500'
+                  }`}
+                >
+                  Automatic
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                {reviewMode === 'auto'
+                  ? 'SMS sent automatically when a tech marks a job complete.'
+                  : 'A badge appears on completed appointments — click to send when ready.'}
+              </p>
+            </div>
+          )}
+
+          {reviewSaveError && <p className="text-red-400 text-xs">{reviewSaveError}</p>}
+          <button
+            onClick={handleSaveReview}
+            disabled={savingReview}
+            className="w-full py-3 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+          >
+            {savingReview ? 'Saving...' : savedReview ? 'Saved!' : 'Save Review Settings'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 
@@ -1878,7 +1994,10 @@ const DispatcherDashboard = ({
             onRefresh={fetchData}
             loading={loading}
             clientId={effectiveClientData?.id}
-            headerLeft={<img src={logo} alt="Reliant Support" style={{ height: '26px', width: 'auto' }} />}
+            reviewEnabled={!!(effectiveClientData?.google_review_url)}
+            reviewMode={effectiveClientData?.review_request_mode || 'manual'}
+            onSendReviewRequest={handleSendReviewRequest}
+            headerLeft={<img src={logo} alt="Reliant Support" style={{ height: '26px', width: 'auto' }} />
             headerRight={
               <div className="flex items-center gap-1">
                 {clientData?.is_admin && (

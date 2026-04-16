@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { X, Clock, MapPin, Phone, Wrench, FileText, Pencil } from 'lucide-react';
+import { X, Clock, MapPin, Phone, Wrench, FileText, Pencil, Star } from 'lucide-react';
 
 function formatPhone(value) {
   const digits = value.replace(/\D/g, '').slice(0, 10);
@@ -45,6 +45,9 @@ export default function AppointmentSidePanel({
   onSave,
   onClose,
   isMobile,
+  reviewEnabled,
+  reviewMode,
+  onSendReviewRequest,
 }) {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -63,6 +66,9 @@ export default function AppointmentSidePanel({
   const [errors, setErrors] = useState({});
   const [saveError, setSaveError] = useState('');
   const [isEditing, setIsEditing] = useState(false);
+  const [sendingReview, setSendingReview] = useState(false);
+  const [reviewSent, setReviewSent] = useState(false);
+  const [reviewError, setReviewError] = useState('');
 
   // Group service types by category for the dropdown
   const groupedServiceTypes = React.useMemo(() => {
@@ -93,6 +99,12 @@ export default function AppointmentSidePanel({
     if (mode === 'add' && firstInputRef.current) firstInputRef.current.focus();
     if (mode === 'add') { setIsEditing(false); setSaveError(''); }
   }, [mode]);
+
+  // Reset review state when a different appointment is opened
+  useEffect(() => {
+    setReviewSent(false);
+    setReviewError('');
+  }, [appointment?.id]);
 
   // Reset form when a new slot is clicked in add mode
   useEffect(() => {
@@ -446,6 +458,45 @@ export default function AppointmentSidePanel({
             </div>
           )}
         </div>
+
+        {/* Review request footer */}
+        {reviewEnabled && appointment.status === 'complete' && (
+          <div className="px-4 pb-2.5">
+            {appointment.review_sms_sent_at || reviewSent ? (
+              <div className="flex items-center justify-center gap-2 py-2 rounded-lg bg-green-900/30 text-green-400 text-sm">
+                <Star size={13} className="fill-green-400" />
+                Review request sent
+              </div>
+            ) : reviewMode === 'auto' ? (
+              <div className="flex items-center justify-center gap-2 py-2 rounded-lg bg-gray-750 text-gray-400 text-sm">
+                <Star size={13} />
+                Review SMS sent automatically
+              </div>
+            ) : (
+              <div>
+                <button
+                  onClick={async () => {
+                    setSendingReview(true);
+                    setReviewError('');
+                    const result = await onSendReviewRequest(appointment);
+                    setSendingReview(false);
+                    if (result?.ok && !result?.skipped) {
+                      setReviewSent(true);
+                    } else if (result?.error) {
+                      setReviewError(result.error);
+                    }
+                  }}
+                  disabled={sendingReview}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                >
+                  <Star size={13} />
+                  {sendingReview ? 'Sending...' : 'Send Review Request'}
+                </button>
+                {reviewError && <p className="text-red-400 text-xs mt-1 text-center">{reviewError}</p>}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Edit footer */}
         <div className="px-4 py-2.5 border-t border-gray-700">

@@ -437,6 +437,21 @@ const TechDashboard = ({ techData }) => {
           .eq('appointment_id', apt.id)
           .eq('revoked', false)
           .then(() => {});  // fire-and-forget
+
+        // Trigger review request SMS if client has auto mode enabled (edge function checks mode)
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          if (!session?.access_token) return;
+          fetch(`${SUPABASE_FUNCTIONS_URL}/send-review-sms`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InptcHBkbWZkaGtubnd6d2RmaHdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk4MzQyMDYsImV4cCI6MjA4NTQxMDIwNn0.mXfuz8mEZhizFen78gUaakBDbrzANn4ZM1a7KuDiKJs',
+              'Authorization': `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({ appointment_id: apt.id, source: 'auto' }),
+          }).catch(() => {}); // fire-and-forget; edge function checks mode before sending
+        }).catch(() => {});
+
         showToast('Job marked complete!');
       }
     } catch (err) {

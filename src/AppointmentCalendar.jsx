@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { RefreshCw, ChevronLeft, ChevronRight, Calendar, Plus } from 'lucide-react';
+import { RefreshCw, ChevronLeft, ChevronRight, Calendar, Plus, Star } from 'lucide-react';
 import AppointmentSidePanel from './AppointmentSidePanel';
 
 // ─── Utility functions ──────────────────────────────────────────────────────────
@@ -71,6 +71,9 @@ const AppointmentCalendar = ({
   onRefresh,
   loading,
   clientId,
+  reviewEnabled,
+  reviewMode,
+  onSendReviewRequest,
   headerLeft,
   headerRight,
 }) => {
@@ -525,6 +528,9 @@ const AppointmentCalendar = ({
     const isSelected = selectedAppointment && selectedAppointment.id === apt.id;
     const isDragging = dragState?.apt?.id === apt.id;
 
+    const showReviewBadge = reviewEnabled && reviewMode === 'manual'
+      && apt.status === 'complete' && !apt.review_sms_sent_at;
+
     return (
       <div
         key={apt.id}
@@ -553,6 +559,9 @@ const AppointmentCalendar = ({
             <span className="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-blue-400" title="AI booked" />
           ) : (
             <span className="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-green-400" title="Manual" />
+          )}
+          {showReviewBadge && (
+            <Star size={9} className="flex-shrink-0 text-yellow-400 fill-yellow-400" title="Review request pending" />
           )}
         </div>
         {height >= 60 && (
@@ -1303,6 +1312,9 @@ const AppointmentCalendar = ({
                 onSave={handleSave}
                 onClose={handleCloseSidePanel}
                 isMobile={false}
+                reviewEnabled={reviewEnabled}
+                reviewMode={reviewMode}
+                onSendReviewRequest={onSendReviewRequest}
               />
             </div>
           )}
@@ -1331,6 +1343,9 @@ const AppointmentCalendar = ({
                   onSave={handleSave}
                   onClose={handleCloseSidePanel}
                   isMobile={true}
+                  reviewEnabled={reviewEnabled}
+                  reviewMode={reviewMode}
+                  onSendReviewRequest={onSendReviewRequest}
                 />
               </div>
             </div>
