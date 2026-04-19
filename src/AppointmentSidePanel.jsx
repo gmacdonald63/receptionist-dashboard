@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { X, Clock, MapPin, Phone, Wrench, FileText, Pencil, Star } from 'lucide-react';
+import TimePickerDropdown from './TimePickerDropdown';
 
 function formatPhone(value) {
   const digits = value.replace(/\D/g, '').slice(0, 10);
@@ -60,7 +61,6 @@ export default function AppointmentSidePanel({
   const [serviceType, setServiceType] = useState('');
   const [duration, setDuration] = useState(60);
   const [notes, setNotes] = useState('');
-  const [showCustomTime, setShowCustomTime] = useState(false);
   const [customTime, setCustomTime] = useState(selectedSlot?.time || '');
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({});
@@ -87,7 +87,7 @@ export default function AppointmentSidePanel({
     ? { date: appointment.date, time: appointment.start_time || appointment.time }
     : null;
   const effectiveSlot = isEditing ? editSlot : selectedSlot;
-  const effectiveTime = showCustomTime && customTime ? customTime : effectiveSlot?.time;
+  const effectiveTime = customTime || effectiveSlot?.time;
 
   const handleClose = useCallback(() => {
     setIsEditing(false);
@@ -112,7 +112,6 @@ export default function AppointmentSidePanel({
       setFirstName(''); setLastName(''); setPhone('');
       setAddress(''); setCity(''); setState(''); setZip('');
       setNotes(''); setErrors({}); setSaveError('');
-      setShowCustomTime(false);
       setCustomTime(selectedSlot.time || '');
       setTechnicianId(defaultTechnicianId ? String(defaultTechnicianId) : 'auto');
       setServiceType('');
@@ -147,7 +146,6 @@ export default function AppointmentSidePanel({
     setServiceType(appointment.service_type || '');
     setDuration(appointment.duration || 60);
     setNotes(appointment.notes || appointment.summary || '');
-    setShowCustomTime(false);
     setCustomTime((appointment.start_time || appointment.time) || '');
     setErrors({}); setSaveError('');
     setIsEditing(true);
@@ -219,30 +217,10 @@ export default function AppointmentSidePanel({
                 <Clock size={11} />
                 {formatDateDisplay(effectiveSlot.date)}
               </span>
-              <span className="inline-flex items-center px-2.5 py-1 bg-blue-500/15 text-blue-400 rounded-lg text-xs font-medium">
-                {effectiveTime ? formatTime12(effectiveTime) : '—'}
-              </span>
-              {!showCustomTime && (
-                <button type="button" onClick={() => setShowCustomTime(true)}
-                  className="text-[11px] text-gray-500 hover:text-gray-400 transition-colors">
-                  change time
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* Custom time — inline when toggled */}
-          {showCustomTime && (
-            <div className="flex items-center gap-2">
-              <input type="time" value={customTime}
-                onChange={e => setCustomTime(e.target.value)}
-                className="flex-1 px-2.5 py-1.5 bg-gray-750 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+              <TimePickerDropdown
+                value={effectiveTime || ''}
+                onChange={setCustomTime}
               />
-              <button type="button"
-                onClick={() => { setShowCustomTime(false); setCustomTime(effectiveSlot?.time || ''); }}
-                className="text-xs text-gray-500 hover:text-gray-400">
-                reset
-              </button>
             </div>
           )}
 
