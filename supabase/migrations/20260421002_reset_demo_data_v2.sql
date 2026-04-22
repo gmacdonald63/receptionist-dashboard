@@ -1,28 +1,37 @@
--- reset_demo_snapshot.sql
--- Wipes all demo data for client_id 9999, then re-seeds by COPYING live data
--- from client_id 1 (Comfort Heating & Air, Portland OR).
+-- reset_demo_data() v2 — copies only flagged records from client_id=1 into the
+-- demo client (9999), shifts dates by whole weeks anchored on the Sunday of
+-- the current week, and seeds 3 tech_locations at Portland-area coords so the
+-- Map tab has live-looking pins on every reset.
 --
--- Dates are shifted by whole weeks so appointments land on the same weekday.
--- Reference date: 2026-03-15 (Sunday when snapshot pattern was established).
---
--- Run: SELECT reset_demo_data();
+-- Changes from the previous version:
+--   • ref_date moved to 2026-04-05 (Sunday of the flagged appointment week)
+--   • customers / calls / appointments filtered by include_in_demo = true
+--   • calls copy now includes recording_url (was missing)
+--   • tech_locations seeded for Mike / Scott / Jake with now() timestamps
+--   • tech_locations wipe added to the cleanup section
 
-CREATE OR REPLACE FUNCTION reset_demo_data()
-RETURNS void AS $$
+CREATE OR REPLACE FUNCTION public.reset_demo_data()
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+AS $function$
 DECLARE
   demo_cid   BIGINT  := 9999;
   src_cid    BIGINT  := 1;
   demo_agent TEXT    := 'agent_2a4314820da33d77656a6e4693';
   src_agent  TEXT    := 'agent_3bec4ff7311350d9b19b93db05';
-  ref_date   DATE   := '2026-03-15';   -- Sunday when data pattern was captured
+  -- Sunday of the week the flagged appointments were booked in (Mon 4/6 – Thu 4/9)
+  ref_date   DATE   := '2026-04-05';
   cur_sunday DATE;
   day_offset INTEGER;
+  mike_id    BIGINT;
+  scott_id   BIGINT;
+  jake_id    BIGINT;
 BEGIN
 
   -- ============================================================
   -- 0. COMPUTE DATE OFFSET (whole weeks so weekdays stay aligned)
   -- ============================================================
-  -- Find the Sunday of the current week
   cur_sunday := CURRENT_DATE - EXTRACT(DOW FROM CURRENT_DATE)::int;
   day_offset := cur_sunday - ref_date;
 
@@ -37,6 +46,9 @@ BEGIN
     WHERE customer_id IN (SELECT id FROM customers WHERE client_id = demo_cid);
 
   DELETE FROM customers WHERE client_id = demo_cid;
+
+  -- Tech locations: wipe before technicians (FK CASCADE would handle it, but explicit is clearer)
+  DELETE FROM tech_locations WHERE client_id = demo_cid;
 
   UPDATE appointments SET technician_id = NULL WHERE client_id = demo_cid;
   DELETE FROM appointments WHERE client_id = demo_cid;
@@ -70,7 +82,7 @@ BEGIN
   WHERE id = demo_cid;
 
   -- ============================================================
-  -- 3. COPY SERVICE TYPES (all 157 from production)
+  -- 3. COPY SERVICE TYPES (full catalog)
   -- ============================================================
 
   INSERT INTO service_types (client_id, name, category, duration_minutes, urgency,
@@ -81,18 +93,17 @@ BEGIN
   WHERE client_id = src_cid;
 
   -- ============================================================
-  -- 4. COPY CUSTOMERS (all from production)
+  -- 4. COPY CUSTOMERS (only flagged include_in_demo = true)
   -- ============================================================
 
-  -- Use a temp table to map old customer IDs to new ones (for notes/reminders)
   CREATE TEMP TABLE _cust_map (old_id uuid, new_id uuid) ON COMMIT DROP;
 
   INSERT INTO customers (client_id, first_name, last_name, name, phone, email, address, tags)
   SELECT demo_cid, first_name, last_name, name, phone, email, address, tags
   FROM customers
-  WHERE client_id = src_cid;
+  WHERE client_id = src_cid
+    AND include_in_demo = true;
 
-  -- Build the mapping: match on (first_name, last_name, phone) which is unique per customer
   INSERT INTO _cust_map (old_id, new_id)
   SELECT src.id, demo.id
   FROM customers src
@@ -101,37 +112,39 @@ BEGIN
    AND src.first_name = demo.first_name
    AND COALESCE(src.last_name,'') = COALESCE(demo.last_name,'')
    AND src.phone = demo.phone
-  WHERE src.client_id = src_cid;
+  WHERE src.client_id = src_cid
+    AND src.include_in_demo = true;
 
   -- ============================================================
-  -- 5. COPY CALLS (unique per call_id, prefer rows with summary)
+  -- 5. COPY CALLS (only flagged)
   -- ============================================================
-  -- The webhook fires multiple times per call. Keep the best row per call_id.
 
   INSERT INTO calls (call_id, agent_id, caller_name, caller_number, summary,
-                     transcript, duration_seconds, appointment_booked, created_at)
+                     transcript, recording_url, duration_seconds, appointment_booked,
+                     created_at)
   SELECT DISTINCT ON (call_id)
-         'demo_' || call_id,  -- prefix to avoid collision with real call IDs
+         'demo_' || call_id,
          demo_agent,
          caller_name,
          caller_number,
          summary,
          transcript,
+         recording_url,
          duration_seconds,
          appointment_booked,
          created_at + (day_offset || ' days')::interval
   FROM calls
   WHERE agent_id = src_agent
+    AND include_in_demo = true
   ORDER BY call_id,
            (summary IS NOT NULL)::int DESC,
            (caller_name IS NOT NULL AND caller_name != '')::int DESC,
            created_at DESC;
 
   -- ============================================================
-  -- 6. COPY APPOINTMENTS (with date offset + technician mapping)
+  -- 6. COPY APPOINTMENTS (only flagged; date-shifted, tech-mapped)
   -- ============================================================
 
-  -- Build technician mapping: match by name
   CREATE TEMP TABLE _tech_map (old_id bigint, new_id bigint) ON COMMIT DROP;
 
   INSERT INTO _tech_map (old_id, new_id)
@@ -150,19 +163,20 @@ BEGIN
   SELECT
     demo_cid,
     a.caller_name, a.first_name, a.last_name, a.caller_number,
-    a.date + day_offset,          -- shift date by whole weeks
+    a.date + day_offset,
     a.start_time, a.end_time,
     a.address, a.city, a.state, a.zip,
     a.notes, a.source, a.status, a.service_type,
     CASE WHEN a.call_id IS NOT NULL THEN 'demo_' || a.call_id ELSE NULL END,
-    tm.new_id,                    -- mapped technician ID
+    tm.new_id,
     a.duration
   FROM appointments a
   LEFT JOIN _tech_map tm ON tm.old_id = a.technician_id
-  WHERE a.client_id = src_cid;
+  WHERE a.client_id = src_cid
+    AND a.include_in_demo = true;
 
   -- ============================================================
-  -- 7. COPY CUSTOMER NOTES
+  -- 7. COPY CUSTOMER NOTES (auto-inherit via _cust_map)
   -- ============================================================
 
   INSERT INTO customer_notes (customer_id, client_id, note)
@@ -172,16 +186,41 @@ BEGIN
   WHERE cn.client_id = src_cid;
 
   -- ============================================================
-  -- 8. COPY FOLLOW-UP REMINDERS
+  -- 8. COPY FOLLOW-UP REMINDERS (auto-inherit, dates shifted)
   -- ============================================================
 
   INSERT INTO follow_up_reminders (customer_id, client_id, title, note, due_date, completed)
   SELECT cm.new_id, demo_cid, fr.title, fr.note,
-         fr.due_date + day_offset,    -- shift due dates too
+         fr.due_date + day_offset,
          fr.completed
   FROM follow_up_reminders fr
   JOIN _cust_map cm ON cm.old_id = fr.customer_id
   WHERE fr.client_id = src_cid;
 
+  -- ============================================================
+  -- 9. SEED TECH LOCATIONS (3 demo techs, Portland metro spread)
+  -- ============================================================
+  -- Hardcoded coords are stable markers so the Map tab always has pins.
+  -- Timestamps use now() so techs appear live on a fresh reset; they will
+  -- gray out ~15 min later. validate-demo-token can be wired to touch these
+  -- timestamps on each demo session start (see follow-up task).
+
+  SELECT id INTO mike_id  FROM technicians WHERE client_id = demo_cid AND name = 'Mike Rodriguez' LIMIT 1;
+  SELECT id INTO scott_id FROM technicians WHERE client_id = demo_cid AND name = 'Scott Russell'  LIMIT 1;
+  SELECT id INTO jake_id  FROM technicians WHERE client_id = demo_cid AND name = 'Jake Thompson'  LIMIT 1;
+
+  IF mike_id IS NOT NULL THEN
+    INSERT INTO tech_locations (technician_id, client_id, lat, lng, heading, speed_kmh, recorded_at, received_at)
+    VALUES (mike_id, demo_cid, 45.5230, -122.6780, 180, 0, now(), now());
+  END IF;
+  IF scott_id IS NOT NULL THEN
+    INSERT INTO tech_locations (technician_id, client_id, lat, lng, heading, speed_kmh, recorded_at, received_at)
+    VALUES (scott_id, demo_cid, 45.4870, -122.8040, 90, 0, now(), now());
+  END IF;
+  IF jake_id IS NOT NULL THEN
+    INSERT INTO tech_locations (technician_id, client_id, lat, lng, heading, speed_kmh, recorded_at, received_at)
+    VALUES (jake_id, demo_cid, 45.5000, -122.4300, 270, 0, now(), now());
+  END IF;
+
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$function$;

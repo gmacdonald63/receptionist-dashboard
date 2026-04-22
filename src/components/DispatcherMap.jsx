@@ -1,9 +1,22 @@
 // src/components/DispatcherMap.jsx
 import React, { useState, useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, CircleMarker } from 'react-leaflet';
+import { MapContainer, TileLayer, CircleMarker, useMap } from 'react-leaflet';
+import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';  // Scoped here only — do NOT import in main.jsx
 import { supabase } from '../supabaseClient';
 import { X, Users } from 'lucide-react';
+
+// Zooms the map to tightly fit all active tech pins whenever they change.
+// Leaflet would otherwise keep the MapContainer's initial center/zoom forever.
+const FitToTechs = ({ techLocations }) => {
+  const map = useMap();
+  useEffect(() => {
+    if (!techLocations?.length) return;
+    const bounds = L.latLngBounds(techLocations.map(l => [l.lat, l.lng]));
+    map.fitBounds(bounds, { padding: [40, 40], maxZoom: 13, animate: true });
+  }, [map, techLocations]);
+  return null;
+};
 
 const STADIA_URL = 'https://tiles.stadiamaps.com/tiles/osm_bright/{z}/{x}/{y}{r}.png';
 const STADIA_ATTR = '&copy; <a href="https://stadiamaps.com/">Stadia Maps</a>, &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors';
@@ -76,6 +89,7 @@ const DispatcherMap = ({ clientId, technicians, jobs }) => {
 
       <MapContainer center={[39.5, -98.35]} zoom={5} style={{ height: '100%', width: '100%' }} zoomControl={false}>
         <TileLayer url={STADIA_URL} attribution={STADIA_ATTR} />
+        <FitToTechs techLocations={techLocations} />
 
         {techLocations.map(loc => {
           const age = minsAgo(loc.received_at);

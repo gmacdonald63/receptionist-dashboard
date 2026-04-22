@@ -138,6 +138,9 @@ const App = () => {
           setDemoToken(token);
           setIsPublicDemo(true);
           setDemoMode(true);
+          // Route public demo through the single authenticated render path
+          // so it gets all 7 tabs (Team/Map) instead of the legacy 5-tab fork.
+          setRole('owner');
         }
       } catch (err) {
         console.error('Demo token validation failed:', err);

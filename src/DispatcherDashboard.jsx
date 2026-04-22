@@ -1653,16 +1653,8 @@ const DispatcherDashboard = ({
     );
   };
 
-  // Demo nav — unchanged (used by the isPublicDemo render block above)
-  const navItems = [
-    { id: 'appointments', label: 'Appointments', icon: Calendar },
-    { id: 'customers', label: 'Customers', icon: Users },
-    { id: 'calls', label: 'Calls', icon: Phone },
-    { id: 'billing', label: 'Billing', icon: DollarSign },
-    { id: 'settings', label: 'Settings', icon: Settings }
-  ];
-
-  // Authenticated nav — owner gets 6 tabs, dispatcher gets 4 tabs
+  // Nav — owner gets 7 tabs, dispatcher gets 5 tabs.
+  // Demo viewers are routed through the owner path (role='owner' set on token validation in App.jsx).
   const teamTab = { id: 'team', label: 'Team', icon: Users };
 
   const ownerNavItems = [
@@ -1685,67 +1677,9 @@ const DispatcherDashboard = ({
 
   const activeNavItems = role === 'dispatcher' ? dispatcherNavItems : ownerNavItems;
 
-  // Public demo mode — no login required
-  if (isPublicDemo && demoMode && demoClientData) {
-    return (
-      <div className="min-h-screen bg-gray-900 pb-20">
-        <DemoDashboard
-          demoClientData={demoClientData}
-          expiresAt={demoExpiresAt}
-          isPublicDemo={true}
-          demoToken={demoToken}
-          onExitDemo={onExitDemo}
-          onDataRefresh={handleDemoDataRefresh}
-        />
-
-        {/* Main Content */}
-        <main className="p-4 md:p-6">
-          {activeTab === 'appointments' && (
-            <AppointmentCalendar
-              appointments={appointments}
-              businessHours={businessHours}
-              technicians={technicians}
-              serviceTypes={serviceTypes}
-              currentWeekStart={currentWeekStart}
-              onWeekChange={setCurrentWeekStart}
-              onSaveAppointment={handleAddAppointment}
-              onRefresh={fetchData}
-              loading={loading}
-              clientId={effectiveClientData?.id}
-              headerLeft={<img src={logo} alt="Reliant Support" style={{ height: '26px', width: 'auto' }} />}
-            />
-          )}
-          {activeTab === 'customers' && (
-            <Customers
-              clientData={effectiveClientData}
-              appointments={appointments}
-              onReminderCountChange={setReminderCount}
-              headerLeft={<img src={logo} alt="Reliant Support" style={{ height: '26px', width: 'auto' }} />}
-            />
-          )}
-          {activeTab === 'calls' && renderCallLogs(
-            <img src={logo} alt="Reliant Support" style={{ height: '26px', width: 'auto' }} />
-          )}
-          {activeTab === 'billing' && (
-            <>
-              <div className="flex items-center mb-3">
-                <img src={logo} alt="Reliant Support" style={{ height: '26px', width: 'auto' }} />
-              </div>
-              {renderBilling()}
-            </>
-          )}
-          {activeTab === 'settings' && (
-            <>
-              <div className="flex items-center mb-3">
-                <img src={logo} alt="Reliant Support" style={{ height: '26px', width: 'auto' }} />
-              </div>
-              {renderSettings()}
-            </>
-          )}
-        </main>
-
-        {/* Stripe Billing Portal Demo Modal */}
-        {showBillingPortal && (() => {
+  // Stripe Billing Portal Demo Modal — rendered when demo users click "Manage Subscription".
+  // Returns JSX (or null) so we can include it in the single main return below.
+  const billingPortalModal = showBillingPortal && (() => {
           const now = new Date();
           const renewsDate = new Date(now);
           renewsDate.setMonth(renewsDate.getMonth() + 1);
@@ -1869,28 +1803,7 @@ const DispatcherDashboard = ({
               </div>
             </div>
           );
-        })()}
-
-        {/* Bottom Navigation */}
-        <nav className="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 z-30">
-          <div className="grid grid-cols-5 gap-1">
-            {navItems.map(item => (
-              <button
-                key={item.id}
-                onClick={() => setActiveTab(item.id)}
-                className={`flex flex-col items-center gap-1 py-3 ${
-                  activeTab === item.id ? 'text-blue-500' : 'text-gray-400'
-                }`}
-              >
-                <item.icon className="w-5 h-5" />
-                <span className="text-xs">{item.label}</span>
-              </button>
-            ))}
-          </div>
-        </nav>
-      </div>
-    );
-  }
+        })();
 
   // Subscription gate — admins and sales reps bypass, non-subscribers see only billing
   const isSubscriptionActive = clientData?.is_admin ||
@@ -1950,12 +1863,12 @@ const DispatcherDashboard = ({
       <InstallPrompt />
       <UpdatePrompt />
 
-      {/* Demo overlay for authenticated sales reps */}
-      {demoMode && !isPublicDemo && (
+      {/* Demo banner — shown for both public demo viewers and authenticated sales reps */}
+      {demoMode && (
         <DemoDashboard
           demoClientData={demoClientData}
           expiresAt={demoExpiresAt}
-          isPublicDemo={false}
+          isPublicDemo={isPublicDemo}
           demoToken={demoToken}
           onExitDemo={onExitDemo}
           onDataRefresh={handleDemoDataRefresh}
@@ -2096,7 +2009,7 @@ const DispatcherDashboard = ({
                 </button>
               </div>
             </div>
-            <TeamTab clientData={clientData} role={role} />
+            <TeamTab clientData={effectiveClientData} role={role} isPublicDemo={isPublicDemo} />
           </>
         )}
         {activeTab === 'map' && effectiveClientData?.id && (
@@ -2127,6 +2040,9 @@ const DispatcherDashboard = ({
           ))}
         </div>
       </nav>
+
+      {/* Stripe Billing Portal Demo Modal (rendered when demo users click "Manage Subscription") */}
+      {billingPortalModal}
     </div>
   );
 };
