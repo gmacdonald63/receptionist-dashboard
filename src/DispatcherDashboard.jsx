@@ -148,6 +148,10 @@ const DispatcherDashboard = ({
   const [settingsHoursForm, setSettingsHoursForm] = useState([]);
   const [savingHours, setSavingHours] = useState(false);
 
+  // Tax rate settings state (stored as decimal, edited as percent)
+  const [taxRateDisplay, setTaxRateDisplay] = useState('');
+  const [savingTaxRate, setSavingTaxRate] = useState(false);
+
   // Billing / Stripe state
   const [billingLoading, setBillingLoading] = useState(false);
   const [billingAction, setBillingAction] = useState(null); // 'checkout' | 'portal'
@@ -198,6 +202,12 @@ const DispatcherDashboard = ({
   }, [user, clientData, demoMode, demoClientData]);
 
   // Sync business hours settings form whenever businessHours data loads
+  // Seed tax rate display value from clientData (stored as decimal, shown as percent)
+  useEffect(() => {
+    const rate = effectiveClientData?.default_tax_rate ?? 0;
+    setTaxRateDisplay((Number(rate) * 100).toFixed(3));
+  }, [effectiveClientData?.id, effectiveClientData?.default_tax_rate]);
+
   useEffect(() => {
     const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const form = DAY_NAMES.map((name, dow) => {
@@ -305,6 +315,30 @@ const DispatcherDashboard = ({
       alert('Failed to save hours. Please try again.');
     } finally {
       setSavingHours(false);
+    }
+  };
+
+  const handleSaveTaxRate = async () => {
+    const cid = effectiveClientData?.id;
+    if (!cid) return;
+    const pct = Number(taxRateDisplay);
+    if (Number.isNaN(pct) || pct < 0 || pct >= 100) {
+      alert('Tax rate must be between 0 and 99.999%.');
+      return;
+    }
+    const decimal = Number((pct / 100).toFixed(5));
+    setSavingTaxRate(true);
+    try {
+      const { error } = await supabase
+        .from('clients')
+        .update({ default_tax_rate: decimal })
+        .eq('id', cid);
+      if (error) throw error;
+    } catch (err) {
+      console.error('Failed to save tax rate:', err);
+      alert('Failed to save tax rate. Please try again.');
+    } finally {
+      setSavingTaxRate(false);
     }
   };
 
@@ -1024,6 +1058,36 @@ const DispatcherDashboard = ({
           <SmsConfigForm clientData={effectiveClientData} />
         </div>
       )}
+
+      <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+        <h3 className="text-lg font-semibold mb-1 text-white">Invoicing &amp; Tax</h3>
+        <p className="text-gray-400 text-xs mb-4">
+          Default sales tax rate applied to taxable line items on estimates and invoices.
+          The taxable flag on each catalog item determines what gets taxed.
+        </p>
+        <div className="space-y-1 mb-4">
+          <label className="text-sm text-gray-300">Default sales tax rate</label>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min="0"
+              max="20"
+              step="0.001"
+              value={taxRateDisplay}
+              onChange={e => setTaxRateDisplay(e.target.value)}
+              className="w-24 px-2.5 py-1.5 bg-gray-750 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+            />
+            <span className="text-gray-400 text-sm">%</span>
+          </div>
+        </div>
+        <button
+          onClick={handleSaveTaxRate}
+          disabled={savingTaxRate}
+          className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+        >
+          {savingTaxRate ? 'Saving…' : 'Save Tax Rate'}
+        </button>
+      </div>
     </div>
   );
 
