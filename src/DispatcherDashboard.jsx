@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Phone, Calendar, FileText, Clock, DollarSign, Download, Play, Pause, Search, RefreshCw, ChevronRight, LogOut, Settings, Plus, X, Users, MapPin } from 'lucide-react';
+import { Phone, Calendar, FileText, Clock, DollarSign, Download, Play, Pause, Search, RefreshCw, ChevronRight, LogOut, Settings, Plus, X, Users, MapPin, Tag } from 'lucide-react';
 import { retellService } from './retellService';
 import { supabase } from './supabaseClient';
 import Customers from './Customers';
@@ -8,6 +8,7 @@ import TeamTab from './TeamTab';
 import InstallPrompt from './InstallPrompt';
 import UpdatePrompt from './UpdatePrompt';
 import AppointmentCalendar from './AppointmentCalendar';
+import PricingCatalog from './PricingCatalog';
 import DispatcherMap from './components/DispatcherMap.jsx';
 import logo from './assets/RELIANT SUPPORT LOGO.svg';
 
@@ -1415,6 +1416,7 @@ const DispatcherDashboard = ({
     { id: 'calls', label: 'Calls', icon: Phone },
     teamTab,
     { id: 'map', label: 'Map', icon: MapPin },
+    { id: 'pricing', label: 'Pricing', icon: Tag },
     { id: 'billing', label: 'Billing', icon: DollarSign },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
@@ -1786,6 +1788,24 @@ const DispatcherDashboard = ({
             </button>
           </div>
         )}
+        {activeTab === 'pricing' && role !== 'dispatcher' && (
+          <>
+            <div className="flex items-center justify-between mb-3">
+              <img src={logo} alt="Reliant Support" style={{ height: '26px', width: 'auto' }} />
+              <div className="flex items-center gap-1">
+                {clientData?.is_admin && (
+                  <button onClick={onShowAdmin} className="p-2 hover:bg-gray-700 rounded-lg" title="Admin Dashboard">
+                    <Settings className="w-5 h-5 text-gray-400" />
+                  </button>
+                )}
+                <button onClick={onLogout} className="p-2 hover:bg-gray-700 rounded-lg" title="Sign out">
+                  <LogOut className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+            </div>
+            <PricingCatalog clientId={clientData?.id} />
+          </>
+        )}
         {activeTab === 'billing' && role !== 'dispatcher' && (
           <>
             <div className="flex items-center justify-between mb-3">
@@ -1853,7 +1873,7 @@ const DispatcherDashboard = ({
 
       {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 z-30">
-        <div className={`grid gap-1 ${role === 'dispatcher' ? 'grid-cols-5' : 'grid-cols-7'}`}>
+        <div className={`grid gap-1 ${role === 'dispatcher' ? 'grid-cols-5' : 'grid-cols-8'}`}>
           {activeNavItems.map(item => (
             <button
               key={item.id}
