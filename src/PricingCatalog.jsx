@@ -21,6 +21,10 @@ export default function PricingCatalog({ clientId }) {
   const [formError, setFormError] = useState(null)
   const [saving, setSaving] = useState(false)
 
+  // CSV import state
+  const [importPreview, setImportPreview] = useState(null)
+  const [importing, setImporting] = useState(false)
+
   // Service types for the optional link dropdown
   const [serviceTypes, setServiceTypes] = useState([])
   useEffect(() => {
@@ -97,6 +101,64 @@ export default function PricingCatalog({ clientId }) {
     setItems(prev => prev.filter(it => it.id !== item.id))
   }
 
+  async function handleExport() {
+    const Papa = (await import('papaparse')).default
+    const rows = visibleItems.map(it => ({
+      name: it.name,
+      description: it.description || '',
+      category: it.category || '',
+      unit_type: it.unit_type,
+      unit_price: it.unit_price,
+      taxable: it.taxable ? 'true' : 'false',
+      tier: it.tier || '',
+      tier_group: it.tier_group || '',
+      is_active: it.is_active ? 'true' : 'false',
+      sort_order: it.sort_order,
+    }))
+    const csv = Papa.unparse(rows)
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    const today = new Date().toISOString().slice(0, 10)
+    a.download = `pricing-catalog-${today}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  async function handleImportFile(file) {
+    if (!file) return
+    const Papa = (await import('papaparse')).default
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      transformHeader: h => h.trim(),
+      complete: ({ data }) => {
+        const rows = data.map(raw => parseCsvRow(raw))
+        const validCount = rows.filter(r => r.errors.length === 0).length
+        setImportPreview({ rows, validCount, invalidCount: rows.length - validCount })
+      },
+      error: (err) => alert(`Failed to parse CSV: ${err.message}`),
+    })
+  }
+
+  async function commitImport() {
+    if (!importPreview) return
+    const validRows = importPreview.rows.filter(r => r.errors.length === 0).map(r => ({ ...r.parsed, client_id: clientId }))
+    if (validRows.length === 0) { alert('No valid rows to import.'); return }
+    setImporting(true)
+    const { data, error } = await supabase.from('pricing_catalog').insert(validRows).select()
+    setImporting(false)
+    if (error) {
+      alert(`Import failed: ${error.message}`)
+      return
+    }
+    setItems(prev => [...prev, ...(data || [])])
+    setImportPreview(null)
+  }
+
   if (loading) {
     return <div className="p-6 text-gray-400">Loading pricing catalog…</div>
   }
@@ -122,17 +184,19 @@ export default function PricingCatalog({ clientId }) {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            disabled
-            title="Coming in Chunk 4"
-            className="flex items-center gap-2 px-3 py-2 bg-gray-700 text-gray-300 rounded-lg opacity-60 cursor-not-allowed"
-          >
+          <label className="flex items-center gap-2 px-3 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 cursor-pointer">
             <Upload className="w-4 h-4" /> Import CSV
-          </button>
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              onChange={e => { handleImportFile(e.target.files[0]); e.target.value = '' }}
+              className="hidden"
+            />
+          </label>
           <button
-            disabled
-            title="Coming in Chunk 4"
-            className="flex items-center gap-2 px-3 py-2 bg-gray-700 text-gray-300 rounded-lg opacity-60 cursor-not-allowed"
+            onClick={handleExport}
+            disabled={visibleItems.length === 0}
+            className="flex items-center gap-2 px-3 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Download className="w-4 h-4" /> Export
           </button>
@@ -186,6 +250,16 @@ export default function PricingCatalog({ clientId }) {
           items={visibleItems}
           onEdit={(item) => { setEditingItem(item); setFormError(null); setShowForm(true) }}
           onDelete={handleDelete}
+        />
+      )}
+
+      {/* Import preview modal */}
+      {importPreview && (
+        <ImportPreviewModal
+          preview={importPreview}
+          importing={importing}
+          onCommit={commitImport}
+          onCancel={() => setImportPreview(null)}
         />
       )}
 
@@ -446,6 +520,106 @@ function CatalogItemForm({ item, serviceTypes, clientId, onSaved, onCancel, erro
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  )
+}
+
+function parseCsvRow(raw) {
+  const errors = []
+  const name = String(raw.name || '').trim()
+  if (!name) errors.push('name required')
+  const unit_type = String(raw.unit_type || 'each').trim() || 'each'
+  const priceStr = String(raw.unit_price || '0').trim()
+  const unit_price = Number(priceStr)
+  if (Number.isNaN(unit_price) || unit_price < 0) errors.push('unit_price invalid')
+  const taxable = parseBool(raw.taxable, true)
+  const is_active = parseBool(raw.is_active, true)
+  const sort_order = Number(raw.sort_order) || 0
+
+  if (errors.length) return { raw, parsed: null, errors }
+  return {
+    raw,
+    parsed: {
+      name,
+      description: String(raw.description || '').trim() || null,
+      category: String(raw.category || '').trim() || null,
+      unit_type,
+      unit_price,
+      taxable,
+      tier: String(raw.tier || '').trim() || null,
+      tier_group: String(raw.tier_group || '').trim() || null,
+      is_active,
+      sort_order,
+    },
+    errors: [],
+  }
+}
+
+function parseBool(value, defaultVal) {
+  if (value === undefined || value === null || value === '') return defaultVal
+  const s = String(value).trim().toLowerCase()
+  if (['true', 't', 'yes', 'y', '1'].includes(s)) return true
+  if (['false', 'f', 'no', 'n', '0'].includes(s)) return false
+  return defaultVal
+}
+
+function ImportPreviewModal({ preview, importing, onCommit, onCancel }) {
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-gray-800 rounded-lg border border-gray-700 p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+        <h3 className="text-xl font-bold text-white mb-2">Import preview</h3>
+        <p className="text-sm text-gray-400 mb-4">
+          {preview.validCount} valid {preview.validCount === 1 ? 'row' : 'rows'},{' '}
+          <span className={preview.invalidCount > 0 ? 'text-red-400' : 'text-gray-500'}>
+            {preview.invalidCount} invalid
+          </span>
+          . Only valid rows will be imported.
+        </p>
+
+        <div className="overflow-x-auto rounded border border-gray-700 mb-4 max-h-[50vh]">
+          <table className="min-w-full text-xs">
+            <thead className="bg-gray-900 text-gray-300 uppercase sticky top-0">
+              <tr>
+                <th className="px-2 py-2 text-left">Status</th>
+                <th className="px-2 py-2 text-left">Name</th>
+                <th className="px-2 py-2 text-left">Category</th>
+                <th className="px-2 py-2 text-left">Unit</th>
+                <th className="px-2 py-2 text-right">Price</th>
+                <th className="px-2 py-2 text-left">Issues</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-700 bg-gray-900/40">
+              {preview.rows.map((r, i) => (
+                <tr key={i}>
+                  <td className="px-2 py-1.5">
+                    {r.errors.length === 0
+                      ? <span className="text-green-400">✓</span>
+                      : <span className="text-red-400">✗</span>}
+                  </td>
+                  <td className="px-2 py-1.5 text-gray-200">{r.raw.name || <span className="text-red-400 italic">(missing)</span>}</td>
+                  <td className="px-2 py-1.5 text-gray-300">{r.raw.category || ''}</td>
+                  <td className="px-2 py-1.5 text-gray-300">{r.raw.unit_type || ''}</td>
+                  <td className="px-2 py-1.5 text-right text-gray-300 tabular-nums">{r.raw.unit_price || ''}</td>
+                  <td className="px-2 py-1.5 text-red-400">{r.errors.join('; ')}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-700">
+          <button onClick={onCancel} disabled={importing} className="px-4 py-2 text-gray-300 hover:text-white">
+            Cancel
+          </button>
+          <button
+            onClick={onCommit}
+            disabled={importing || preview.validCount === 0}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-60"
+          >
+            {importing ? 'Importing…' : `Import ${preview.validCount} ${preview.validCount === 1 ? 'row' : 'rows'}`}
+          </button>
+        </div>
       </div>
     </div>
   )
