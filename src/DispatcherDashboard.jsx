@@ -152,6 +152,29 @@ const DispatcherDashboard = ({
   const [taxRateDisplay, setTaxRateDisplay] = useState('');
   const [savingTaxRate, setSavingTaxRate] = useState(false);
 
+  // Greeting message state
+  const [greetingMessage, setGreetingMessage] = useState('');
+  const [savingGreeting, setSavingGreeting] = useState(false);
+  const [savedGreeting, setSavedGreeting] = useState(false);
+  const [greetingError, setGreetingError] = useState(null);
+
+  // Voice selection state
+  const VOICE_OPTIONS = [
+    { id: '11labs-Kate', label: 'Female', name: 'Kate' },
+    { id: '11labs-Jason', label: 'Male', name: 'Jason' },
+  ];
+  const [selectedVoice, setSelectedVoice] = useState('11labs-Kate');
+  const [savingVoice, setSavingVoice] = useState(false);
+  const [savedVoice, setSavedVoice] = useState(false);
+  const [voiceError, setVoiceError] = useState(null);
+
+  // Review request state
+  const [reviewUrl, setReviewUrl] = useState('');
+  const [reviewMode, setReviewMode] = useState('manual');
+  const [savingReview, setSavingReview] = useState(false);
+  const [savedReview, setSavedReview] = useState(false);
+  const [reviewSaveError, setReviewSaveError] = useState(null);
+
   // Billing / Stripe state
   const [billingLoading, setBillingLoading] = useState(false);
   const [billingAction, setBillingAction] = useState(null); // 'checkout' | 'portal'
@@ -223,6 +246,54 @@ const DispatcherDashboard = ({
     setSettingsHoursForm(form);
   }, [businessHours]);
 
+  // Load current greeting and voice from Retell when agent ID is available (skip in demo mode)
+  useEffect(() => {
+    const agentId = effectiveClientData?.retell_agent_id;
+    if (!agentId || demoMode) return;
+    retellService.getAgent(agentId).then(agent => {
+      if (agent?.begin_message != null) setGreetingMessage(agent.begin_message);
+      if (agent?.voice_id) setSelectedVoice(agent.voice_id);
+    });
+  }, [effectiveClientData?.retell_agent_id, demoMode]);
+
+  // Sync review request settings from client data
+  useEffect(() => {
+    setReviewUrl(effectiveClientData?.google_review_url || '');
+    setReviewMode(effectiveClientData?.review_request_mode || 'manual');
+  }, [effectiveClientData?.id]);
+
+  const handleSaveGreeting = async () => {
+    const agentId = effectiveClientData?.retell_agent_id;
+    if (!agentId) return;
+    setSavingGreeting(true);
+    setGreetingError(null);
+    try {
+      await retellService.updateAgentGreeting(agentId, greetingMessage);
+      setSavedGreeting(true);
+      setTimeout(() => setSavedGreeting(false), 3000);
+    } catch (err) {
+      setGreetingError('Failed to save. Please try again.');
+    } finally {
+      setSavingGreeting(false);
+    }
+  };
+
+  const handleSaveVoice = async () => {
+    const agentId = effectiveClientData?.retell_agent_id;
+    if (!agentId) return;
+    setSavingVoice(true);
+    setVoiceError(null);
+    try {
+      await retellService.updateAgent(agentId, { voice_id: selectedVoice });
+      setSavedVoice(true);
+      setTimeout(() => setSavedVoice(false), 3000);
+    } catch (err) {
+      setVoiceError('Failed to save. Please try again.');
+    } finally {
+      setSavingVoice(false);
+    }
+  };
+
   const handleDemoDataRefresh = () => {
     fetchData();
   };
@@ -271,6 +342,7 @@ const DispatcherDashboard = ({
           source: apt.source, // 'ai' or 'manual'
           technician_id: apt.technician_id || null,
           service_type: apt.service_type || null,
+          review_sms_sent_at: apt.review_sms_sent_at || null,
         })));
       }
     } catch (err) {
@@ -298,6 +370,7 @@ const DispatcherDashboard = ({
     if (!cid) return;
     setSavingHours(true);
     try {
+      // 1. Save to Supabase (used by check-availability and book-appointment Edge Functions)
       const rows = settingsHoursForm.map(h => ({
         client_id: cid,
         day_of_week: h.day_of_week,
@@ -310,6 +383,26 @@ const DispatcherDashboard = ({
         .upsert(rows, { onConflict: 'client_id,day_of_week' });
       if (error) throw error;
       await fetchBusinessHours();
+
+      // 2. Update the Retell LLM prompt so the AI knows the hours conversationally
+      const agentId = effectiveClientData?.retell_agent_id;
+      if (agentId && !demoMode) {
+        const agent = await retellService.getAgent(agentId);
+        const llmId = agent?.response_engine?.llm_id;
+        if (llmId) {
+          const llm = await retellService.getLLM(llmId);
+          if (llm?.general_prompt) {
+            const newHoursBlock = buildHoursTextForPrompt(settingsHoursForm);
+            const updatedPrompt = llm.general_prompt.replace(
+              /## BUSINESS HOURS\n[\s\S]*?\n## SERVICE AREA/,
+              `## BUSINESS HOURS\n${newHoursBlock}\n\n## SERVICE AREA`
+            );
+            if (updatedPrompt !== llm.general_prompt) {
+              await retellService.updateLLM(llmId, { general_prompt: updatedPrompt });
+            }
+          }
+        }
+      }
     } catch (err) {
       console.error('Failed to save business hours:', err);
       alert('Failed to save hours. Please try again.');
@@ -340,6 +433,68 @@ const DispatcherDashboard = ({
     } finally {
       setSavingTaxRate(false);
     }
+  };
+
+  const handleSaveReview = async () => {
+    const cid = effectiveClientData?.id;
+    if (!cid) return;
+    setSavingReview(true);
+    setReviewSaveError(null);
+    const { error } = await supabase.from('clients').update({
+      google_review_url: reviewUrl.trim() || null,
+      review_request_mode: reviewMode,
+    }).eq('id', cid);
+    setSavingReview(false);
+    if (!error) {
+      setSavedReview(true);
+      setTimeout(() => setSavedReview(false), 3000);
+      if (onSetClientData) onSetClientData({ ...clientData, google_review_url: reviewUrl.trim() || null, review_request_mode: reviewMode });
+    } else {
+      setReviewSaveError('Save failed. Please try again.');
+    }
+  };
+
+  const handleSendReviewRequest = async (apt) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return { error: 'Not authenticated' };
+    const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InptcHBkbWZkaGtubnd6d2RmaHdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk4MzQyMDYsImV4cCI6MjA4NTQxMDIwNn0.mXfuz8mEZhizFen78gUaakBDbrzANn4ZM1a7KuDiKJs';
+    const res = await fetch(`${SUPABASE_FUNCTIONS_URL}/send-review-sms`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': ANON_KEY,
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ appointment_id: apt.id, source: 'manual' }),
+    });
+    const result = await res.json();
+    if (result.ok && !result.skipped) {
+      setAppointments(prev => prev.map(a =>
+        a.id === apt.id ? { ...a, review_sms_sent_at: new Date().toISOString() } : a
+      ));
+    }
+    return result;
+  };
+
+  // Format "08:00" → "8 AM", "18:30" → "6:30 PM"
+  const formatTimeForPrompt = (time24) => {
+    const [h, m] = time24.split(':').map(Number);
+    const period = h >= 12 ? 'PM' : 'AM';
+    const h12 = h % 12 || 12;
+    return m === 0 ? `${h12} ${period}` : `${h12}:${String(m).padStart(2, '0')} ${period}`;
+  };
+
+  // Build the ## BUSINESS HOURS block text from the settings form
+  const buildHoursTextForPrompt = (hoursForm) => {
+    const lines = hoursForm.map(day => {
+      if (!day.is_open) {
+        const isWeekend = day.day_of_week === 0 || day.day_of_week === 6;
+        return `${day.name}: ${isWeekend ? 'Closed - Emergency calls only' : 'Closed'}`;
+      }
+      return `${day.name}: ${formatTimeForPrompt(day.open_time)} – ${formatTimeForPrompt(day.close_time)}`;
+    });
+    lines.push('Emergency Service: Available 24/7');
+    return lines.join('\n');
   };
 
   const fetchTechnicians = async () => {
@@ -975,14 +1130,54 @@ const DispatcherDashboard = ({
     <div className="space-y-4">
       <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
         <h3 className="text-lg font-semibold mb-4 text-white">Greeting Message</h3>
+        <p className="text-xs text-gray-400 mb-3">This is the first thing your AI receptionist says when it answers the phone.</p>
         <textarea
           className="w-full h-32 p-3 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 text-sm"
-          placeholder="Enter your custom greeting message..."
-          defaultValue="Thank you for calling ABC Medical Services. How may I help you today?"
+          placeholder="e.g. Thank you for calling. How can I help you today?"
+          value={greetingMessage}
+          onChange={e => setGreetingMessage(e.target.value)}
+          disabled={demoMode}
         />
-        <button className="mt-3 w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-          Save Changes
+        {greetingError && <p className="text-red-400 text-xs mt-1">{greetingError}</p>}
+        <button
+          onClick={handleSaveGreeting}
+          disabled={savingGreeting || demoMode}
+          className="mt-3 w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+        >
+          {savingGreeting ? 'Saving...' : savedGreeting ? 'Saved!' : 'Save Changes'}
         </button>
+        {demoMode && <p className="text-yellow-500 text-xs mt-2 text-center">Greeting changes are disabled in demo mode.</p>}
+      </div>
+
+      <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+        <h3 className="text-lg font-semibold mb-1 text-white">Receptionist Voice</h3>
+        <p className="text-xs text-gray-400 mb-4">Choose the voice your AI receptionist uses on calls.</p>
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          {VOICE_OPTIONS.map(v => (
+            <button
+              key={v.id}
+              onClick={() => !demoMode && setSelectedVoice(v.id)}
+              disabled={demoMode}
+              className={`p-4 rounded-lg border-2 text-left transition-colors ${
+                selectedVoice === v.id
+                  ? 'border-blue-500 bg-blue-900/30'
+                  : 'border-gray-600 bg-gray-750 hover:border-gray-500'
+              } disabled:opacity-50`}
+            >
+              <p className="text-white font-medium">{v.label}</p>
+              <p className="text-gray-400 text-sm">{v.name}</p>
+            </button>
+          ))}
+        </div>
+        {voiceError && <p className="text-red-400 text-xs mb-2">{voiceError}</p>}
+        <button
+          onClick={handleSaveVoice}
+          disabled={savingVoice || demoMode}
+          className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+        >
+          {savingVoice ? 'Saving...' : savedVoice ? 'Saved!' : 'Save Voice'}
+        </button>
+        {demoMode && <p className="text-yellow-500 text-xs mt-2 text-center">Voice changes are disabled in demo mode.</p>}
       </div>
 
       <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
@@ -1087,6 +1282,67 @@ const DispatcherDashboard = ({
         >
           {savingTaxRate ? 'Saving…' : 'Save Tax Rate'}
         </button>
+      </div>
+
+      <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+        <h3 className="text-lg font-semibold mb-1 text-white">Review Requests</h3>
+        <p className="text-xs text-gray-400 mb-4">
+          Send customers a text message asking for a Google review after their job is complete. Leave the URL blank to disable.
+        </p>
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-gray-400 block mb-1">Google Review URL</label>
+            <input
+              type="url"
+              value={reviewUrl}
+              onChange={e => setReviewUrl(e.target.value)}
+              placeholder="https://g.page/r/your-business/review"
+              className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm border border-gray-600 focus:border-blue-500 outline-none"
+            />
+          </div>
+
+          {reviewUrl.trim() && (
+            <div>
+              <label className="text-xs text-gray-400 block mb-2">Send Mode</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setReviewMode('manual')}
+                  className={`py-2.5 rounded-lg border-2 text-sm font-medium transition-colors ${
+                    reviewMode === 'manual'
+                      ? 'border-blue-500 bg-blue-900/30 text-white'
+                      : 'border-gray-600 bg-gray-750 text-gray-400 hover:border-gray-500'
+                  }`}
+                >
+                  Manual
+                </button>
+                <button
+                  onClick={() => setReviewMode('auto')}
+                  className={`py-2.5 rounded-lg border-2 text-sm font-medium transition-colors ${
+                    reviewMode === 'auto'
+                      ? 'border-blue-500 bg-blue-900/30 text-white'
+                      : 'border-gray-600 bg-gray-750 text-gray-400 hover:border-gray-500'
+                  }`}
+                >
+                  Automatic
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                {reviewMode === 'auto'
+                  ? 'SMS sent automatically when a tech marks a job complete.'
+                  : 'A badge appears on completed appointments — click to send when ready.'}
+              </p>
+            </div>
+          )}
+
+          {reviewSaveError && <p className="text-red-400 text-xs">{reviewSaveError}</p>}
+          <button
+            onClick={handleSaveReview}
+            disabled={savingReview}
+            className="w-full py-3 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+          >
+            {savingReview ? 'Saving...' : savedReview ? 'Saved!' : 'Save Review Settings'}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -1462,16 +1718,8 @@ const DispatcherDashboard = ({
     );
   };
 
-  // Demo nav — unchanged (used by the isPublicDemo render block above)
-  const navItems = [
-    { id: 'appointments', label: 'Appointments', icon: Calendar },
-    { id: 'customers', label: 'Customers', icon: Users },
-    { id: 'calls', label: 'Calls', icon: Phone },
-    { id: 'billing', label: 'Billing', icon: DollarSign },
-    { id: 'settings', label: 'Settings', icon: Settings }
-  ];
-
-  // Authenticated nav — owner gets 6 tabs, dispatcher gets 4 tabs
+  // Nav — owner gets 7 tabs, dispatcher gets 5 tabs.
+  // Demo viewers are routed through the owner path (role='owner' set on token validation in App.jsx).
   const teamTab = { id: 'team', label: 'Team', icon: Users };
 
   const ownerNavItems = [
@@ -1495,67 +1743,9 @@ const DispatcherDashboard = ({
 
   const activeNavItems = role === 'dispatcher' ? dispatcherNavItems : ownerNavItems;
 
-  // Public demo mode — no login required
-  if (isPublicDemo && demoMode && demoClientData) {
-    return (
-      <div className="min-h-screen bg-gray-900 pb-20">
-        <DemoDashboard
-          demoClientData={demoClientData}
-          expiresAt={demoExpiresAt}
-          isPublicDemo={true}
-          demoToken={demoToken}
-          onExitDemo={onExitDemo}
-          onDataRefresh={handleDemoDataRefresh}
-        />
-
-        {/* Main Content */}
-        <main className="p-4 md:p-6">
-          {activeTab === 'appointments' && (
-            <AppointmentCalendar
-              appointments={appointments}
-              businessHours={businessHours}
-              technicians={technicians}
-              serviceTypes={serviceTypes}
-              currentWeekStart={currentWeekStart}
-              onWeekChange={setCurrentWeekStart}
-              onSaveAppointment={handleAddAppointment}
-              onRefresh={fetchData}
-              loading={loading}
-              clientId={effectiveClientData?.id}
-              headerLeft={<img src={logo} alt="Reliant Support" style={{ height: '26px', width: 'auto' }} />}
-            />
-          )}
-          {activeTab === 'customers' && (
-            <Customers
-              clientData={effectiveClientData}
-              appointments={appointments}
-              onReminderCountChange={setReminderCount}
-              headerLeft={<img src={logo} alt="Reliant Support" style={{ height: '26px', width: 'auto' }} />}
-            />
-          )}
-          {activeTab === 'calls' && renderCallLogs(
-            <img src={logo} alt="Reliant Support" style={{ height: '26px', width: 'auto' }} />
-          )}
-          {activeTab === 'billing' && (
-            <>
-              <div className="flex items-center mb-3">
-                <img src={logo} alt="Reliant Support" style={{ height: '26px', width: 'auto' }} />
-              </div>
-              {renderBilling()}
-            </>
-          )}
-          {activeTab === 'settings' && (
-            <>
-              <div className="flex items-center mb-3">
-                <img src={logo} alt="Reliant Support" style={{ height: '26px', width: 'auto' }} />
-              </div>
-              {renderSettings()}
-            </>
-          )}
-        </main>
-
-        {/* Stripe Billing Portal Demo Modal */}
-        {showBillingPortal && (() => {
+  // Stripe Billing Portal Demo Modal — rendered when demo users click "Manage Subscription".
+  // Returns JSX (or null) so we can include it in the single main return below.
+  const billingPortalModal = showBillingPortal && (() => {
           const now = new Date();
           const renewsDate = new Date(now);
           renewsDate.setMonth(renewsDate.getMonth() + 1);
@@ -1679,28 +1869,7 @@ const DispatcherDashboard = ({
               </div>
             </div>
           );
-        })()}
-
-        {/* Bottom Navigation */}
-        <nav className="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 z-30">
-          <div className="grid grid-cols-5 gap-1">
-            {navItems.map(item => (
-              <button
-                key={item.id}
-                onClick={() => setActiveTab(item.id)}
-                className={`flex flex-col items-center gap-1 py-3 ${
-                  activeTab === item.id ? 'text-blue-500' : 'text-gray-400'
-                }`}
-              >
-                <item.icon className="w-5 h-5" />
-                <span className="text-xs">{item.label}</span>
-              </button>
-            ))}
-          </div>
-        </nav>
-      </div>
-    );
-  }
+        })();
 
   // Subscription gate — admins and sales reps bypass, non-subscribers see only billing
   const isSubscriptionActive = clientData?.is_admin ||
@@ -1760,12 +1929,12 @@ const DispatcherDashboard = ({
       <InstallPrompt />
       <UpdatePrompt />
 
-      {/* Demo overlay for authenticated sales reps */}
-      {demoMode && !isPublicDemo && (
+      {/* Demo banner — shown for both public demo viewers and authenticated sales reps */}
+      {demoMode && (
         <DemoDashboard
           demoClientData={demoClientData}
           expiresAt={demoExpiresAt}
-          isPublicDemo={false}
+          isPublicDemo={isPublicDemo}
           demoToken={demoToken}
           onExitDemo={onExitDemo}
           onDataRefresh={handleDemoDataRefresh}
@@ -1804,6 +1973,9 @@ const DispatcherDashboard = ({
             onRefresh={fetchData}
             loading={loading}
             clientId={effectiveClientData?.id}
+            reviewEnabled={!!(effectiveClientData?.google_review_url)}
+            reviewMode={effectiveClientData?.review_request_mode || 'manual'}
+            onSendReviewRequest={handleSendReviewRequest}
             headerLeft={<img src={logo} alt="Reliant Support" style={{ height: '26px', width: 'auto' }} />}
             headerRight={
               <div className="flex items-center gap-1">
@@ -1921,7 +2093,7 @@ const DispatcherDashboard = ({
                 </button>
               </div>
             </div>
-            <TeamTab clientData={clientData} role={role} />
+            <TeamTab clientData={effectiveClientData} role={role} isPublicDemo={isPublicDemo} />
           </>
         )}
         {activeTab === 'map' && effectiveClientData?.id && (
@@ -1952,6 +2124,9 @@ const DispatcherDashboard = ({
           ))}
         </div>
       </nav>
+
+      {/* Stripe Billing Portal Demo Modal (rendered when demo users click "Manage Subscription") */}
+      {billingPortalModal}
     </div>
   );
 };

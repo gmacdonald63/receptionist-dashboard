@@ -54,6 +54,77 @@ export const retellService = {
     }
   },
 
+  // Get Retell LLM config (includes general_prompt)
+  async getLLM(llmId) {
+    try {
+      const response = await fetch(`https://api.retellai.com/get-retell-llm/${llmId}`, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${RETELL_API_KEY}` }
+      });
+      if (!response.ok) throw new Error(`API Error: ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching LLM:', error);
+      return null;
+    }
+  },
+
+  // Patch Retell LLM with updated fields
+  async updateLLM(llmId, updates) {
+    const response = await fetch(`https://api.retellai.com/update-retell-llm/${llmId}`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${RETELL_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(updates)
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`API Error: ${response.status} - ${text}`);
+    }
+    return await response.json();
+  },
+
+  // Get agent config (includes begin_message / greeting)
+  async getAgent(agentId) {
+    try {
+      const response = await fetch(`${RETELL_API_BASE}/get-agent/${agentId}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${RETELL_API_KEY}`,
+        }
+      });
+      if (!response.ok) throw new Error(`API Error: ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching agent:', error);
+      return null;
+    }
+  },
+
+  // Update the agent's greeting (begin_message)
+  async updateAgentGreeting(agentId, beginMessage) {
+    return this.updateAgent(agentId, { begin_message: beginMessage });
+  },
+
+  // Update any agent fields (voice_id, begin_message, etc.)
+  async updateAgent(agentId, updates) {
+    const response = await fetch(`${RETELL_API_BASE}/update-agent/${agentId}`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${RETELL_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(updates)
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`API Error: ${response.status} - ${text}`);
+    }
+    return await response.json();
+  },
+
   // Get a specific call by ID
   async getCall(callId) {
     try {

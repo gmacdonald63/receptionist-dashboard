@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { X, Clock, MapPin, Phone, Wrench, FileText, Pencil } from 'lucide-react';
+import { X, Clock, MapPin, Phone, Wrench, FileText, Pencil, Star } from 'lucide-react';
+import TimePickerDropdown from './TimePickerDropdown';
 
 function formatPhone(value) {
   const digits = value.replace(/\D/g, '').slice(0, 10);
@@ -45,6 +46,9 @@ export default function AppointmentSidePanel({
   onSave,
   onClose,
   isMobile,
+  reviewEnabled,
+  reviewMode,
+  onSendReviewRequest,
 }) {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -57,12 +61,14 @@ export default function AppointmentSidePanel({
   const [serviceType, setServiceType] = useState('');
   const [duration, setDuration] = useState(60);
   const [notes, setNotes] = useState('');
-  const [showCustomTime, setShowCustomTime] = useState(false);
   const [customTime, setCustomTime] = useState(selectedSlot?.time || '');
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({});
   const [saveError, setSaveError] = useState('');
   const [isEditing, setIsEditing] = useState(false);
+  const [sendingReview, setSendingReview] = useState(false);
+  const [reviewSent, setReviewSent] = useState(false);
+  const [reviewError, setReviewError] = useState('');
 
   // Group service types by category for the dropdown
   const groupedServiceTypes = React.useMemo(() => {
@@ -81,7 +87,7 @@ export default function AppointmentSidePanel({
     ? { date: appointment.date, time: appointment.start_time || appointment.time }
     : null;
   const effectiveSlot = isEditing ? editSlot : selectedSlot;
-  const effectiveTime = showCustomTime && customTime ? customTime : effectiveSlot?.time;
+  const effectiveTime = customTime || effectiveSlot?.time;
 
   const handleClose = useCallback(() => {
     setIsEditing(false);
@@ -94,13 +100,18 @@ export default function AppointmentSidePanel({
     if (mode === 'add') { setIsEditing(false); setSaveError(''); }
   }, [mode]);
 
+  // Reset review state when a different appointment is opened
+  useEffect(() => {
+    setReviewSent(false);
+    setReviewError('');
+  }, [appointment?.id]);
+
   // Reset form when a new slot is clicked in add mode
   useEffect(() => {
     if (mode === 'add' && selectedSlot) {
       setFirstName(''); setLastName(''); setPhone('');
       setAddress(''); setCity(''); setState(''); setZip('');
       setNotes(''); setErrors({}); setSaveError('');
-      setShowCustomTime(false);
       setCustomTime(selectedSlot.time || '');
       setTechnicianId(defaultTechnicianId ? String(defaultTechnicianId) : 'auto');
       setServiceType('');
@@ -135,7 +146,6 @@ export default function AppointmentSidePanel({
     setServiceType(appointment.service_type || '');
     setDuration(appointment.duration || 60);
     setNotes(appointment.notes || appointment.summary || '');
-    setShowCustomTime(false);
     setCustomTime((appointment.start_time || appointment.time) || '');
     setErrors({}); setSaveError('');
     setIsEditing(true);
@@ -207,30 +217,10 @@ export default function AppointmentSidePanel({
                 <Clock size={11} />
                 {formatDateDisplay(effectiveSlot.date)}
               </span>
-              <span className="inline-flex items-center px-2.5 py-1 bg-blue-500/15 text-blue-400 rounded-lg text-xs font-medium">
-                {effectiveTime ? formatTime12(effectiveTime) : '—'}
-              </span>
-              {!showCustomTime && (
-                <button type="button" onClick={() => setShowCustomTime(true)}
-                  className="text-[11px] text-gray-500 hover:text-gray-400 transition-colors">
-                  change time
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* Custom time — inline when toggled */}
-          {showCustomTime && (
-            <div className="flex items-center gap-2">
-              <input type="time" value={customTime}
-                onChange={e => setCustomTime(e.target.value)}
-                className="flex-1 px-2.5 py-1.5 bg-gray-750 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+              <TimePickerDropdown
+                value={effectiveTime || ''}
+                onChange={setCustomTime}
               />
-              <button type="button"
-                onClick={() => { setShowCustomTime(false); setCustomTime(effectiveSlot?.time || ''); }}
-                className="text-xs text-gray-500 hover:text-gray-400">
-                reset
-              </button>
             </div>
           )}
 
@@ -446,6 +436,45 @@ export default function AppointmentSidePanel({
             </div>
           )}
         </div>
+
+        {/* Review request footer */}
+        {reviewEnabled && appointment.status === 'complete' && (
+          <div className="px-4 pb-2.5">
+            {appointment.review_sms_sent_at || reviewSent ? (
+              <div className="flex items-center justify-center gap-2 py-2 rounded-lg bg-green-900/30 text-green-400 text-sm">
+                <Star size={13} className="fill-green-400" />
+                Review request sent
+              </div>
+            ) : reviewMode === 'auto' ? (
+              <div className="flex items-center justify-center gap-2 py-2 rounded-lg bg-gray-750 text-gray-400 text-sm">
+                <Star size={13} />
+                Review SMS sent automatically
+              </div>
+            ) : (
+              <div>
+                <button
+                  onClick={async () => {
+                    setSendingReview(true);
+                    setReviewError('');
+                    const result = await onSendReviewRequest(appointment);
+                    setSendingReview(false);
+                    if (result?.ok && !result?.skipped) {
+                      setReviewSent(true);
+                    } else if (result?.error) {
+                      setReviewError(result.error);
+                    }
+                  }}
+                  disabled={sendingReview}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                >
+                  <Star size={13} />
+                  {sendingReview ? 'Sending...' : 'Send Review Request'}
+                </button>
+                {reviewError && <p className="text-red-400 text-xs mt-1 text-center">{reviewError}</p>}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Edit footer */}
         <div className="px-4 py-2.5 border-t border-gray-700">
