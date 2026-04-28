@@ -545,6 +545,7 @@ export default function EstimateBuilder({
   // Load existing estimate if estimateId provided
   useEffect(() => {
     if (!estimateId) return
+    let cancelled = false
     setLoading(true)
     Promise.all([
       supabase
@@ -563,6 +564,15 @@ export default function EstimateBuilder({
         .eq('estimate_id', estimateId)
         .order('sort_order'),
     ]).then(([estRes, optRes, lineRes]) => {
+      if (cancelled) return
+      if (estRes.error) {
+        setError('Failed to load estimate.')
+        setLoading(false)
+        return
+      }
+      if (optRes.error) {
+        console.error('Failed to load estimate options:', optRes.error)
+      }
       const est = estRes.data
       const opts = optRes.data || []
       const lineItems = lineRes.data || []
@@ -586,6 +596,7 @@ export default function EstimateBuilder({
       }
       setLoading(false)
     })
+    return () => { cancelled = true }
   }, [estimateId])
 
   const isReadOnly = ['approved', 'converted'].includes(status)
@@ -682,14 +693,16 @@ export default function EstimateBuilder({
 
       // Delete removed options
       if (removedOptionIds.current.length > 0) {
-        await supabase
+        const { error: delLinesErr } = await supabase
           .from('estimate_line_items')
           .delete()
           .in('option_id', removedOptionIds.current)
-        await supabase
+        if (delLinesErr) throw new Error('Failed to remove old option lines: ' + delLinesErr.message)
+        const { error: delOptsErr } = await supabase
           .from('estimate_options')
           .delete()
           .in('id', removedOptionIds.current)
+        if (delOptsErr) throw new Error('Failed to remove old options: ' + delOptsErr.message)
         removedOptionIds.current = []
       }
 
@@ -753,7 +766,7 @@ export default function EstimateBuilder({
 
       onSaved?.(estId)
     } catch (err) {
-      setError(err.message || 'Save failed. Please try again.')
+      setError((err.message ?? 'Save failed') + ' — please try saving again to ensure all data is correct.')
     } finally {
       setSaving(false)
     }
