@@ -11,6 +11,7 @@ import ActivationPage from './pages/ActivationPage.jsx';
 import RepSetPasswordPage from './pages/RepSetPasswordPage.jsx';
 import SalesRepDashboard from './pages/SalesRepDashboard.jsx';
 import TrackingPage from './pages/TrackingPage.jsx';
+import EstimateViewerPublic from './pages/EstimateViewerPublic.jsx';
 
 const SUPABASE_URL = 'https://zmppdmfdhknnwzwdfhwf.supabase.co';
 
@@ -57,6 +58,10 @@ const App = () => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       // Phase 2: ?track short-circuit — no auth needed for tracking page
       if (new URLSearchParams(window.location.search).get('track')) {
+        setAuthLoading(false);
+        return;
+      }
+      if (new URLSearchParams(window.location.search).get('estimate')) {
         setAuthLoading(false);
         return;
       }
@@ -240,6 +245,9 @@ const App = () => {
   // ── Public tracking route (no auth required) ──────────────
   const trackToken = new URLSearchParams(window.location.search).get('track');
   if (trackToken) return <TrackingPage token={trackToken} />;
+
+  const estimateToken = new URLSearchParams(window.location.search).get('estimate');
+  if (estimateToken) return <EstimateViewerPublic token={estimateToken} />;
 
   // ── Public onboarding route (no auth required) ──────────────
   const _onboardParams = new URLSearchParams(window.location.search);
