@@ -1,9 +1,10 @@
 // src/TechDashboard.jsx
 import React, { useState, useEffect } from 'react';
-import { MapPin, CheckCircle, Navigation, RefreshCw, LogOut, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { MapPin, CheckCircle, Navigation, RefreshCw, LogOut, ChevronLeft, ChevronRight, X, FileText } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import logo from './assets/RELIANT SUPPORT LOGO.svg';
 import locationService from './utils/locationService.js';
+import EstimateBuilder from './EstimateBuilder';
 
 const SUPABASE_FUNCTIONS_URL = 'https://zmppdmfdhknnwzwdfhwf.supabase.co/functions/v1';
 
@@ -147,7 +148,7 @@ const CallRecordingSection = ({ callId }) => {
 };
 
 // ── Job Detail Bottom Sheet ──────────────────────────────────────────────────
-const JobDetail = ({ apt, permissions, updatingId, onClose, onUpdateStatus, isPastDay }) => {
+const JobDetail = ({ apt, permissions, updatingId, onClose, onUpdateStatus, isPastDay, onCreateEstimate }) => {
   const sc = STATUS_CONFIG[apt.status] || STATUS_CONFIG.confirmed;
   const canOnMyWay  = isAllowed(permissions, 'on_my_way');
   const canComplete = isAllowed(permissions, 'mark_complete');
@@ -271,6 +272,15 @@ const JobDetail = ({ apt, permissions, updatingId, onClose, onUpdateStatus, isPa
                 Mark Complete
               </button>
             )}
+
+            {/* Create Estimate — always shown */}
+            <button
+              onClick={() => onCreateEstimate(apt)}
+              className="flex items-center justify-center gap-2 w-full py-2.5 bg-gray-750 hover:bg-gray-700 border border-gray-600 text-gray-300 text-sm font-medium rounded-lg transition-colors"
+            >
+              <FileText className="w-4 h-4 text-blue-400" />
+              Create Estimate
+            </button>
           </div>
         )}
       </div>
@@ -291,6 +301,9 @@ const TechDashboard = ({ techData }) => {
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [gpsStatus, setGpsStatus] = useState({ isTracking: false, hasPosition: false, lastError: null });
   const [gpsDebug, setGpsDebug] = useState(null);
+  const [showEstimateBuilder, setShowEstimateBuilder] = useState(false);
+  const [estimateAptId, setEstimateAptId] = useState(null);
+  const [estimateClientId, setEstimateClientId] = useState(null);
 
   const getTodayISO = () => {
     const d = new Date();
@@ -536,6 +549,12 @@ const TechDashboard = ({ techData }) => {
           onClose={() => setSelectedJob(null)}
           onUpdateStatus={updateStatus}
           isPastDay={isPastDate}
+          onCreateEstimate={(apt) => {
+            setEstimateAptId(apt.id);
+            setEstimateClientId(apt.client_id);
+            setSelectedJob(null);
+            setShowEstimateBuilder(true);
+          }}
         />
       )}
 
@@ -705,6 +724,22 @@ const TechDashboard = ({ techData }) => {
               ))}
             </div>
           </div>
+        </div>
+      )}
+
+      {showEstimateBuilder && estimateClientId && (
+        <div className="fixed inset-0 z-50 bg-gray-950 flex flex-col">
+          <EstimateBuilder
+            clientId={estimateClientId}
+            appointmentId={estimateAptId}
+            compact={true}
+            onClose={() => {
+              setShowEstimateBuilder(false);
+              setEstimateAptId(null);
+              setEstimateClientId(null);
+            }}
+            onSaved={() => {}}
+          />
         </div>
       )}
     </div>
