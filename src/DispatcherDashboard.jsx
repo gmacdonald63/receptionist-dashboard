@@ -1741,6 +1741,7 @@ const DispatcherDashboard = ({
     { id: 'calls', label: 'Calls', icon: Phone },
     teamTab,
     { id: 'map', label: 'Map', icon: MapPin },
+    { id: 'estimates', label: 'Estimates', icon: FileText },
   ];
 
   const activeNavItems = role === 'dispatcher' ? dispatcherNavItems : ownerNavItems;
@@ -2046,7 +2047,7 @@ const DispatcherDashboard = ({
         )}
         {activeTab === 'estimates' && (
           <EstimatesTab
-            clientId={effectiveClientData?.id || clientData?.id}
+            clientId={clientData?.id}
             role={role}
             taxRate={effectiveClientData?.default_tax_rate ?? 0}
           />
@@ -2118,7 +2119,7 @@ const DispatcherDashboard = ({
 
       {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 z-30">
-        <div className={`grid gap-1 ${role === 'dispatcher' ? 'grid-cols-5' : 'grid-cols-9'}`}>
+        <div className={`grid gap-1 ${role === 'dispatcher' ? 'grid-cols-6' : 'grid-cols-9'}`}>
           {activeNavItems.map(item => (
             <button
               key={item.id}

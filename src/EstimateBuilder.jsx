@@ -777,9 +777,11 @@ export default function EstimateBuilder({
           <h2 className="text-lg font-semibold text-white">
             {isNew ? 'New Estimate' : 'Edit Estimate'}
           </h2>
-          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[status] || STATUS_COLORS.draft}`}>
-            {status}
-          </span>
+          {estimateDbId && (
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[status] || STATUS_COLORS.draft}`}>
+              {status}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {!isReadOnly && (
