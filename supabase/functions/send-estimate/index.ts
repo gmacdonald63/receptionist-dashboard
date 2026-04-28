@@ -1,6 +1,6 @@
 // supabase/functions/send-estimate/index.ts
 // Authenticated. Generates a portal token and sends the URL via SMS.
-// Reuses the send-sms Edge Function (same pattern as generate-tracking-token).
+// SMS is best-effort — if Telnyx is not configured, token + URL are still returned.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const cors = {
@@ -49,19 +49,13 @@ Deno.serve(async (req) => {
       .eq("id", estimate.client_id)
       .single();
 
-    if (!client?.telnyx_api_key || !client?.telnyx_from_number)
-      return new Response(
-        JSON.stringify({ error: "SMS not configured for this client — set telnyx_api_key and telnyx_from_number" }),
-        { status: 422, headers: cors }
-      );
-
     // Revoke existing tokens for this estimate
     await sb.from("estimate_tokens")
       .update({ revoked: true })
       .eq("estimate_id", estimate_id)
       .eq("revoked", false);
 
-    const validityDays = client.estimate_validity_days ?? 30;
+    const validityDays = client?.estimate_validity_days ?? 30;
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + validityDays);
 
@@ -76,34 +70,43 @@ Deno.serve(async (req) => {
     }
 
     const portalUrl = `https://app.reliantsupport.net/?estimate=${tokenRow.token}`;
-    const greeting = customer_name ? `Hi ${customer_name.split(" ")[0]}, ` : "";
-    const smsBody =
-      `${greeting}your estimate from ${client.business_name || "us"} is ready. ` +
-      `View and approve it here: ${portalUrl}`;
 
-    // Send SMS via send-sms function
-    const smsRes = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/send-sms`, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-        "apikey": Deno.env.get("SUPABASE_ANON_KEY")!,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        to: phone,
-        body: smsBody,
-        telnyx_api_key: client.telnyx_api_key,
-        telnyx_from_number: client.telnyx_from_number,
-      }),
-    });
+    // Send SMS — best effort. Skip silently if Telnyx not configured.
+    let smsSent = false;
+    let smsError: string | null = null;
+    if (client?.telnyx_api_key && client?.telnyx_from_number) {
+      const greeting = customer_name ? `Hi ${customer_name.split(" ")[0]}, ` : "";
+      const smsBody =
+        `${greeting}your estimate from ${client.business_name || "us"} is ready. ` +
+        `View and approve it here: ${portalUrl}`;
 
-    const smsSent = smsRes.ok;
-    if (!smsRes.ok) {
-      const smsErr = await smsRes.json().catch(() => ({}));
-      console.error("❌ send-estimate: SMS failed:", smsErr);
+      const smsRes = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/send-sms`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+          "apikey": Deno.env.get("SUPABASE_ANON_KEY")!,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          to: phone,
+          body: smsBody,
+          telnyx_api_key: client.telnyx_api_key,
+          telnyx_from_number: client.telnyx_from_number,
+        }),
+      });
+
+      smsSent = smsRes.ok;
+      if (!smsRes.ok) {
+        const smsErr = await smsRes.json().catch(() => ({}));
+        smsError = smsErr.error || `SMS HTTP ${smsRes.status}`;
+        console.error("❌ send-estimate: SMS failed:", smsError);
+      }
+    } else {
+      smsError = "SMS not configured — add Telnyx credentials in Settings to enable SMS delivery.";
+      console.warn("⚠️ send-estimate: Telnyx not configured for client", estimate.client_id);
     }
 
-    // Update estimate status to 'sent'
+    // Update estimate status to 'sent' regardless of SMS result
     await sb.from("estimates")
       .update({ status: "sent" })
       .eq("id", estimate_id);
@@ -111,6 +114,7 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({
       ok: true,
       sms_sent: smsSent,
+      sms_error: smsError,
       token: tokenRow.token,
       portal_url: portalUrl,
     }), { headers: cors });

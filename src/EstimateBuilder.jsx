@@ -397,7 +397,9 @@ function SendModal({ estimate, onClose, onSent }) {
   const [phone, setPhone] = useState('')
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
+  const [smsSent, setSmsSent] = useState(false)
   const [portalUrl, setPortalUrl] = useState('')
+  const [copied, setCopied] = useState(false)
   const [error, setError] = useState('')
 
   async function handleSend(e) {
@@ -423,6 +425,7 @@ function SendModal({ estimate, onClose, onSent }) {
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`)
       setPortalUrl(json.portal_url || '')
+      setSmsSent(json.sms_sent === true)
       setSent(true)
       onSent?.()
     } catch (err) {
@@ -430,6 +433,13 @@ function SendModal({ estimate, onClose, onSent }) {
     } finally {
       setSending(false)
     }
+  }
+
+  function handleCopy() {
+    navigator.clipboard.writeText(portalUrl).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
   }
 
   return (
@@ -443,15 +453,38 @@ function SendModal({ estimate, onClose, onSent }) {
         </div>
 
         {sent ? (
-          <div className="text-center py-4">
-            <div className="w-12 h-12 bg-green-900/50 rounded-full flex items-center justify-center mx-auto mb-3">
-              <Check className="w-6 h-6 text-green-400" />
-            </div>
-            <p className="text-green-400 font-medium mb-1">Estimate sent!</p>
-            {portalUrl && (
-              <p className="text-xs text-gray-400 break-all mb-4">{portalUrl}</p>
+          <div className="py-2">
+            {smsSent ? (
+              <div className="text-center mb-4">
+                <div className="w-12 h-12 bg-green-900/50 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <Check className="w-6 h-6 text-green-400" />
+                </div>
+                <p className="text-green-400 font-medium">SMS sent!</p>
+                <p className="text-gray-400 text-sm mt-1">The customer received a link to review and approve.</p>
+              </div>
+            ) : (
+              <div className="flex items-start gap-2 p-3 bg-yellow-900/30 border border-yellow-700/50 rounded-lg text-yellow-300 text-sm mb-4">
+                <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                <span>Portal link generated but SMS not sent — Telnyx SMS is not configured. Copy the link below to share manually, or add Telnyx credentials in Settings.</span>
+              </div>
             )}
-            <button onClick={onClose} className={BTN_PRIMARY}>Done</button>
+            {portalUrl && (
+              <div className="mb-4">
+                <p className="text-xs text-gray-500 mb-1">Portal link</p>
+                <div className="flex items-center gap-2 p-2 bg-gray-900 rounded-lg border border-gray-700">
+                  <p className="text-xs text-gray-300 break-all flex-1">{portalUrl}</p>
+                  <button
+                    onClick={handleCopy}
+                    className="shrink-0 px-2 py-1 bg-gray-700 hover:bg-gray-600 text-xs text-white rounded transition-colors"
+                  >
+                    {copied ? 'Copied!' : 'Copy'}
+                  </button>
+                </div>
+              </div>
+            )}
+            <div className="flex justify-end">
+              <button onClick={onClose} className={BTN_PRIMARY}>Done</button>
+            </div>
           </div>
         ) : (
           <form onSubmit={handleSend} className="space-y-4">
