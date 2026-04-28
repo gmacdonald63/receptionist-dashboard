@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
 
     // Fetch Telnyx credentials and validity from the client row
     const { data: client } = await sb.from("clients")
-      .select("telnyx_api_key, telnyx_from_number, estimate_validity_days, business_name")
+      .select("telnyx_api_key, telnyx_from_number, estimate_validity_days, company_name")
       .eq("id", estimate.client_id)
       .single();
 
@@ -77,7 +77,7 @@ Deno.serve(async (req) => {
     if (client?.telnyx_api_key && client?.telnyx_from_number) {
       const greeting = customer_name ? `Hi ${customer_name.split(" ")[0]}, ` : "";
       const smsBody =
-        `${greeting}your estimate from ${client.business_name || "us"} is ready. ` +
+        `${greeting}your estimate from ${client.company_name || "us"} is ready. ` +
         `View and approve it here: ${portalUrl}`;
 
       const smsRes = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/send-sms`, {
