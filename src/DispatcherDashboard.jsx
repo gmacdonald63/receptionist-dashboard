@@ -152,6 +152,8 @@ const DispatcherDashboard = ({
   // Tax rate settings state (stored as decimal, edited as percent)
   const [taxRateDisplay, setTaxRateDisplay] = useState('');
   const [savingTaxRate, setSavingTaxRate] = useState(false);
+  const [legalText, setLegalText] = useState('');
+  const [savingLegalText, setSavingLegalText] = useState(false);
 
   // Greeting message state
   const [greetingMessage, setGreetingMessage] = useState('');
@@ -230,6 +232,7 @@ const DispatcherDashboard = ({
   useEffect(() => {
     const rate = effectiveClientData?.default_tax_rate ?? 0;
     setTaxRateDisplay((Number(rate) * 100).toFixed(3));
+    setLegalText(effectiveClientData?.estimate_legal_text ?? '');
   }, [effectiveClientData?.id, effectiveClientData?.default_tax_rate]);
 
   useEffect(() => {
@@ -434,6 +437,16 @@ const DispatcherDashboard = ({
     } finally {
       setSavingTaxRate(false);
     }
+  };
+
+  const handleSaveLegalText = async () => {
+    setSavingLegalText(true);
+    const { error } = await supabase
+      .from('clients')
+      .update({ estimate_legal_text: legalText.trim() || null })
+      .eq('id', clientData?.id);
+    setSavingLegalText(false);
+    if (error) console.error('Failed to save legal text:', error.message);
   };
 
   const handleSaveReview = async () => {
@@ -1283,6 +1296,28 @@ const DispatcherDashboard = ({
         >
           {savingTaxRate ? 'Saving…' : 'Save Tax Rate'}
         </button>
+        <div className="mt-5 pt-5 border-t border-gray-700">
+          <label className="block text-gray-400 text-xs uppercase tracking-wide mb-1">
+            Estimate Approval Legal Text
+          </label>
+          <p className="text-gray-500 text-xs mb-2">
+            Shown to customers on the estimate portal before they approve. Leave blank to use the system default.
+          </p>
+          <textarea
+            value={legalText}
+            onChange={e => setLegalText(e.target.value)}
+            rows={4}
+            placeholder="Leave blank for default legal text…"
+            className="w-full px-2.5 py-1.5 bg-gray-750 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm resize-none"
+          />
+          <button
+            onClick={handleSaveLegalText}
+            disabled={savingLegalText}
+            className="mt-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            {savingLegalText ? 'Saving…' : 'Save Legal Text'}
+          </button>
+        </div>
       </div>
 
       <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
