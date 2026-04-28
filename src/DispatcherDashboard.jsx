@@ -23,51 +23,40 @@ const formatPhone = (raw) => {
 };
 
 const SmsConfigForm = ({ clientData }) => {
-  const [form, setForm] = useState({
-    telnyx_api_key:     clientData?.telnyx_api_key     || '',
-    telnyx_from_number: clientData?.telnyx_from_number || '',
-  });
+  const [fromNumber, setFromNumber] = useState(clientData?.telnyx_from_number || '');
   const [saving, setSaving] = useState(false);
   const [saved,  setSaved]  = useState(false);
   const [saveError, setSaveError] = useState(null);
 
-  // Sync form when clientData changes (e.g. demo mode toggle)
+  // Sync when clientData changes (e.g. demo mode toggle)
   useEffect(() => {
-    setForm({
-      telnyx_api_key:     clientData?.telnyx_api_key     || '',
-      telnyx_from_number: clientData?.telnyx_from_number || '',
-    });
+    setFromNumber(clientData?.telnyx_from_number || '');
   }, [clientData?.id]);
 
   const save = async () => {
     setSaving(true);
     setSaveError(null);
     const { error } = await supabase.from('clients').update({
-      telnyx_api_key:     form.telnyx_api_key     || null,
-      telnyx_from_number: form.telnyx_from_number || null,
+      telnyx_from_number: fromNumber.trim() || null,
     }).eq('id', clientData.id);
     setSaving(false);
     if (!error) { setSaved(true); setTimeout(() => setSaved(false), 3000); }
     else { setSaveError('Save failed. Please try again.'); }
   };
 
-  const fields = [
-    { key: 'telnyx_api_key',     label: 'Telnyx API Key',   placeholder: 'KEY...', type: 'password' },
-    { key: 'telnyx_from_number', label: 'From Number',       placeholder: '+15032454131' },
-  ];
-
   return (
     <div className="space-y-3">
-      {fields.map(({ key, label, placeholder, type }) => (
-        <div key={key}>
-          <label className="text-xs text-gray-400 block mb-1">{label}</label>
-          <input type={type || 'text'} value={form[key]}
-            onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
-            placeholder={placeholder}
-            className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm border border-gray-600 focus:border-blue-500 outline-none"
-          />
-        </div>
-      ))}
+      <div>
+        <label className="text-xs text-gray-400 block mb-1">SMS From Number</label>
+        <input
+          type="text"
+          value={fromNumber}
+          onChange={e => setFromNumber(e.target.value)}
+          placeholder="+15032454131"
+          className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm border border-gray-600 focus:border-blue-500 outline-none"
+        />
+        <p className="text-xs text-gray-500 mt-1">The Telnyx number assigned to this account. Include country code.</p>
+      </div>
       <button onClick={save} disabled={saving}
         className="w-full py-2 bg-blue-600 text-white rounded-lg text-sm font-medium disabled:opacity-50">
         {saving ? 'Saving...' : saved ? 'Saved!' : 'Save SMS Settings'}
@@ -1262,7 +1251,7 @@ const DispatcherDashboard = ({
         <div className="bg-gray-800 rounded-lg p-4 border border-gray-700 mb-4">
           <h3 className="text-white font-medium mb-1">SMS Configuration</h3>
           <p className="text-gray-400 text-xs mb-4">
-            Enables automatic tracking link SMS to customers when a tech taps "On My Way." Powered by Telnyx.
+            Enables SMS to customers for tracking links, estimates, and review requests. Enter the Telnyx number assigned to this account.
           </p>
           <SmsConfigForm clientData={effectiveClientData} />
         </div>

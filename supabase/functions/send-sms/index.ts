@@ -1,4 +1,5 @@
 // supabase/functions/send-sms/index.ts
+// Reads TELNYX_API_KEY from env secret. Callers only need to pass telnyx_from_number.
 const corsOnly = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "Authorization, Content-Type, apikey",
@@ -16,14 +17,18 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { to, body, telnyx_api_key, telnyx_from_number } = await req.json();
-    if (!to || !body || !telnyx_api_key || !telnyx_from_number)
-      return new Response(JSON.stringify({ error: "Missing required fields" }), { status: 400, headers: cors });
+    const { to, body, telnyx_from_number } = await req.json();
+    if (!to || !body || !telnyx_from_number)
+      return new Response(JSON.stringify({ error: "Missing required fields: to, body, telnyx_from_number" }), { status: 400, headers: cors });
+
+    const apiKey = Deno.env.get("TELNYX_API_KEY");
+    if (!apiKey)
+      return new Response(JSON.stringify({ error: "TELNYX_API_KEY secret not configured" }), { status: 500, headers: cors });
 
     const res = await fetch("https://api.telnyx.com/v2/messages", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${telnyx_api_key}`,
+        "Authorization": `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ from: telnyx_from_number, to, text: body }),

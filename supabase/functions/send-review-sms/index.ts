@@ -36,9 +36,9 @@ Deno.serve(async (req) => {
       .eq("id", appointment_id).single();
     if (!apt) return new Response(JSON.stringify({ error: "appointment not found" }), { status: 404, headers: cors });
 
-    // Fetch client settings
+    // Fetch client settings — only need from_number and review config, not API key
     const { data: client } = await sb.from("clients")
-      .select("telnyx_api_key, telnyx_from_number, google_review_url, review_request_mode")
+      .select("telnyx_from_number, google_review_url, review_request_mode")
       .eq("id", apt.client_id).single();
     if (!client) return new Response(JSON.stringify({ error: "client not found" }), { status: 404, headers: cors });
 
@@ -62,8 +62,8 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "no phone number on appointment" }), { status: 422, headers: cors });
     }
 
-    if (!client.telnyx_api_key || !client.telnyx_from_number) {
-      return new Response(JSON.stringify({ error: "SMS not configured for this client" }), { status: 422, headers: cors });
+    if (!client.telnyx_from_number) {
+      return new Response(JSON.stringify({ error: "SMS from-number not configured for this client" }), { status: 422, headers: cors });
     }
 
     const customerName = apt.caller_name?.split(" ")[0] || "there";
@@ -79,7 +79,6 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         to: phone,
         body: smsBody,
-        telnyx_api_key: client.telnyx_api_key,
         telnyx_from_number: client.telnyx_from_number,
       }),
     });

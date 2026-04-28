@@ -36,8 +36,9 @@ Deno.serve(async (req) => {
       .eq("id", appointment_id).single();
     if (!apt) return new Response(JSON.stringify({ error: "appointment not found" }), { status: 404, headers: cors });
 
+    // Only need from_number — API key comes from env secret
     const { data: client } = await sb.from("clients")
-      .select("telnyx_api_key, telnyx_from_number")
+      .select("telnyx_from_number")
       .eq("id", apt.client_id).single();
 
     const { data: tech } = await sb.from("technicians").select("name").eq("id", technician_id).single();
@@ -68,9 +69,10 @@ Deno.serve(async (req) => {
 
     const trackingUrl = `${APP_URL}/?track=${tokenRow.token}`;
 
-    // Send SMS if Telnyx configured and customer has a phone
+    // Send SMS if from_number configured and customer has a phone
+    // API key is read from TELNYX_API_KEY env secret inside send-sms
     let smsSent = false;
-    if (client?.telnyx_api_key && client?.telnyx_from_number && apt.caller_phone) {
+    if (client?.telnyx_from_number && apt.caller_phone) {
       const smsRes = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/send-sms`, {
         method: "POST",
         headers: {
@@ -81,7 +83,6 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           to: apt.caller_phone,
           body: `Hi ${apt.caller_name || 'there'}, ${techFirst} is on the way! Track their location: ${trackingUrl}`,
-          telnyx_api_key: client.telnyx_api_key,
           telnyx_from_number: client.telnyx_from_number,
         }),
       });
