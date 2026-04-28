@@ -9,6 +9,7 @@ import InstallPrompt from './InstallPrompt';
 import UpdatePrompt from './UpdatePrompt';
 import AppointmentCalendar from './AppointmentCalendar';
 import PricingCatalog from './PricingCatalog';
+import EstimatesTab from './EstimatesTab';
 import DispatcherMap from './components/DispatcherMap.jsx';
 import logo from './assets/RELIANT SUPPORT LOGO.svg';
 
@@ -1729,6 +1730,7 @@ const DispatcherDashboard = ({
     teamTab,
     { id: 'map', label: 'Map', icon: MapPin },
     { id: 'pricing', label: 'Pricing', icon: Tag },
+    { id: 'estimates', label: 'Estimates', icon: FileText },
     { id: 'billing', label: 'Billing', icon: DollarSign },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
@@ -2042,6 +2044,13 @@ const DispatcherDashboard = ({
             <PricingCatalog clientId={clientData?.id} />
           </>
         )}
+        {activeTab === 'estimates' && (
+          <EstimatesTab
+            clientId={effectiveClientData?.id || clientData?.id}
+            role={role}
+            taxRate={effectiveClientData?.default_tax_rate ?? 0}
+          />
+        )}
         {activeTab === 'billing' && role !== 'dispatcher' && (
           <>
             <div className="flex items-center justify-between mb-3">
@@ -2109,7 +2118,7 @@ const DispatcherDashboard = ({
 
       {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 z-30">
-        <div className={`grid gap-1 ${role === 'dispatcher' ? 'grid-cols-5' : 'grid-cols-8'}`}>
+        <div className={`grid gap-1 ${role === 'dispatcher' ? 'grid-cols-5' : 'grid-cols-9'}`}>
           {activeNavItems.map(item => (
             <button
               key={item.id}
