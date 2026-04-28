@@ -1,0 +1,6 @@
+name,description,category,unit_type,unit_price,taxable,is_active,sort_order
+Diagnostic Service Call,Standard diagnostic visit first hour,Diagnostics,each,89.00,true,true,10
+HVAC Tune-Up,Annual maintenance single system,Maintenance,each,129.00,true,true,20
+Refrigerant R-410A,Per pound market price,Materials,pound,95.00,true,true,30
+Capacitor (45/5 MFD),Standard run/start capacitor,Parts,each,35.00,true,true,40
+Labor — Standard,Standard hourly labor non-emergency,Labor,hour,115.00,false,true,50
