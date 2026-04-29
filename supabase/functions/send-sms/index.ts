@@ -1,5 +1,7 @@
 // supabase/functions/send-sms/index.ts
-// Reads TELNYX_API_KEY from env secret. Callers only need to pass telnyx_from_number.
+// Internal utility called only by other Edge Functions.
+// Auth: checks apikey header against SUPABASE_ANON_KEY (passed through by gateway untouched).
+// TELNYX_API_KEY is read from env secret.
 const corsOnly = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "Authorization, Content-Type, apikey",
@@ -11,8 +13,9 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsOnly });
   if (req.method !== "POST") return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405, headers: cors });
 
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader || authHeader !== `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`) {
+  // Verify internal caller via apikey header (anon key passed through by Supabase gateway unchanged)
+  const apikey = req.headers.get("apikey");
+  if (!apikey || apikey !== Deno.env.get("SUPABASE_ANON_KEY")) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: cors });
   }
 
