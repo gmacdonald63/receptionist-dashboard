@@ -24,7 +24,6 @@ Deno.serve(async (req) => {
 
     const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
-    // Validate user is authenticated
     const jwt = authHeader.replace("Bearer ", "");
     const { data: { user }, error: authError } = await sb.auth.getUser(jwt);
     if (authError || !user) {
@@ -36,7 +35,6 @@ Deno.serve(async (req) => {
       .eq("id", appointment_id).single();
     if (!apt) return new Response(JSON.stringify({ error: "appointment not found" }), { status: 404, headers: cors });
 
-    // Only need from_number — API key comes from env secret
     const { data: client } = await sb.from("clients")
       .select("telnyx_from_number")
       .eq("id", apt.client_id).single();
@@ -44,12 +42,10 @@ Deno.serve(async (req) => {
     const { data: tech } = await sb.from("technicians").select("name").eq("id", technician_id).single();
     const techFirst = tech?.name?.split(' ')[0] || 'Your technician';
 
-    // Revoke existing tokens for this appointment
     const { error: revokeError } = await sb.from("tracking_tokens").update({ revoked: true })
       .eq("appointment_id", appointment_id).eq("revoked", false);
     if (revokeError) console.error("Failed to revoke tokens:", revokeError.message);
 
-    // expires_at = appointment end_time + 2 hours (fallback: now + 4h)
     let expiresAt: string;
     if (apt.end_time && apt.date) {
       const d = new Date(`${apt.date}T${apt.end_time}`);
@@ -69,27 +65,30 @@ Deno.serve(async (req) => {
 
     const trackingUrl = `${APP_URL}/?track=${tokenRow.token}`;
 
-    // Send SMS if from_number configured and customer has a phone
-    // API key is read from TELNYX_API_KEY env secret inside send-sms
+    // Call Telnyx directly
     let smsSent = false;
-    if (client?.telnyx_from_number && apt.caller_phone) {
-      const smsRes = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/send-sms`, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-          "apikey": Deno.env.get("SUPABASE_ANON_KEY")!,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          to: apt.caller_phone,
-          body: `Hi ${apt.caller_name || 'there'}, ${techFirst} is on the way! Track their location: ${trackingUrl}`,
-          telnyx_from_number: client.telnyx_from_number,
-        }),
-      });
-      smsSent = smsRes.ok;
-      if (!smsRes.ok) {
-        const smsErr = await smsRes.json().catch(() => ({}));
-        console.error("SMS send failed:", smsErr);
+    const telnyxApiKey = Deno.env.get("TELNYX_API_KEY");
+    if (client?.telnyx_from_number && apt.caller_phone && telnyxApiKey) {
+      try {
+        const smsRes = await fetch("https://api.telnyx.com/v2/messages", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${telnyxApiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            from: client.telnyx_from_number,
+            to: apt.caller_phone,
+            text: `Hi ${apt.caller_name || 'there'}, ${techFirst} is on the way! Track their location: ${trackingUrl}`,
+          }),
+        });
+        smsSent = smsRes.ok;
+        if (!smsRes.ok) {
+          const smsErr = await smsRes.json().catch(() => ({}));
+          console.error("SMS send failed:", smsErr);
+        }
+      } catch (err) {
+        console.error("SMS fetch failed:", err);
       }
     }
 

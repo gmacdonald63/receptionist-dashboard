@@ -1,6 +1,5 @@
 // supabase/functions/send-estimate/index.ts
-// Authenticated. Generates a portal token and sends the URL via SMS.
-// SMS is best-effort — if Telnyx is not configured, token + URL are still returned.
+// Authenticated. Generates a portal token and sends the URL via SMS directly via Telnyx.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const cors = {
@@ -28,14 +27,12 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Validate caller
     const jwt = authHeader.replace("Bearer ", "");
     const { data: { user }, error: authError } = await sb.auth.getUser(jwt);
     if (authError || !user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: cors });
     }
 
-    // Fetch estimate to get client_id
     const { data: estimate } = await sb.from("estimates")
       .select("client_id, title")
       .eq("id", estimate_id)
@@ -43,9 +40,8 @@ Deno.serve(async (req) => {
     if (!estimate)
       return new Response(JSON.stringify({ error: "estimate not found" }), { status: 404, headers: cors });
 
-    // Fetch Telnyx credentials and validity from the client row
     const { data: client } = await sb.from("clients")
-      .select("telnyx_api_key, telnyx_from_number, estimate_validity_days, company_name")
+      .select("telnyx_from_number, estimate_validity_days, company_name")
       .eq("id", estimate.client_id)
       .single();
 
@@ -71,39 +67,46 @@ Deno.serve(async (req) => {
 
     const portalUrl = `https://app.reliantsupport.net/?estimate=${tokenRow.token}`;
 
-    // Send SMS — best effort. Skip silently if Telnyx not configured.
+    // Call Telnyx directly — no intermediary function
     let smsSent = false;
     let smsError: string | null = null;
-    if (client?.telnyx_api_key && client?.telnyx_from_number) {
+    const telnyxApiKey = Deno.env.get("TELNYX_API_KEY");
+
+    if (client?.telnyx_from_number && telnyxApiKey) {
       const greeting = customer_name ? `Hi ${customer_name.split(" ")[0]}, ` : "";
       const smsBody =
         `${greeting}your estimate from ${client.company_name || "us"} is ready. ` +
         `View and approve it here: ${portalUrl}`;
 
-      const smsRes = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/send-sms`, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-          "apikey": Deno.env.get("SUPABASE_ANON_KEY")!,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          to: phone,
-          body: smsBody,
-          telnyx_api_key: client.telnyx_api_key,
-          telnyx_from_number: client.telnyx_from_number,
-        }),
-      });
-
-      smsSent = smsRes.ok;
-      if (!smsRes.ok) {
-        const smsErr = await smsRes.json().catch(() => ({}));
-        smsError = smsErr.error || `SMS HTTP ${smsRes.status}`;
-        console.error("❌ send-estimate: SMS failed:", smsError);
+      try {
+        const smsRes = await fetch("https://api.telnyx.com/v2/messages", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${telnyxApiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            from: client.telnyx_from_number,
+            to: phone,
+            text: smsBody,
+          }),
+        });
+        const smsResult = await smsRes.json();
+        if (smsRes.ok) {
+          smsSent = true;
+          console.log("✅ SMS sent:", smsResult.data?.id);
+        } else {
+          smsError = smsResult.errors?.[0]?.detail || `Telnyx error ${smsRes.status}`;
+          console.error("❌ Telnyx error:", smsError);
+        }
+      } catch (smsErr) {
+        smsError = smsErr instanceof Error ? smsErr.message : String(smsErr);
+        console.error("❌ SMS fetch failed:", smsError);
       }
+    } else if (!client?.telnyx_from_number) {
+      smsError = "SMS from-number not configured for this client.";
     } else {
-      smsError = "SMS not configured — add Telnyx credentials in Settings to enable SMS delivery.";
-      console.warn("⚠️ send-estimate: Telnyx not configured for client", estimate.client_id);
+      smsError = "TELNYX_API_KEY secret not configured.";
     }
 
     // Update estimate status to 'sent' regardless of SMS result

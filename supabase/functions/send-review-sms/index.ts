@@ -23,36 +23,28 @@ Deno.serve(async (req) => {
 
     const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
-    // Validate caller is authenticated
     const jwt = authHeader.replace("Bearer ", "");
     const { data: { user }, error: authError } = await sb.auth.getUser(jwt);
     if (authError || !user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: cors });
     }
 
-    // Fetch appointment
     const { data: apt } = await sb.from("appointments")
       .select("caller_name, caller_phone, caller_number, client_id, review_sms_sent_at, status")
       .eq("id", appointment_id).single();
     if (!apt) return new Response(JSON.stringify({ error: "appointment not found" }), { status: 404, headers: cors });
 
-    // Fetch client settings — only need from_number and review config, not API key
     const { data: client } = await sb.from("clients")
       .select("telnyx_from_number, google_review_url, review_request_mode")
       .eq("id", apt.client_id).single();
     if (!client) return new Response(JSON.stringify({ error: "client not found" }), { status: 404, headers: cors });
 
-    // If called from auto-trigger, only proceed when mode is 'auto'
     if (source === "auto" && client.review_request_mode !== "auto") {
       return new Response(JSON.stringify({ ok: true, skipped: true, reason: "mode_is_manual" }), { headers: cors });
     }
-
-    // Skip silently if no review URL configured
     if (!client.google_review_url) {
       return new Response(JSON.stringify({ ok: true, skipped: true, reason: "no_review_url" }), { headers: cors });
     }
-
-    // Don't double-send
     if (apt.review_sms_sent_at) {
       return new Response(JSON.stringify({ ok: true, skipped: true, reason: "already_sent" }), { headers: cors });
     }
@@ -61,35 +53,37 @@ Deno.serve(async (req) => {
     if (!phone) {
       return new Response(JSON.stringify({ error: "no phone number on appointment" }), { status: 422, headers: cors });
     }
-
     if (!client.telnyx_from_number) {
       return new Response(JSON.stringify({ error: "SMS from-number not configured for this client" }), { status: 422, headers: cors });
+    }
+
+    const telnyxApiKey = Deno.env.get("TELNYX_API_KEY");
+    if (!telnyxApiKey) {
+      return new Response(JSON.stringify({ error: "TELNYX_API_KEY secret not configured" }), { status: 500, headers: cors });
     }
 
     const customerName = apt.caller_name?.split(" ")[0] || "there";
     const smsBody = `Hi ${customerName}, thank you for choosing us! We'd love to hear your feedback — please leave us a review: ${client.google_review_url}`;
 
-    const smsRes = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/send-sms`, {
+    const smsRes = await fetch("https://api.telnyx.com/v2/messages", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-        "apikey": Deno.env.get("SUPABASE_ANON_KEY")!,
+        "Authorization": `Bearer ${telnyxApiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
+        from: client.telnyx_from_number,
         to: phone,
-        body: smsBody,
-        telnyx_from_number: client.telnyx_from_number,
+        text: smsBody,
       }),
     });
 
     if (!smsRes.ok) {
       const smsErr = await smsRes.json().catch(() => ({}));
       console.error("Review SMS send failed:", smsErr);
-      return new Response(JSON.stringify({ error: smsErr.error || "SMS send failed" }), { status: 500, headers: cors });
+      return new Response(JSON.stringify({ error: smsErr.errors?.[0]?.detail || "SMS send failed" }), { status: 500, headers: cors });
     }
 
-    // Stamp the appointment so we don't double-send
     await sb.from("appointments")
       .update({ review_sms_sent_at: new Date().toISOString() })
       .eq("id", appointment_id);
