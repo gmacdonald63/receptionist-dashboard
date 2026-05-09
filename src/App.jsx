@@ -12,6 +12,7 @@ import RepSetPasswordPage from './pages/RepSetPasswordPage.jsx';
 import SalesRepDashboard from './pages/SalesRepDashboard.jsx';
 import TrackingPage from './pages/TrackingPage.jsx';
 import EstimateViewerPublic from './pages/EstimateViewerPublic.jsx';
+import MissedRevenuePage from './pages/MissedRevenuePage.jsx';
 
 const SUPABASE_URL = 'https://zmppdmfdhknnwzwdfhwf.supabase.co';
 
@@ -266,6 +267,9 @@ const App = () => {
   if (_repInviteToken) {
     return <RepSetPasswordPage repInviteToken={_repInviteToken} />;
   }
+
+  // ── Public lead-magnet landing page (no auth, no nav) ────────────
+  if (window.location.pathname === '/missed-revenue') return <MissedRevenuePage />;
 
   // Show loading while checking auth or demo token
   if (authLoading || demoLoading) {
