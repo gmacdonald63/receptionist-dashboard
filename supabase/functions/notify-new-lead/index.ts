@@ -1,4 +1,14 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+/**
+ * notify-new-lead
+ *
+ * Entry point called fire-and-forget from the landing page after a lead is inserted.
+ * Delegates to send-audit-pdf, which handles PDF generation, prospect email, and
+ * Greg's internal notification in one call.
+ *
+ * Kept as a thin wrapper so the calling URL in MissedRevenuePage.jsx doesn't need
+ * to change, and so future webhook sources (HubSpot, Zapier, etc.) can call this
+ * same endpoint without knowing about the PDF internals.
+ */
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,81 +22,40 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { lead_id } = await req.json();
+    const body = await req.json();
+    const lead_id: string = body.lead_id;
 
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
-
-    const { data: lead, error } = await supabase
-      .from("landing_page_leads")
-      .select("*")
-      .eq("id", lead_id)
-      .single();
-
-    if (error || !lead) {
-      throw new Error(`Lead not found: ${lead_id}`);
-    }
-
-    const resendKey = Deno.env.get("RESEND_API_KEY");
-    if (!resendKey) {
-      console.warn("RESEND_API_KEY not set — skipping notification");
-      return new Response(JSON.stringify({ skipped: true }), {
-        status: 200,
+    if (!lead_id) {
+      return new Response(JSON.stringify({ error: "lead_id required" }), {
+        status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const source = lead.utm_source || "direct";
-    const campaign = lead.utm_campaign || "-";
-    const lostRevenue = Number(lead.lost_revenue_per_month).toLocaleString("en-US");
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const anonKey     = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-    const emailText = `
-New lead from /missed-revenue:
-
-Name:    ${lead.name}
-Company: ${lead.company}
-Email:   ${lead.email}
-Phone:   ${lead.phone}
-
-Their calculator results:
-  Missed calls/mo:  ${lead.missed_calls_per_month}
-  Lost jobs/mo:     ${lead.lost_jobs_per_month}
-  Lost revenue/mo:  $${lostRevenue}
-
-Source: ${source} / ${campaign}
-
-Lead in dashboard: https://app.reliantsupport.net/leads/${lead.id}
-    `.trim();
-
-    const subject = `🔥 New warm lead: ${lead.company} ($${lostRevenue}/mo at risk)`;
-
-    const res = await fetch("https://api.resend.com/emails", {
+    // Delegate to send-audit-pdf — fire and don't await the result
+    // (the caller already fire-and-forgets this function, so we can
+    //  await here to get proper error logging without blocking the user)
+    const res = await fetch(`${supabaseUrl}/functions/v1/send-audit-pdf`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${resendKey}`,
+        apikey:        anonKey,
+        Authorization: `Bearer ${anonKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        from: "Reliant Support <noreply@reliantsupport.net>",
-        to: ["greg@reliantsupport.net"],
-        subject,
-        text: emailText,
-      }),
+      body: JSON.stringify({ lead_id }),
     });
 
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`Resend error: ${err}`);
-    }
+    const result = await res.json();
+    console.log("send-audit-pdf result:", JSON.stringify(result));
 
-    // TODO: Add Samantha's email or SMS notification here when she's onboarded
-
-    return new Response(JSON.stringify({ sent: true }), {
+    return new Response(JSON.stringify({ forwarded: true, result }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
+
   } catch (err) {
     console.error("notify-new-lead error:", err);
     return new Response(JSON.stringify({ error: (err as Error).message }), {
