@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex,nofollow" />
+  <title>Your Missed Revenue Audit | Reliant Support</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { colors: { gray750: '#2d3748' } } }
+    }
+  </script>
+  <style>
+    input[type=number]::-webkit-inner-spin-button,
+    input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+    input[type=number] { -moz-appearance: textfield; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+
+  <div class="max-w-3xl mx-auto px-6">
+
+    <!-- HERO -->
+    <div class="pt-10 pb-2">
+      <img src="https://app.reliantsupport.net/assets/RELIANT%20SUPPORT%20LOGO.svg"
+           alt="Reliant Support" class="h-8 w-auto mb-10"
+           onerror="this.style.display='none'; document.getElementById('logo-text').style.display='block'"/>
+      <div id="logo-text" style="display:none" class="mb-10">
+        <span class="text-white font-bold text-lg">RELIANT SUPPORT</span>
+      </div>
+      <h1 class="text-3xl md:text-4xl font-bold leading-tight mb-4">
+        How much money is your HVAC business losing to missed calls?
+      </h1>
+      <p class="text-gray-400 text-lg mb-3">
+        Most owners are shocked when they see the real number. Run the 30-second
+        calculator below — your inputs, your math, your number.
+      </p>
+      <p class="text-sm text-gray-500 mb-8">Built by a former HVAC owner. No fluff.</p>
+    </div>
+
+    <!-- CALCULATOR INPUTS -->
+    <div class="mb-8">
+      <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Your Numbers</p>
+      <div class="grid grid-cols-3 gap-4">
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">Missed calls/day</label>
+          <input type="number" id="missedPerDay" value="5" min="0"
+            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500" />
+        </div>
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">Avg job value</label>
+          <div class="relative">
+            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
+            <input type="number" id="avgJobValue" value="350" min="0"
+              class="w-full bg-gray-800 border border-gray-700 rounded-lg pl-7 pr-3 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500" />
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">Booking rate</label>
+          <div class="relative">
+            <input type="number" id="bookingRate" value="35" min="0" max="100"
+              class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 pr-8 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500" />
+            <span class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">%</span>
+          </div>
+        </div>
+      </div>
+      <p class="text-xs text-gray-600 mt-2">
+        Based on a 6-day work week (24 days/mo) and 5-minute average call
+      </p>
+    </div>
+
+    <!-- OUTPUT CARDS -->
+    <div class="mb-6">
+      <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">What You're Losing Today</p>
+      <div class="grid grid-cols-3 gap-4">
+        <div class="bg-gray-800 border border-gray-700 rounded-xl p-4 text-center">
+          <p class="text-2xl font-bold text-red-400" id="out_missedMo">120</p>
+          <p class="text-gray-400 text-xs mt-1">Missed calls/mo</p>
+        </div>
+        <div class="bg-gray-800 border border-gray-700 rounded-xl p-4 text-center">
+          <p class="text-2xl font-bold text-red-400" id="out_lostJobs">42</p>
+          <p class="text-gray-400 text-xs mt-1">Lost jobs/mo</p>
+        </div>
+        <div class="bg-gray-800 border border-gray-700 rounded-xl p-4 text-center">
+          <p class="text-2xl font-bold text-red-400" id="out_lostRev">$14,700</p>
+          <p class="text-gray-400 text-xs mt-1">Lost revenue/mo</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI MINUTES CALLOUT -->
+    <div class="bg-gray-800 border border-gray-700 rounded-xl p-4 flex items-start gap-3 mb-10">
+      <span class="text-xl mt-0.5">📞</span>
+      <div>
+        <p class="text-sm font-medium text-white">
+          You'd need ~<span id="out_aiMin">600</span> AI minutes/mo to cover those calls
+        </p>
+        <p class="text-xs text-gray-400 mt-0.5" id="out_aiDetail">
+          120 calls × 5 min avg = 600 min
+        </p>
+      </div>
+    </div>
+
+    <!-- LEAD CAPTURE FORM -->
+    <div class="bg-gray-800 border border-blue-500/20 rounded-xl p-6 shadow-lg shadow-blue-900/10 mb-16">
+
+      <!-- HEADING — update this copy when Greg sends the new wording -->
+      <h2 class="text-xl font-bold text-white mb-2" id="form-heading">Get your personalized audit report.</h2>
+      <p class="text-gray-400 text-sm mb-6" id="form-subhead">
+        Enter your details below and we'll send you a personalized PDF with your exact numbers,
+        plus a step-by-step playbook for fixing the leak. Greg (founder, former HVAC owner)
+        will also follow up personally — no pressure, straight talk only.
+      </p>
+
+      <!-- FORM -->
+      <form id="leadForm" novalidate>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">Name</label>
+            <input type="text" id="f_name" required placeholder="John Smith"
+              class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500 placeholder-gray-600" />
+          </div>
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">Company Name</label>
+            <input type="text" id="f_company" required placeholder="Smith HVAC LLC"
+              class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500 placeholder-gray-600" />
+          </div>
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">Email</label>
+            <input type="email" id="f_email" required placeholder="john@smithhvac.com"
+              class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500 placeholder-gray-600" />
+          </div>
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">Phone</label>
+            <input type="tel" id="f_phone" required placeholder="(555) 123-4567"
+              class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500 placeholder-gray-600" />
+          </div>
+        </div>
+
+        <p id="formError" class="text-red-400 text-sm mb-3 hidden"></p>
+
+        <button type="submit" id="submitBtn"
+          class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors">
+          Send My Report
+        </button>
+      </form>
+
+      <!-- SUCCESS STATE -->
+      <div id="successState" class="hidden text-center py-8">
+        <div class="w-16 h-16 rounded-full bg-green-900/40 border border-green-700 flex items-center justify-center mx-auto mb-4">
+          <svg class="w-8 h-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
+        <h3 class="text-xl font-bold text-white mb-2">Your report is on the way</h3>
+        <p class="text-gray-400 text-sm max-w-sm mx-auto">
+          Check your email in the next few minutes. If you don't see it, check your spam folder.
+          Greg may also reach out personally over the next day or two — keep an eye on your phone.
+        </p>
+      </div>
+
+    </div>
+  </div><!-- end max-w-3xl -->
+
+  <script>
+  (function () {
+    // ── Config ────────────────────────────────────────────────────────────────
+    const SUPABASE_URL     = 'https://zmppdmfdhknnwzwdfhwf.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InptcHBkbWZkaGtubnd6d2RmaHdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk4MzQyMDYsImV4cCI6MjA4NTQxMDIwNn0.mXfuz8mEZhizFen78gUaakBDbrzANn4ZM1a7KuDiKJs';
+
+    // ── UTM capture ───────────────────────────────────────────────────────────
+    const params = new URLSearchParams(window.location.search);
+    const utm = {
+      source:   params.get('utm_source')   || null,
+      medium:   params.get('utm_medium')   || null,
+      campaign: params.get('utm_campaign') || null,
+    };
+
+    // ── Calculator ────────────────────────────────────────────────────────────
+    const WORK_DAYS    = 24;
+    const AVG_CALL_MIN = 5;
+
+    function fmt(n) { return Math.round(n).toLocaleString('en-US'); }
+    function fmtD(n) { return '$' + Math.round(n).toLocaleString('en-US'); }
+
+    function calc() {
+      const mpd = Math.max(0, parseFloat(document.getElementById('missedPerDay').value) || 0);
+      const ajv = Math.max(0, parseFloat(document.getElementById('avgJobValue').value)  || 0);
+      const br  = Math.max(0, Math.min(100, parseFloat(document.getElementById('bookingRate').value) || 0));
+
+      const missedMo  = Math.round(mpd * WORK_DAYS);
+      const lostJobs  = Math.round(missedMo * (br / 100));
+      const lostRev   = lostJobs * ajv;
+      const aiMin     = missedMo * AVG_CALL_MIN;
+
+      document.getElementById('out_missedMo').textContent = fmt(missedMo);
+      document.getElementById('out_lostJobs').textContent = fmt(lostJobs);
+      document.getElementById('out_lostRev').textContent  = fmtD(lostRev);
+      document.getElementById('out_aiMin').textContent    = fmt(aiMin);
+      document.getElementById('out_aiDetail').textContent =
+        fmt(missedMo) + ' calls × ' + AVG_CALL_MIN + ' min avg = ' + fmt(aiMin) + ' min';
+
+      return { mpd, ajv, br, missedMo, lostJobs, lostRev, aiMin };
+    }
+
+    ['missedPerDay','avgJobValue','bookingRate'].forEach(id =>
+      document.getElementById(id).addEventListener('input', calc)
+    );
+    calc();
+
+    // ── Validation ────────────────────────────────────────────────────────────
+    function validEmail(e) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim()); }
+    function validPhone(p) { return /^\+?1?\s?\(?\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4}$/.test(p.trim()); }
+
+    // ── Form submit ───────────────────────────────────────────────────────────
+    const form      = document.getElementById('leadForm');
+    const errEl     = document.getElementById('formError');
+    const submitBtn = document.getElementById('submitBtn');
+
+    function showError(msg) {
+      errEl.textContent = msg;
+      errEl.classList.remove('hidden');
+    }
+    function clearError() { errEl.classList.add('hidden'); }
+
+    form.addEventListener('submit', async function (e) {
+      e.preventDefault();
+      clearError();
+
+      const name    = document.getElementById('f_name').value.trim();
+      const company = document.getElementById('f_company').value.trim();
+      const email   = document.getElementById('f_email').value.trim();
+      const phone   = document.getElementById('f_phone').value.trim();
+
+      if (!name || !company || !email || !phone) {
+        showError('All fields are required.'); return;
+      }
+      if (!validEmail(email)) {
+        showError('Please enter a valid email address.'); return;
+      }
+      if (!validPhone(phone)) {
+        showError('Please enter a valid US phone number.'); return;
+      }
+
+      submitBtn.disabled    = true;
+      submitBtn.textContent = 'Sending...';
+
+      const calced = calc();
+      const payload = {
+        name,
+        company,
+        email,
+        phone,
+        missed_calls_per_day:   Math.round(calced.mpd),
+        avg_job_value:          calced.ajv,
+        booking_rate:           calced.br,
+        missed_calls_per_month: calced.missedMo,
+        lost_jobs_per_month:    calced.lostJobs,
+        lost_revenue_per_month: calced.lostRev,
+        landing_page:           'missed-revenue',
+        utm_source:             utm.source,
+        utm_medium:             utm.medium,
+        utm_campaign:           utm.campaign,
+        user_agent:             navigator.userAgent,
+        referrer:               document.referrer || null,
+      };
+
+      try {
+        // Insert lead row
+        const res = await fetch(SUPABASE_URL + '/rest/v1/landing_page_leads', {
+          method: 'POST',
+          headers: {
+            'apikey':        SUPABASE_ANON_KEY,
+            'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+            'Content-Type':  'application/json',
+            'Prefer':        'return=representation',
+          },
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.message || 'Insert failed (' + res.status + ')');
+        }
+
+        const rows = await res.json();
+        const leadId = rows[0]?.id;
+
+        // Fire-and-forget: trigger PDF generation + emails
+        if (leadId) {
+          fetch(SUPABASE_URL + '/functions/v1/notify-new-lead', {
+            method: 'POST',
+            headers: {
+              'apikey':        SUPABASE_ANON_KEY,
+              'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+              'Content-Type':  'application/json',
+            },
+            body: JSON.stringify({ lead_id: leadId }),
+          }).catch(function (err) { console.error('notify-new-lead failed:', err); });
+        }
+
+        // Show success
+        form.classList.add('hidden');
+        document.getElementById('successState').classList.remove('hidden');
+
+      } catch (err) {
+        console.error('Submission error:', err);
+        showError('Something went wrong. Please try again.');
+        submitBtn.disabled    = false;
+        submitBtn.textContent = 'Send My Report';
+      }
+    });
+
+  })();
+  </script>
+
+</body>
+</html>
