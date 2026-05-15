@@ -165,8 +165,9 @@
   <script>
   (function () {
     // ── Config ────────────────────────────────────────────────────────────────
-    const SUPABASE_URL     = 'https://zmppdmfdhknnwzwdfhwf.supabase.co';
-    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InptcHBkbWZkaGtubnd6d2RmaHdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk4MzQyMDYsImV4cCI6MjA4NTQxMDIwNn0.mXfuz8mEZhizFen78gUaakBDbrzANn4ZM1a7KuDiKJs';
+    const SUPABASE_URL      = 'https://zmppdmfdhknnwzwdfhwf.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_7zUX2xo79fHeCdQUVCSkRA_-YBdVfIj';
+    const SUPABASE_ANON_JWT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InptcHBkbWZkaGtubnd6d2RmaHdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk4MzQyMDYsImV4cCI6MjA4NTQxMDIwNn0.mXfuz8mEZhizFen78gUaakBDbrzANn4ZM1a7KuDiKJs';
 
     // ── UTM capture ───────────────────────────────────────────────────────────
     const params = new URLSearchParams(window.location.search);
@@ -271,7 +272,7 @@
           method: 'POST',
           headers: {
             'apikey':        SUPABASE_ANON_KEY,
-            'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+            'Authorization': 'Bearer ' + SUPABASE_ANON_JWT,
             'Content-Type':  'application/json',
             'Prefer':        'return=representation',
           },
@@ -292,7 +293,7 @@
             method: 'POST',
             headers: {
               'apikey':        SUPABASE_ANON_KEY,
-              'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+              'Authorization': 'Bearer ' + SUPABASE_ANON_JWT,
               'Content-Type':  'application/json',
             },
             body: JSON.stringify({ lead_id: leadId }),
