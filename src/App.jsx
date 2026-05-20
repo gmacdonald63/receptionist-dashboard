@@ -13,10 +13,19 @@ import SalesRepDashboard from './pages/SalesRepDashboard.jsx';
 import TrackingPage from './pages/TrackingPage.jsx';
 import EstimateViewerPublic from './pages/EstimateViewerPublic.jsx';
 import MissedRevenuePage from './pages/MissedRevenuePage.jsx';
+import CallReceptionist from './pages/CallReceptionist.jsx';
 
 const SUPABASE_URL = 'https://zmppdmfdhknnwzwdfhwf.supabase.co';
 
 const App = () => {
+  // Marketing routes — captured once on mount, never changes for this component lifetime
+  const [marketingRoute] = useState(() => {
+    const path = window.location.pathname;
+    if (path === '/try-receptionist') return 'receptionist';
+    if (path === '/try-demo') return 'demo-redirect';
+    return null;
+  });
+
   // Authentication state
   const [user, setUser] = useState(null);
   const [clientData, setClientData] = useState(null);
@@ -35,8 +44,21 @@ const App = () => {
   const [demoExpiresAt, setDemoExpiresAt] = useState(null);
   const [demoLoading, setDemoLoading] = useState(false);
 
+  // /try-demo → mint a fresh demo token via Edge Function and redirect to ?demo=<uuid>
+  useEffect(() => {
+    if (marketingRoute === 'demo-redirect') {
+      window.location.replace(`${SUPABASE_URL}/functions/v1/generate-demo-token`);
+    }
+  }, [marketingRoute]);
+
   // Check for existing session on load
   useEffect(() => {
+    // Skip all auth/session work for marketing routes
+    if (marketingRoute) {
+      setAuthLoading(false);
+      return;
+    }
+
     // Check if this is a password reset flow
     const hashParams = new URLSearchParams(window.location.hash.substring(1));
     const type = hashParams.get('type');
@@ -271,6 +293,18 @@ const App = () => {
   // ── Public lead-magnet landing page (no auth, no nav) ────────────
   if (window.location.pathname === '/missed-revenue') return <MissedRevenuePage />;
 
+  // Marketing routes — render before any auth/loading branches
+  if (marketingRoute === 'receptionist') {
+    return <CallReceptionist />;
+  }
+  if (marketingRoute === 'demo-redirect') {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <RefreshCw className="w-8 h-8 animate-spin text-blue-500" />
+      </div>
+    );
+  }
+
   // Show loading while checking auth or demo token
   if (authLoading || demoLoading) {
     return (
@@ -352,11 +386,11 @@ const App = () => {
   // main demo view below by skipping this block.
   if (clientData?.is_sales_rep && !demoMode) {
     const handleShowDemo = async () => {
-      // Fetch the demo client (uses demo_client_id from rep's record, or falls back to client id 9)
+      // Fetch the demo client (uses demo_client_id from rep's record, or falls back to the canonical demo client 9999)
       const { data } = await supabase
         .from('clients')
         .select('*')
-        .eq('id', clientData.demo_client_id || 9)
+        .eq('id', clientData.demo_client_id || 9999)
         .single();
       if (data) {
         setDemoClientData(data);
