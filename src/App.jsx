@@ -14,6 +14,7 @@ import TrackingPage from './pages/TrackingPage.jsx';
 import EstimateViewerPublic from './pages/EstimateViewerPublic.jsx';
 import MissedRevenuePage from './pages/MissedRevenuePage.jsx';
 import CallReceptionist from './pages/CallReceptionist.jsx';
+import TryDemo from './pages/TryDemo.jsx';
 
 const SUPABASE_URL = 'https://zmppdmfdhknnwzwdfhwf.supabase.co';
 
@@ -22,7 +23,7 @@ const App = () => {
   const [marketingRoute] = useState(() => {
     const path = window.location.pathname;
     if (path === '/try-receptionist') return 'receptionist';
-    if (path === '/try-demo') return 'demo-redirect';
+    if (path === '/try-demo') return 'demo-landing';
     return null;
   });
 
@@ -43,13 +44,6 @@ const App = () => {
   const [demoToken, setDemoToken] = useState(null);
   const [demoExpiresAt, setDemoExpiresAt] = useState(null);
   const [demoLoading, setDemoLoading] = useState(false);
-
-  // /try-demo → mint a fresh demo token via Edge Function and redirect to ?demo=<uuid>
-  useEffect(() => {
-    if (marketingRoute === 'demo-redirect') {
-      window.location.replace(`${SUPABASE_URL}/functions/v1/generate-demo-token`);
-    }
-  }, [marketingRoute]);
 
   // Check for existing session on load
   useEffect(() => {
@@ -297,12 +291,8 @@ const App = () => {
   if (marketingRoute === 'receptionist') {
     return <CallReceptionist />;
   }
-  if (marketingRoute === 'demo-redirect') {
-    return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <RefreshCw className="w-8 h-8 animate-spin text-blue-500" />
-      </div>
-    );
+  if (marketingRoute === 'demo-landing') {
+    return <TryDemo />;
   }
 
   // Show loading while checking auth or demo token
