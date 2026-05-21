@@ -1,41 +1,139 @@
 /**
  * send-audit-pdf
  *
- * Generates a personalized Missed Revenue Audit PDF (v5 Dark 3-page design),
+ * Generates a personalized Missed Revenue Audit PDF (v5 Dark Personal Letter),
  * stores it in Supabase Storage, and emails it to the prospect via Resend.
  *
+ * PDF design is a direct port of v5_Dark_PersonalLetter_generator.py.
  * Called fire-and-forget from notify-new-lead.
- * On PDF failure: skips the prospect email, includes failure note in Greg's notification.
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   PDFDocument,
-  PDFFont,
-  PDFPage,
+  PDFName,
+  PDFString,
   rgb,
   StandardFonts,
 } from "https://esm.sh/pdf-lib@1.17.1";
 
-// ── Brand colours ─────────────────────────────────────────────────────────────
-const C = {
-  navyDark:   rgb(0.008, 0.024, 0.090),   // #020617  page background
-  navy:       rgb(0.059, 0.090, 0.165),   // #0F172A  card background
-  slate:      rgb(0.118, 0.161, 0.231),   // #1E293B  stat tile background
-  slate2:     rgb(0.580, 0.639, 0.722),   // #94A3B8  muted text
-  slate3:     rgb(0.796, 0.835, 0.886),   // #CBD5E1  body text on dark
-  accentRed:  rgb(0.937, 0.267, 0.267),   // #EF4444
-  accentCyan: rgb(0.024, 0.714, 0.831),   // #06B6D4
-  white:      rgb(1, 1, 1),
-  ruleColor:  rgb(0.157, 0.204, 0.290),   // #283348  dark horizontal rules
-};
+// ── Dark palette (exact hex from approved Python source) ───────────────────
+function hex(h: string) {
+  return rgb(
+    parseInt(h.slice(1, 3), 16) / 255,
+    parseInt(h.slice(3, 5), 16) / 255,
+    parseInt(h.slice(5, 7), 16) / 255,
+  );
+}
 
-// ── Page constants ────────────────────────────────────────────────────────────
-const PT = 72;
-const PW = 612;
-const PH = 792;
-const ML = 0.75 * PT;    // 54pt left margin
-const MR = 0.75 * PT;    // 54pt right margin
-const CW = PW - ML - MR; // 504pt content width
+const NAVY_DARK   = hex("#0A0E1A");
+const NAVY        = hex("#13192B");
+const SLATE_BG    = hex("#1A2238");
+const TEXT_WHITE  = hex("#FFFFFF");
+const TEXT_LIGHT  = hex("#CBD5E1");
+const TEXT_MUTE   = hex("#94A3B8");
+const ACCENT_RED  = hex("#E11D48");
+const ACCENT_CYAN = hex("#22D3EE");
+const RULE_COLOR  = hex("#2D3748");
+const BTN_CALL_BG = hex("#22D3EE");
+const BTN_CALL_TXT= hex("#0A0E1A");
+const BTN_DASH_BG = hex("#3B82F6");
+const BTN_DASH_TXT= hex("#FFFFFF");
+
+// ── Page constants (letter = 8.5" × 11") ──────────────────────────────────
+const PAGE_W = 612;
+const PAGE_H = 792;
+const INCH   = 72;
+
+// ── Logo PNG embedded as base64 ────────────────────────────────────────────
+// Generated from src/assets/RELIANT SUPPORT LOGO.svg at 460×115px (4× resolution)
+const LOGO_BASE64 =
+  "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" +
+  "gg==";
 
 // ── Lead data shape ───────────────────────────────────────────────────────────
 interface LeadData {
@@ -50,19 +148,16 @@ interface LeadData {
   lost_revenue_per_year: number;
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function fmt(n: number): string {
-  return Math.round(n).toLocaleString("en-US");
-}
+// ── Text helpers ───────────────────────────────────────────────────────────────
 
-function wrapText(text: string, fontSize: number, maxWidth: number): string[] {
-  const avgCharWidth = fontSize * 0.52;
+// Port of Python's wrap() — uses real font metrics for accurate wrapping
+function wrap(font: any, text: string, size: number, maxWidth: number): string[] {
   const words = text.split(/\s+/);
   const lines: string[] = [];
   let current = "";
   for (const w of words) {
     const test = current ? `${current} ${w}` : w;
-    if (test.length * avgCharWidth <= maxWidth) {
+    if (font.widthOfTextAtSize(test, size) <= maxWidth) {
       current = test;
     } else {
       if (current) lines.push(current);
@@ -73,454 +168,335 @@ function wrapText(text: string, fontSize: number, maxWidth: number): string[] {
   return lines.length ? lines : [""];
 }
 
-// ── PDF Builder ───────────────────────────────────────────────────────────────
-class Builder {
-  doc!: PDFDocument;
-  data!: LeadData;
-  bold!: PDFFont;
-  regular!: PDFFont;
-  italic!: PDFFont;
-  boldItalic!: PDFFont;
+// Port of ReportLab's drawRightString() — right-aligns text at rightX
+function drawRightString(page: any, font: any, size: number, color: any, rightX: number, y: number, text: string) {
+  const w = font.widthOfTextAtSize(text, size);
+  page.drawText(text, { x: rightX - w, y, font, size, color });
+}
 
-  async init() {
-    this.doc        = await PDFDocument.create();
-    this.bold       = await this.doc.embedFont(StandardFonts.HelveticaBold);
-    this.regular    = await this.doc.embedFont(StandardFonts.Helvetica);
-    this.italic     = await this.doc.embedFont(StandardFonts.HelveticaOblique);
-    this.boldItalic = await this.doc.embedFont(StandardFonts.HelveticaBoldOblique);
+// Port of ReportLab's linkURL() — adds a clickable URI annotation
+function addLink(page: any, x: number, y: number, width: number, height: number, url: string) {
+  const doc = page.doc;
+  const annot = doc.context.obj({
+    Type:    PDFName.of("Annot"),
+    Subtype: PDFName.of("Link"),
+    Rect:    doc.context.obj([x, y, x + width, y + height]),
+    Border:  doc.context.obj([0, 0, 0]),
+    A: doc.context.obj({
+      Type: PDFName.of("Action"),
+      S:    PDFName.of("URI"),
+      URI:  PDFString.of(url),
+    }),
+  });
+  const ref = doc.context.register(annot);
+  const existing = page.node.get(PDFName.of("Annots"));
+  if (existing) {
+    existing.push(ref);
+  } else {
+    page.node.set(PDFName.of("Annots"), doc.context.obj([ref]));
   }
+}
 
-  // Convert "y from top" to pdf-lib "y from bottom"
-  yb(fromTop: number): number { return PH - fromTop; }
+// Port of Python's draw_button()
+function drawButton(
+  page: any, fonts: any,
+  x: number, y: number, w: number, h: number,
+  fillColor: any, textColor: any, label: string, url: string
+) {
+  page.drawRectangle({ x, y, width: w, height: h, color: fillColor, borderRadius: 8 });
+  const textW = fonts.bold.widthOfTextAtSize(label, 13);
+  const textX = x + (w - textW) / 2;
+  const textY = y + h / 2 - 4;
+  page.drawText(label, { x: textX, y: textY, font: fonts.bold, size: 13, color: textColor });
+  addLink(page, x, y, w, h, url);
+}
 
-  // Shared header + footer drawn on every page
-  drawChrome(page: PDFPage, pageLabel: string, pageNum: number) {
-    const d = this.data;
+// ── fill_page — dark outer border + lighter inner panel ───────────────────────
+function fillPage(page: any) {
+  page.drawRectangle({ x: 0, y: 0, width: PAGE_W, height: PAGE_H, color: NAVY_DARK });
+  page.drawRectangle({
+    x: 0.4 * INCH, y: 0.4 * INCH,
+    width: PAGE_W - 0.8 * INCH, height: PAGE_H - 0.8 * INCH,
+    color: NAVY,
+  });
+}
 
-    // ── Header ──
-    // "RELIANT" in red, "SUPPORT" in white, same baseline
-    const reliantW = this.bold.widthOfTextAtSize("RELIANT ", 14);
-    page.drawText("RELIANT", {
-      x: ML, y: this.yb(34),
-      font: this.bold, size: 14, color: C.accentRed,
-    });
-    page.drawText("SUPPORT", {
-      x: ML + reliantW, y: this.yb(34),
-      font: this.bold, size: 14, color: C.white,
-    });
-    page.drawText("AI Voice Receptionist for HVAC", {
-      x: ML, y: this.yb(48),
-      font: this.regular, size: 8, color: C.slate2,
-    });
+// ── draw_header — logo + right-side meta + rule ───────────────────────────────
+function drawHeader(page: any, fonts: any, logoImage: any, data: LeadData, label: string) {
+  page.drawImage(logoImage, {
+    x:      0.75 * INCH,
+    y:      PAGE_H - 1.2 * INCH,
+    width:  1.6 * INCH,
+    height: 0.4 * INCH,
+  });
 
-    // Right side: page label, company name, date — all right-aligned
-    const labelW   = this.bold.widthOfTextAtSize(pageLabel, 8);
-    const companyW = this.bold.widthOfTextAtSize(d.company_name, 11);
-    const dateW    = this.regular.widthOfTextAtSize(d.prepared_date, 8);
+  const rightX = PAGE_W - 0.75 * INCH;
+  drawRightString(page, fonts.regular, 8, TEXT_MUTE,  rightX, PAGE_H - 0.95 * INCH, label.toUpperCase());
+  drawRightString(page, fonts.bold,    10, TEXT_LIGHT, rightX, PAGE_H - 1.12 * INCH, data.company_name);
+  drawRightString(page, fonts.regular, 8, TEXT_MUTE,  rightX, PAGE_H - 1.27 * INCH, data.prepared_date);
 
-    page.drawText(pageLabel, {
-      x: PW - MR - labelW, y: this.yb(30),
-      font: this.bold, size: 8, color: C.slate2,
-    });
-    page.drawText(d.company_name, {
-      x: PW - MR - companyW, y: this.yb(43),
-      font: this.bold, size: 11, color: C.white,
-    });
-    page.drawText(d.prepared_date, {
-      x: PW - MR - dateW, y: this.yb(56),
-      font: this.regular, size: 8, color: C.slate2,
-    });
+  page.drawLine({
+    start:     { x: 0.75 * INCH, y: PAGE_H - 1.45 * INCH },
+    end:       { x: rightX,      y: PAGE_H - 1.45 * INCH },
+    color:     RULE_COLOR, thickness: 0.5,
+  });
+}
 
-    // Header rule
-    page.drawLine({
-      start: { x: ML,       y: this.yb(68) },
-      end:   { x: PW - MR,  y: this.yb(68) },
-      color: C.ruleColor, thickness: 0.75,
-    });
+// ── draw_footer ───────────────────────────────────────────────────────────────
+function drawFooter(page: any, fonts: any, pageNum: number) {
+  const y = 0.5 * INCH;
+  page.drawText("RELIANT SUPPORT  \xb7  reliantsupport.net", {
+    x: 0.75 * INCH, y, font: fonts.regular, size: 8, color: TEXT_MUTE,
+  });
+  drawRightString(page, fonts.regular, 8, TEXT_MUTE,
+    PAGE_W - 0.75 * INCH, y, `PAGE ${pageNum} OF 3`);
+}
 
-    // ── Footer ──
-    page.drawLine({
-      start: { x: ML,       y: this.yb(PH - 28) },
-      end:   { x: PW - MR,  y: this.yb(PH - 28) },
-      color: C.ruleColor, thickness: 0.5,
-    });
-    page.drawText("RELIANT SUPPORT  |  reliantsupport.net", {
-      x: ML, y: this.yb(PH - 16),
-      font: this.regular, size: 7, color: C.slate2,
-    });
-    const pgStr = `PAGE ${pageNum} OF 3`;
-    const pgW   = this.bold.widthOfTextAtSize(pgStr, 7);
-    page.drawText(pgStr, {
-      x: PW - MR - pgW, y: this.yb(PH - 16),
-      font: this.bold, size: 7, color: C.slate2,
-    });
-  }
+// ── PAGE 1: THE AUDIT ─────────────────────────────────────────────────────────
+function page1(doc: any, fonts: any, logoImage: any, data: LeadData) {
+  const page = doc.addPage([PAGE_W, PAGE_H]);
+  fillPage(page);
+  drawHeader(page, fonts, logoImage, data, "Your Audit");
 
-  // ── Page 1: YOUR AUDIT ────────────────────────────────────────────────────
-  page1() {
-    const page = this.doc.addPage([PW, PH]);
-    const d    = this.data;
+  const y = PAGE_H - 1.9 * INCH;  // 655.2 pt from bottom
 
-    page.drawRectangle({ x: 0, y: 0, width: PW, height: PH, color: C.navyDark });
-    this.drawChrome(page, "YOUR AUDIT", 1);
+  page.drawText("YOUR MISSED REVENUE", {
+    x: 0.75 * INCH, y, font: fonts.bold, size: 9, color: ACCENT_CYAN,
+  });
 
-    let y = 88;
+  page.drawText(`$${data.lost_revenue_per_month.toLocaleString("en-US")}`, {
+    x: 0.75 * INCH, y: y - 1.15 * INCH,
+    font: fonts.bold, size: 96, color: ACCENT_RED,
+  });
 
-    // Eyebrow
-    page.drawText("YOUR MISSED REVENUE", {
-      x: ML, y: this.yb(y),
-      font: this.bold, size: 9, color: C.accentCyan,
-    });
-    y += 16;
+  page.drawText("per month", {
+    x: 0.75 * INCH, y: y - 1.45 * INCH,
+    font: fonts.regular, size: 14, color: TEXT_LIGHT,
+  });
 
-    // Giant revenue number
-    const revStr  = `$${fmt(d.lost_revenue_per_month)}`;
-    const revSize = 64;
-    page.drawText(revStr, {
-      x: ML, y: this.yb(y + revSize),
-      font: this.bold, size: revSize, color: C.accentRed,
-    });
-    y += revSize + 8;
+  page.drawText(
+    `$${data.lost_revenue_per_year.toLocaleString("en-US")} per year if nothing changes.`,
+    { x: 0.75 * INCH, y: y - 1.7 * INCH, font: fonts.regular, size: 11, color: TEXT_MUTE }
+  );
 
-    // "per month"
-    page.drawText("per month", {
-      x: ML, y: this.yb(y),
-      font: this.regular, size: 16, color: C.white,
-    });
-    y += 22;
+  // ── Stats row ──
+  const statsY = y - 2.55 * INCH;
+  const colW   = (PAGE_W - 1.5 * INCH - 2 * 0.1 * INCH) / 3;
+  const stats  = [
+    { number: String(data.missed_calls_per_day),   label: "MISSED CALLS", sub: "per day"   },
+    { number: String(data.missed_calls_per_month), label: "MISSED CALLS", sub: "per month" },
+    { number: String(data.lost_jobs_per_month),    label: "LOST JOBS",    sub: "per month" },
+  ];
 
-    // Annual figure
-    page.drawText(`That's $${fmt(d.lost_revenue_per_year)} per year walking out the door.`, {
-      x: ML, y: this.yb(y),
-      font: this.italic, size: 10.5, color: C.slate2,
-    });
-    y += 26;
-
-    // ── Three stat tiles ──
-    const tileGap = 8;
-    const tileW   = (CW - tileGap * 2) / 3;
-    const tileH   = 70;
-    const tiles   = [
-      { label: "Missed calls/day",   value: fmt(d.missed_calls_per_day) },
-      { label: "Missed calls/mo",    value: fmt(d.missed_calls_per_month) },
-      { label: "Lost jobs/mo",       value: fmt(d.lost_jobs_per_month) },
-    ];
-
-    for (let i = 0; i < 3; i++) {
-      const tx = ML + i * (tileW + tileGap);
-
-      page.drawRectangle({
-        x: tx, y: this.yb(y + tileH),
-        width: tileW, height: tileH,
-        color: C.slate,
-        borderRadius: 6,
-      });
-
-      // Cyan number — centered horizontally, upper third of tile
-      const numSize = 26;
-      const numStr  = tiles[i].value;
-      const numW    = this.bold.widthOfTextAtSize(numStr, numSize);
-      page.drawText(numStr, {
-        x: tx + (tileW - numW) / 2, y: this.yb(y + 34),
-        font: this.bold, size: numSize, color: C.accentCyan,
-      });
-
-      // Label — centered horizontally, lower half of tile
-      const lblSize = 8.5;
-      const lblW    = this.regular.widthOfTextAtSize(tiles[i].label, lblSize);
-      page.drawText(tiles[i].label, {
-        x: tx + (tileW - lblW) / 2, y: this.yb(y + 54),
-        font: this.regular, size: lblSize, color: C.slate2,
-      });
-    }
-    y += tileH + 18;
-
-    // Formula line
-    const formula =
-      `${fmt(d.missed_calls_per_day)} missed calls/day x 24 days x ` +
-      `${d.booking_rate}% booking rate x $${fmt(d.avg_job_value)} avg job value`;
-    page.drawText(formula, {
-      x: ML, y: this.yb(y),
-      font: this.italic, size: 8.5, color: C.slate2,
-    });
-    y += 22;
-
-    // Horizontal rule
-    page.drawLine({
-      start: { x: ML,       y: this.yb(y) },
-      end:   { x: PW - MR,  y: this.yb(y) },
-      color: C.ruleColor, thickness: 0.5,
-    });
-    y += 20;
-
-    // Quote with left cyan bar
-    const quoteLines = [
-      "Those calls aren't going to nobody.",
-      "They're going to your competitors.",
-    ];
-    const lineH  = 22;
-    const blockH = quoteLines.length * lineH + 8;
-
+  for (let i = 0; i < 3; i++) {
+    const x = 0.75 * INCH + i * (colW + 0.1 * INCH);
+    const s = stats[i];
     page.drawRectangle({
-      x: ML, y: this.yb(y + blockH),
-      width: 3, height: blockH,
-      color: C.accentCyan,
+      x, y: statsY - 1.0 * INCH,
+      width: colW, height: 0.95 * INCH,
+      color: SLATE_BG, borderRadius: 6,
     });
-
-    let qy = y + 16;
-    for (const line of quoteLines) {
-      page.drawText(line, {
-        x: ML + 14, y: this.yb(qy),
-        font: this.boldItalic, size: 14, color: C.white,
-      });
-      qy += lineH;
-    }
-    y += blockH + 20;
-
-    // "Turn the page" nudge
-    page.drawText("Turn the page -- here's what to do about it.", {
-      x: ML, y: this.yb(y),
-      font: this.italic, size: 10, color: C.slate2,
-    });
+    page.drawText(s.number, { x: x + 14, y: statsY - 0.45 * INCH, font: fonts.bold,    size: 30, color: ACCENT_CYAN });
+    page.drawText(s.label,  { x: x + 14, y: statsY - 0.66 * INCH, font: fonts.bold,    size: 9,  color: TEXT_LIGHT  });
+    page.drawText(s.sub,    { x: x + 14, y: statsY - 0.82 * INCH, font: fonts.regular, size: 9,  color: TEXT_MUTE   });
   }
 
-  // ── Page 2: FOUR STEPS ────────────────────────────────────────────────────
-  page2() {
-    const page = this.doc.addPage([PW, PH]);
+  // Math formula
+  const math =
+    `${data.missed_calls_per_day} missed calls/day  x  24 working days  ` +
+    `x  ${data.booking_rate}% booking rate  x  $${data.avg_job_value} avg job  ` +
+    `=  $${data.lost_revenue_per_month.toLocaleString("en-US")} / mo`;
+  page.drawText(math, {
+    x: 0.75 * INCH, y: statsY - 1.25 * INCH,
+    font: fonts.italic, size: 9.5, color: TEXT_MUTE,
+  });
 
-    page.drawRectangle({ x: 0, y: 0, width: PW, height: PH, color: C.navyDark });
-    this.drawChrome(page, "FOUR STEPS", 2);
+  // ── Anchor quote at bottom ──
+  const anchorY = 1.95 * INCH;
+  page.drawLine({
+    start: { x: 0.75 * INCH, y: anchorY + 0.5 * INCH },
+    end:   { x: PAGE_W - 0.75 * INCH, y: anchorY + 0.5 * INCH },
+    color: RULE_COLOR, thickness: 0.5,
+  });
+  page.drawText("Those calls aren't going to nobody.", {
+    x: 0.75 * INCH, y: anchorY + 0.2 * INCH,
+    font: fonts.italic, size: 13, color: TEXT_LIGHT,
+  });
+  page.drawText("They're going to your competitors.", {
+    x: 0.75 * INCH, y: anchorY,
+    font: fonts.italic, size: 13, color: TEXT_LIGHT,
+  });
+  page.drawText("Turn the page for the four things you can do about it.", {
+    x: 0.75 * INCH, y: anchorY - 0.3 * INCH,
+    font: fonts.regular, size: 10, color: TEXT_MUTE,
+  });
 
-    let y = 88;
+  drawFooter(page, fonts, 1);
+}
 
-    // Eyebrow
-    page.drawText("WHAT YOU CAN DO", {
-      x: ML, y: this.yb(y),
-      font: this.bold, size: 9, color: C.accentCyan,
-    });
-    y += 16;
+// ── PAGE 2: THE FOUR STEPS ────────────────────────────────────────────────────
+// Steps are plain text — no boxes (per spec)
+function page2(doc: any, fonts: any, logoImage: any, data: LeadData) {
+  const page = doc.addPage([PAGE_W, PAGE_H]);
+  fillPage(page);
+  drawHeader(page, fonts, logoImage, data, "Four Steps");
 
-    // Headline
-    page.drawText("Four things to fix it.", {
-      x: ML, y: this.yb(y + 26),
-      font: this.bold, size: 30, color: C.white,
-    });
-    y += 40;
+  const y = PAGE_H - 1.9 * INCH;
 
-    // Subhead
-    const subLines = wrapText(
-      "Start with #1 even if you think you've got it covered. The whole thing falls apart if you skip it.",
-      10.5, CW
-    );
-    for (const line of subLines) {
-      page.drawText(line, {
-        x: ML, y: this.yb(y + 10.5),
-        font: this.regular, size: 10.5, color: C.slate3,
-      });
-      y += 15;
+  page.drawText("WHAT YOU CAN DO", {
+    x: 0.75 * INCH, y, font: fonts.bold, size: 9, color: ACCENT_CYAN,
+  });
+  page.drawText("Four things to fix it.", {
+    x: 0.75 * INCH, y: y - 36, font: fonts.bold, size: 28, color: TEXT_WHITE,
+  });
+  page.drawText("Each one helps. Done together, they close the leak entirely.", {
+    x: 0.75 * INCH, y: y - 60, font: fonts.regular, size: 11, color: TEXT_MUTE,
+  });
+
+  const stepsY   = y - 1.3 * INCH;
+  const bodyMaxW = PAGE_W - 2.4 * INCH;
+  const bodyX    = 0.95 * INCH + 8;
+
+  const steps = [
+    {
+      num: "01", title: "Measure what you're not measuring",
+      body: "Pull your call log and count the misses. Track your booking rate. "
+          + "Most shop owners have never looked at these numbers -- and what gets measured gets managed.",
+    },
+    {
+      num: "02", title: "Stop letting calls go to voicemail",
+      body: "Voicemail loses jobs. By the time you call back, your customer has called someone else. "
+          + "Forward to a person, an answering service, or AI -- anything but voicemail.",
+    },
+    {
+      num: "03", title: "Systematize the answer",
+      body: "Whoever picks up needs to ask the same questions every time. A simple script, "
+          + "an on-call rotation, and a way to track where leads come from. Consistency turns calls into bookings.",
+    },
+    {
+      num: "04", title: "Get out of your own way",
+      body: "Your hourly rate as a tech is worth more than what it costs to hand off the phone. "
+          + "Stop being your own receptionist.",
+    },
+  ];
+
+  let iy = stepsY;
+  for (const step of steps) {
+    page.drawText(step.num,   { x: 0.75 * INCH, y: iy, font: fonts.bold, size: 14, color: ACCENT_RED  });
+    page.drawText(step.title, { x: bodyX,        y: iy, font: fonts.bold, size: 13, color: TEXT_WHITE  });
+    const bodyLines = wrap(fonts.regular, step.body, 10.5, bodyMaxW);
+    let by = iy - 18;
+    for (const line of bodyLines) {
+      page.drawText(line, { x: bodyX, y: by, font: fonts.regular, size: 10.5, color: TEXT_LIGHT });
+      by -= 14;
     }
-    y += 8;
-
-    // Horizontal rule
-    page.drawLine({
-      start: { x: ML,       y: this.yb(y) },
-      end:   { x: PW - MR,  y: this.yb(y) },
-      color: C.ruleColor, thickness: 0.5,
-    });
-    y += 18;
-
-    const steps = [
-      {
-        num: "01",
-        title: "Measure",
-        body: "Pull your missed call count and booking rate. Write them down. You can't fix what you're not tracking, and both numbers are probably worse than you think.",
-      },
-      {
-        num: "02",
-        title: "Voicemail",
-        body: "Stop letting calls go to voicemail. A customer needing AC repair in July isn't leaving a message -- they're dialing the next company on the list.",
-      },
-      {
-        num: "03",
-        title: "Systematize",
-        body: "Write a five-line intake script. Set an on-call rotation if you have multiple techs. Build the system once and the phone behaves the same way every time.",
-      },
-      {
-        num: "04",
-        title: "Get out of your own way",
-        body: "If you're a $150/hr tech spending 2 hrs/day on the phone, you're paying $300/day to be your own receptionist. Almost any answering solution is cheaper than your billable time.",
-      },
-    ];
-
-    for (const step of steps) {
-      const bodyLines = wrapText(step.body, 9.5, CW - 68);
-      const cardH     = Math.max(76, 36 + bodyLines.length * 13 + 10);
-
-      page.drawRectangle({
-        x: ML, y: this.yb(y + cardH),
-        width: CW, height: cardH,
-        color: C.navy,
-        borderRadius: 6,
-      });
-
-      // Big red number — vertically centered on left
-      const numSize = 22;
-      page.drawText(step.num, {
-        x: ML + 14, y: this.yb(y + cardH / 2 + numSize / 2),
-        font: this.bold, size: numSize, color: C.accentRed,
-      });
-
-      // Title
-      page.drawText(step.title, {
-        x: ML + 60, y: this.yb(y + 20),
-        font: this.bold, size: 13, color: C.white,
-      });
-
-      // Body
-      let by = y + 36;
-      for (const line of bodyLines) {
-        page.drawText(line, {
-          x: ML + 60, y: this.yb(by),
-          font: this.regular, size: 9.5, color: C.slate3,
-        });
-        by += 13;
-      }
-
-      y += cardH + 8;
-    }
+    iy = by - 22;
   }
 
-  // ── Page 3: A NOTE FROM GREG ──────────────────────────────────────────────
-  page3() {
-    const page = this.doc.addPage([PW, PH]);
+  drawFooter(page, fonts, 2);
+}
 
-    page.drawRectangle({ x: 0, y: 0, width: PW, height: PH, color: C.navyDark });
-    this.drawChrome(page, "A NOTE FROM GREG", 3);
+// ── PAGE 3: A NOTE FROM GREG ──────────────────────────────────────────────────
+function page3(doc: any, fonts: any, logoImage: any, data: LeadData) {
+  const page = doc.addPage([PAGE_W, PAGE_H]);
+  fillPage(page);
+  drawHeader(page, fonts, logoImage, data, "A Note From Greg");
 
-    let y = 88;
+  const y = PAGE_H - 1.9 * INCH;
 
-    // Eyebrow
-    page.drawText("FROM THE FOUNDER", {
-      x: ML, y: this.yb(y),
-      font: this.bold, size: 9, color: C.accentCyan,
-    });
-    y += 16;
+  page.drawText("FROM THE FOUNDER", {
+    x: 0.75 * INCH, y, font: fonts.bold, size: 9, color: ACCENT_CYAN,
+  });
+  page.drawText("Why I built this.", {
+    x: 0.75 * INCH, y: y - 36, font: fonts.bold, size: 26, color: TEXT_WHITE,
+  });
 
-    // Headline
-    page.drawText("Why I built this.", {
-      x: ML, y: this.yb(y + 26),
-      font: this.bold, size: 30, color: C.white,
-    });
-    y += 40;
+  const letterY  = y - 1.0 * INCH;
+  const bodyMaxW = PAGE_W - 1.5 * INCH;
 
-    // Horizontal rule
-    page.drawLine({
-      start: { x: ML,       y: this.yb(y) },
-      end:   { x: PW - MR,  y: this.yb(y) },
-      color: C.ruleColor, thickness: 0.5,
-    });
-    y += 16;
+  const paragraphs = [
+    "I spent 25 years in HVAC and another 15 in home services. The phone "
+    + "problem you just saw the math on was something I lived with for years "
+    + "before I figured out how to fix it.",
 
-    const paragraphs = [
-      "I spent 25+ years in the HVAC industry. I've run crews, dispatched techs, and answered the phone myself at 11pm because there was nobody else to do it.",
-      "I know exactly what it costs when that call doesn't get answered -- not just the job, but the customer you didn't know you lost.",
-      "I built Reliant Support because I knew I could put together something better than what was out there. Something that does more than just answer the phone -- it books the job, tracks the customer, and brings your whole operation into one place.",
-      "We're not a call center. We're not a voicemail service. We're an AI receptionist that works like a great employee -- one that never calls in sick, never misses a call, and never costs you a $350 job because it wasn't paying attention.",
-      "Someone from my team will reach out in the next day or two. If you'd rather not wait, the buttons below will get you there faster.",
-    ];
+    "Every answering solution I tried let me down. Voicemail lost jobs. "
+    + "Answering services took messages but never actually booked anything. "
+    + "The receptionist I hired was great when she was there and useless when "
+    + "she wasn't. None of it solved the real problem.",
 
-    for (const para of paragraphs) {
-      const lines = wrapText(para, 10.5, CW);
-      for (const line of lines) {
-        page.drawText(line, {
-          x: ML, y: this.yb(y + 10.5),
-          font: this.regular, size: 10.5, color: C.slate3,
-        });
-        y += 15;
-      }
-      y += 8;
+    "So I built Reliant Support. It's an AI voice receptionist designed "
+    + "specifically for HVAC shops. It picks up every unanswered call "
+    + "instead of going to voicemail. It books appointments straight to "
+    + "your schedule. It costs less than what you're losing right now.",
+
+    "If anything in this audit caught your attention, Samantha from our "
+    + "team will reach out in the next day or two to answer any questions "
+    + "you have. She's a real person, not a sales pipeline. No pressure, "
+    + "no follow-up if it's not a fit.",
+
+    "If you'd rather get a feel for it before Samantha calls, there are "
+    + "two ways to do that below.",
+  ];
+
+  let iy = letterY;
+  for (const p of paragraphs) {
+    const lines = wrap(fonts.regular, p, 11, bodyMaxW);
+    for (const line of lines) {
+      page.drawText(line, { x: 0.75 * INCH, y: iy, font: fonts.regular, size: 11, color: TEXT_LIGHT });
+      iy -= 15;
     }
-
-    // Signature
-    y += 4;
-    page.drawText("-- Greg", {
-      x: ML, y: this.yb(y + 14),
-      font: this.boldItalic, size: 14, color: C.white,
-    });
-    y += 22;
-    page.drawText("Greg MacDonald, Founder", {
-      x: ML, y: this.yb(y + 10),
-      font: this.regular, size: 9, color: C.slate2,
-    });
-    y += 24;
-
-    // Rule before CTAs
-    page.drawLine({
-      start: { x: ML,       y: this.yb(y) },
-      end:   { x: PW - MR,  y: this.yb(y) },
-      color: C.ruleColor, thickness: 0.5,
-    });
-    y += 16;
-
-    // Two CTA buttons side by side
-    const btnW = (CW - 12) / 2;
-    const btnH = 38;
-
-    // Button 1: "Call the receptionist"
-    page.drawRectangle({
-      x: ML, y: this.yb(y + btnH),
-      width: btnW, height: btnH,
-      color: C.accentCyan,
-      borderRadius: 6,
-    });
-    const btn1 = "Call the receptionist";
-    const btn1W = this.bold.widthOfTextAtSize(btn1, 11);
-    page.drawText(btn1, {
-      x: ML + (btnW - btn1W) / 2, y: this.yb(y + 23),
-      font: this.bold, size: 11, color: C.navyDark,
-    });
-
-    // Button 2: "Try the dashboard"
-    const btn2X = ML + btnW + 12;
-    page.drawRectangle({
-      x: btn2X, y: this.yb(y + btnH),
-      width: btnW, height: btnH,
-      color: C.accentCyan,
-      borderRadius: 6,
-    });
-    const btn2 = "Try the dashboard";
-    const btn2W = this.bold.widthOfTextAtSize(btn2, 11);
-    page.drawText(btn2, {
-      x: btn2X + (btnW - btn2W) / 2, y: this.yb(y + 23),
-      font: this.bold, size: 11, color: C.navyDark,
-    });
-
-    y += btnH + 10;
-
-    // URL labels under buttons
-    const url1 = "reliantsupport.net/demo";
-    const url2 = "app.reliantsupport.net";
-    const url1W = this.regular.widthOfTextAtSize(url1, 8);
-    const url2W = this.regular.widthOfTextAtSize(url2, 8);
-
-    page.drawText(url1, {
-      x: ML + (btnW - url1W) / 2, y: this.yb(y),
-      font: this.regular, size: 8, color: C.slate2,
-    });
-    page.drawText(url2, {
-      x: btn2X + (btnW - url2W) / 2, y: this.yb(y),
-      font: this.regular, size: 8, color: C.slate2,
-    });
+    iy -= 8;
   }
 
-  async build(data: LeadData): Promise<Uint8Array> {
-    this.data = data;
-    await this.init();
-    this.page1();
-    this.page2();
-    this.page3();
-    return this.doc.save();
-  }
+  iy -= 6;
+  page.drawText("-- Greg", {
+    x: 0.75 * INCH, y: iy, font: fonts.boldItalic, size: 16, color: TEXT_WHITE,
+  });
+  page.drawText("Greg MacDonald, Founder", {
+    x: 0.75 * INCH, y: iy - 18, font: fonts.regular, size: 10, color: TEXT_MUTE,
+  });
+
+  // ── Side-by-side buttons (centered, matching Python dimensions exactly) ──
+  const btnY   = 2.0 * INCH;
+  const btnW   = 2.7 * INCH;
+  const btnH   = 0.55 * INCH;
+  const gap    = 0.2 * INCH;
+  const totalW = btnW * 2 + gap;
+  const btnXL  = (PAGE_W - totalW) / 2;
+  const btnXR  = btnXL + btnW + gap;
+
+  drawButton(page, fonts, btnXL, btnY, btnW, btnH,
+    BTN_CALL_BG, BTN_CALL_TXT,
+    "Call the receptionist",
+    "https://app.reliantsupport.net/try-receptionist");
+
+  drawButton(page, fonts, btnXR, btnY, btnW, btnH,
+    BTN_DASH_BG, BTN_DASH_TXT,
+    "Try the dashboard",
+    "https://app.reliantsupport.net/try-demo");
+
+  drawFooter(page, fonts, 3);
+}
+
+// ── PDF builder ───────────────────────────────────────────────────────────────
+async function buildPdf(data: LeadData): Promise<Uint8Array> {
+  const doc = await PDFDocument.create();
+  const fonts = {
+    regular:    await doc.embedFont(StandardFonts.Helvetica),
+    bold:       await doc.embedFont(StandardFonts.HelveticaBold),
+    italic:     await doc.embedFont(StandardFonts.HelveticaOblique),
+    boldItalic: await doc.embedFont(StandardFonts.HelveticaBoldOblique),
+  };
+
+  // Decode base64 logo and embed as PNG
+  const logoBytes  = Uint8Array.from(atob(LOGO_BASE64), c => c.charCodeAt(0));
+  const logoImage  = await doc.embedPng(logoBytes);
+
+  page1(doc, fonts, logoImage, data);
+  page2(doc, fonts, logoImage, data);
+  page3(doc, fonts, logoImage, data);
+
+  return doc.save();
 }
 
 // ── CORS headers ──────────────────────────────────────────────────────────────
@@ -548,7 +524,6 @@ Deno.serve(async (req) => {
   try {
     ({ lead_id: leadId } = await req.json());
 
-    // 1. Fetch lead
     const { data: lead, error: fetchErr } = await supabase
       .from("landing_page_leads")
       .select("*")
@@ -566,7 +541,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 2. Prepare data for PDF
     const today = new Date();
     const preparedDate = today.toLocaleDateString("en-US", {
       year: "numeric", month: "long", day: "numeric",
@@ -584,15 +558,12 @@ Deno.serve(async (req) => {
       lost_revenue_per_year:   Number(lead.lost_revenue_per_month) * 12,
     };
 
-    // 3. Generate PDF
     let pdfBytes: Uint8Array | null = null;
     let storagePath: string | null = null;
 
     try {
-      const builder = new Builder();
-      pdfBytes = await builder.build(pdfData);
+      pdfBytes = await buildPdf(pdfData);
 
-      // 4. Upload to Supabase Storage
       storagePath = `audit-pdfs/${leadId}.pdf`;
       const { error: uploadErr } = await supabase.storage
         .from("audit-pdfs")
@@ -603,7 +574,6 @@ Deno.serve(async (req) => {
 
       if (uploadErr) throw new Error(`Storage upload failed: ${uploadErr.message}`);
 
-      // 5. Update lead row with storage path
       await supabase
         .from("landing_page_leads")
         .update({ pdf_storage_path: storagePath })
@@ -615,7 +585,7 @@ Deno.serve(async (req) => {
       console.error("PDF generation/upload failed:", pdfErr);
     }
 
-    // 6a. Email the prospect (only if PDF succeeded)
+    // Email prospect (only if PDF succeeded)
     if (!pdfFailed && pdfBytes) {
       const firstName = parseFirstName(lead.name);
       const lostRev   = Number(lead.lost_revenue_per_month).toLocaleString("en-US");
@@ -629,12 +599,11 @@ Deno.serve(async (req) => {
         "Inside you'll find:",
         `  - Your numbers in writing ($${lostRev}/month estimated lost revenue)`,
         "  - Four things you can do this week to start plugging the leak",
-        "  - How Reliant Support would handle it for you if you'd rather not do it",
-        "    yourself",
+        "  - How Reliant Support would handle it for you if you'd rather not",
+        "    do it yourself",
         "",
-        "I'll reach out personally in the next day or two to see if there are any",
-        "questions I can answer. If you'd rather skip the wait and grab a time",
-        "yourself, you can book a 15-minute walkthrough here:",
+        "I'll reach out personally in the next day or two. If you'd rather skip",
+        "the wait, you can book a 15-minute walkthrough here:",
         "",
         "reliantsupport.net/demo",
         "",
@@ -649,22 +618,17 @@ Deno.serve(async (req) => {
 
       const prospectRes = await fetch("https://api.resend.com/emails", {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${resendKey}`,
-          "Content-Type": "application/json",
-        },
+        headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-          from: "Greg at Reliant Support <noreply@reliantsupport.net>",
-          reply_to: "greg@reliantsupport.net",
-          to: [lead.email],
-          subject: `Your Missed Revenue Audit -- ${lead.company}`,
-          text: prospectText,
-          attachments: [
-            {
-              filename: `Missed_Revenue_Audit_${lead.company.replace(/\s+/g, "_")}.pdf`,
-              content: pdfBase64,
-            },
-          ],
+          from:      "Greg at Reliant Support <noreply@reliantsupport.net>",
+          reply_to:  "greg@reliantsupport.net",
+          to:        [lead.email],
+          subject:   `Your Missed Revenue Audit -- ${lead.company}`,
+          text:      prospectText,
+          attachments: [{
+            filename: `Missed_Revenue_Audit_${lead.company.replace(/\s+/g, "_")}.pdf`,
+            content:  pdfBase64,
+          }],
         }),
       });
 
@@ -674,12 +638,11 @@ Deno.serve(async (req) => {
           .update({ prospect_email_sent_at: new Date().toISOString() })
           .eq("id", leadId);
       } else {
-        const errBody = await prospectRes.text();
-        console.error("Prospect email send failed:", errBody);
+        console.error("Prospect email failed:", await prospectRes.text());
       }
     }
 
-    // 6b. Internal notification to Greg (always fires)
+    // Internal notification to Greg (always fires)
     const source   = lead.utm_source  || "direct";
     const campaign = lead.utm_campaign || "-";
     const lostRev  = Number(lead.lost_revenue_per_month).toLocaleString("en-US");
@@ -692,14 +655,12 @@ Company: ${lead.company}
 Email:   ${lead.email}
 Phone:   ${lead.phone}
 
-Their calculator results:
+Calculator results:
   Missed calls/mo:  ${lead.missed_calls_per_month}
   Lost jobs/mo:     ${lead.lost_jobs_per_month}
   Lost revenue/mo:  $${lostRev}
 
 Source: ${source} / ${campaign}
-
-Lead in dashboard: https://app.reliantsupport.net/leads/${lead.id}
     `.trim();
 
     if (pdfFailed) {
@@ -710,19 +671,16 @@ Lead in dashboard: https://app.reliantsupport.net/leads/${lead.id}
 
     await fetch("https://api.resend.com/emails", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${resendKey}`,
-        "Content-Type": "application/json",
-      },
+      headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        from: "Reliant Support <noreply@reliantsupport.net>",
-        to: ["greg@reliantsupport.net"],
+        from:    "Reliant Support <noreply@reliantsupport.net>",
+        to:      ["greg@reliantsupport.net"],
         subject: `New warm lead: ${lead.company} ($${lostRev}/mo at risk)${pdfFailed ? " -- PDF failed" : ""}`,
-        text: gregText,
+        text:    gregText,
       }),
     });
 
-    // TODO: Add Samantha's email or SMS notification here when she's onboarded
+    // TODO: Add Samantha's notification here when she's onboarded
 
     return new Response(
       JSON.stringify({ sent: true, pdf_failed: pdfFailed }),
@@ -739,7 +697,6 @@ Lead in dashboard: https://app.reliantsupport.net/leads/${lead.id}
 });
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
 function parseFirstName(name: string): string {
   const trimmed = name.trim();
   if (!trimmed) return "there";
