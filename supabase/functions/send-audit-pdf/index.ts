@@ -1,7 +1,7 @@
 /**
  * send-audit-pdf
  *
- * Generates a personalized Missed Revenue Audit PDF for a landing_page_leads row,
+ * Generates a personalized Missed Revenue Audit PDF (v5 Dark 3-page design),
  * stores it in Supabase Storage, and emails it to the prospect via Resend.
  *
  * Called fire-and-forget from notify-new-lead.
@@ -14,38 +14,30 @@ import {
   PDFPage,
   rgb,
   StandardFonts,
-  degrees,
 } from "https://esm.sh/pdf-lib@1.17.1";
 
-// ── Brand colours (match ReportLab source exactly) ──────────────────────────
+// ── Brand colours ─────────────────────────────────────────────────────────────
 const C = {
-  navy:       rgb(0.059, 0.090, 0.165),   // #0F172A
-  navyDark:   rgb(0.008, 0.024, 0.090),   // #020617
-  slate:      rgb(0.118, 0.161, 0.231),   // #1E293B
-  textDark:   rgb(0.059, 0.090, 0.165),   // #0F172A
-  textBody:   rgb(0.200, 0.255, 0.333),   // #334155
-  textMute:   rgb(0.392, 0.455, 0.545),   // #64748B
+  navyDark:   rgb(0.008, 0.024, 0.090),   // #020617  page background
+  navy:       rgb(0.059, 0.090, 0.165),   // #0F172A  card background
+  slate:      rgb(0.118, 0.161, 0.231),   // #1E293B  stat tile background
+  slate2:     rgb(0.580, 0.639, 0.722),   // #94A3B8  muted text
+  slate3:     rgb(0.796, 0.835, 0.886),   // #CBD5E1  body text on dark
   accentRed:  rgb(0.937, 0.267, 0.267),   // #EF4444
   accentCyan: rgb(0.024, 0.714, 0.831),   // #06B6D4
-  rule:       rgb(0.886, 0.910, 0.949),   // #E2E8F0
-  panelLight: rgb(0.973, 0.980, 0.988),   // #F8FAFC
   white:      rgb(1, 1, 1),
-  slate2:     rgb(0.580, 0.639, 0.722),   // #94A3B8
-  slate3:     rgb(0.796, 0.835, 0.886),   // #CBD5E1
-  slate4:     rgb(0.400, 0.455, 0.545),   // #64748B  (same as textMute)
+  ruleColor:  rgb(0.157, 0.204, 0.290),   // #283348  dark horizontal rules
 };
 
-// ── Page constants ───────────────────────────────────────────────────────────
-const PT = 72;                    // points per inch
-const PW = 612;                   // letter width  (8.5")
-const PH = 792;                   // letter height (11")
-const ML = 0.75 * PT;            // left margin
-const MR = 0.75 * PT;            // right margin
-const MT = 0.75 * PT;            // top margin
-const MB = 0.75 * PT;            // bottom margin
-const CW = PW - ML - MR;         // content width
+// ── Page constants ────────────────────────────────────────────────────────────
+const PT = 72;
+const PW = 612;
+const PH = 792;
+const ML = 0.75 * PT;    // 54pt left margin
+const MR = 0.75 * PT;    // 54pt right margin
+const CW = PW - ML - MR; // 504pt content width
 
-// ── Lead data shape ──────────────────────────────────────────────────────────
+// ── Lead data shape ───────────────────────────────────────────────────────────
 interface LeadData {
   company_name: string;
   prepared_date: string;
@@ -58,16 +50,12 @@ interface LeadData {
   lost_revenue_per_year: number;
 }
 
-// ── Text helpers ─────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function fmt(n: number): string {
+  return Math.round(n).toLocaleString("en-US");
+}
 
-/**
- * Wraps text into lines that fit within maxWidth using a simple word-wrap.
- * pdf-lib doesn't have a native measureText on standard fonts for variable widths,
- * so we use an approximate character-width heuristic based on font size.
- * For Helvetica at 10pt, average char width ≈ 5.5pt; scales linearly with size.
- */
 function wrapText(text: string, fontSize: number, maxWidth: number): string[] {
-  // Approximate average char width ratio for Helvetica (empirically tuned)
   const avgCharWidth = fontSize * 0.52;
   const words = text.split(/\s+/);
   const lines: string[] = [];
@@ -85,629 +73,457 @@ function wrapText(text: string, fontSize: number, maxWidth: number): string[] {
   return lines.length ? lines : [""];
 }
 
-function fmt(n: number): string {
-  return Math.round(n).toLocaleString("en-US");
-}
-
-// ── Layout engine ────────────────────────────────────────────────────────────
-
+// ── PDF Builder ───────────────────────────────────────────────────────────────
 class Builder {
-  doc: PDFDocument;
-  data: LeadData;
+  doc!: PDFDocument;
+  data!: LeadData;
   bold!: PDFFont;
   regular!: PDFFont;
   italic!: PDFFont;
   boldItalic!: PDFFont;
 
-  page!: PDFPage;
-  pageNum = 0;
-  y = 0;   // current Y cursor (from bottom of page, pdf-lib coordinate system)
-
   async init() {
-    this.doc = await PDFDocument.create();
-    this.bold      = await this.doc.embedFont(StandardFonts.HelveticaBold);
-    this.regular   = await this.doc.embedFont(StandardFonts.Helvetica);
-    this.italic    = await this.doc.embedFont(StandardFonts.HelveticaOblique);
+    this.doc        = await PDFDocument.create();
+    this.bold       = await this.doc.embedFont(StandardFonts.HelveticaBold);
+    this.regular    = await this.doc.embedFont(StandardFonts.Helvetica);
+    this.italic     = await this.doc.embedFont(StandardFonts.HelveticaOblique);
     this.boldItalic = await this.doc.embedFont(StandardFonts.HelveticaBoldOblique);
   }
 
-  // pdf-lib Y from top: converts "Y from top" to "Y from bottom"
-  yb(yFromTop: number): number {
-    return PH - yFromTop;
-  }
+  // Convert "y from top" to pdf-lib "y from bottom"
+  yb(fromTop: number): number { return PH - fromTop; }
 
-  newPage(drawFooter = true) {
-    if (this.pageNum > 0 && drawFooter) this.drawFooter();
-    this.page = this.doc.addPage([PW, PH]);
-    this.pageNum++;
-    this.y = MT;   // cursor tracks distance from top
-  }
-
-  drawFooter() {
-    const p = this.page;
-    p.drawLine({
-      start: { x: ML, y: 0.6 * PT },
-      end:   { x: PW - MR, y: 0.6 * PT },
-      color: C.rule,
-      thickness: 0.5,
-    });
-    p.drawText("Reliant Support  ·  reliantsupport.net", {
-      x: ML, y: 0.4 * PT,
-      font: this.regular, size: 8,
-      color: C.textMute,
-    });
-    const pageStr = `Page ${this.pageNum}`;
-    const w = this.regular.widthOfTextAtSize(pageStr, 8);
-    p.drawText(pageStr, {
-      x: PW - MR - w, y: 0.4 * PT,
-      font: this.regular, size: 8,
-      color: C.textMute,
-    });
-  }
-
-  // Ensure there is enough room below current cursor; add a page if not
-  ensureRoom(needed: number) {
-    if (this.y + needed > PH - MB - 0.4 * PT) {
-      this.newPage();
-    }
-  }
-
-  // Draw wrapped body text; returns without drawing if text is empty
-  drawBody(
-    text: string,
-    opts: {
-      font?: PDFFont;
-      size?: number;
-      color?: ReturnType<typeof rgb>;
-      leading?: number;
-      maxWidth?: number;
-      x?: number;
-      bottomPad?: number;
-    } = {}
-  ) {
-    const font      = opts.font      ?? this.regular;
-    const size      = opts.size      ?? 10.5;
-    const color     = opts.color     ?? C.textBody;
-    const leading   = opts.leading   ?? 14;
-    const maxWidth  = opts.maxWidth  ?? CW;
-    const x         = opts.x        ?? ML;
-    const bottomPad = opts.bottomPad ?? 8;
-
-    const lines = wrapText(text, size, maxWidth);
-    this.ensureRoom(leading * lines.length + bottomPad);
-    for (const line of lines) {
-      this.page.drawText(line, {
-        x, y: this.yb(this.y + size),
-        font, size, color,
-      });
-      this.y += leading;
-    }
-    this.y += bottomPad;
-  }
-
-  drawH1(text: string, color = C.textDark) {
-    const font = this.bold, size = 22, leading = 28;
-    const lines = wrapText(text, size, CW);
-    this.ensureRoom(leading * lines.length + 28);
-    for (const line of lines) {
-      this.page.drawText(line, {
-        x: ML, y: this.yb(this.y + size),
-        font, size, color,
-      });
-      this.y += leading;
-    }
-    this.y += 4;
-    // Cyan accent line under heading
-    this.page.drawLine({
-      start: { x: ML,      y: this.yb(this.y) },
-      end:   { x: ML + 50, y: this.yb(this.y) },
-      color: C.accentCyan,
-      thickness: 2.5,
-    });
-    this.y += 18;
-  }
-
-  drawH2(text: string, color = C.textDark) {
-    this.ensureRoom(34);
-    this.y += 4;
-    this.page.drawText(text, {
-      x: ML, y: this.yb(this.y + 14),
-      font: this.bold, size: 14, color,
-    });
-    this.y += 22;
-  }
-
-  drawH3(text: string, color = C.textDark) {
-    this.ensureRoom(22);
-    this.page.drawText(text, {
-      x: ML, y: this.yb(this.y + 11.5),
-      font: this.bold, size: 11.5, color,
-    });
-    this.y += 16;
-  }
-
-  drawEyebrow(text: string, color = C.accentCyan) {
-    this.ensureRoom(14);
-    this.page.drawText(text.toUpperCase(), {
-      x: ML, y: this.yb(this.y + 8.5),
-      font: this.bold, size: 8.5, color,
-    });
-    this.y += 14;
-  }
-
-  drawBullet(text: string, xIndent = 14, fontSize = 10.5, leading = 14) {
-    const bulletX = ML + xIndent;
-    const textX   = bulletX + 14;
-    const maxW    = CW - xIndent - 14;
-    const lines   = wrapText(text, fontSize, maxW);
-    this.ensureRoom(leading * lines.length + 4);
-    // Cyan bullet
-    this.page.drawText("•", {
-      x: bulletX, y: this.yb(this.y + fontSize),
-      font: this.bold, size: 11, color: C.accentCyan,
-    });
-    for (const line of lines) {
-      this.page.drawText(line, {
-        x: textX, y: this.yb(this.y + fontSize),
-        font: this.regular, size: fontSize, color: C.textBody,
-      });
-      this.y += leading;
-    }
-    this.y += 4;
-  }
-
-  drawNumbered(n: number, text: string, fontSize = 10.5, leading = 14) {
-    const numX  = ML + 14;
-    const textX = numX + 18;
-    const maxW  = CW - 14 - 18;
-    const lines = wrapText(text, fontSize, maxW);
-    this.ensureRoom(leading * lines.length + 4);
-    this.page.drawText(`${n}.`, {
-      x: numX, y: this.yb(this.y + fontSize),
-      font: this.bold, size: fontSize, color: C.accentCyan,
-    });
-    for (const line of lines) {
-      this.page.drawText(line, {
-        x: textX, y: this.yb(this.y + fontSize),
-        font: this.regular, size: fontSize, color: C.textBody,
-      });
-      this.y += leading;
-    }
-    this.y += 4;
-  }
-
-  drawRule(topPad = 4, bottomPad = 14) {
-    this.y += topPad;
-    this.ensureRoom(bottomPad);
-    this.page.drawLine({
-      start: { x: ML,       y: this.yb(this.y) },
-      end:   { x: PW - MR, y: this.yb(this.y) },
-      color: C.rule,
-      thickness: 0.5,
-    });
-    this.y += bottomPad;
-  }
-
-  drawTakeaway(text: string) {
-    this.y += 4;
-    const lines   = wrapText(text, 10.5, CW - 24);
-    const blockH  = lines.length * 14 + 16;
-    this.ensureRoom(blockH + 8);
-    // Left cyan bar
-    this.page.drawRectangle({
-      x: ML, y: this.yb(this.y + blockH - 8),
-      width: 3, height: blockH - 8,
-      color: C.accentCyan,
-    });
-    for (const line of lines) {
-      this.page.drawText(line, {
-        x: ML + 16, y: this.yb(this.y + 12),
-        font: this.italic, size: 10.5, color: C.textMute,
-      });
-      this.y += 14;
-    }
-    this.y += 6;
-  }
-
-  // ── COVER ──────────────────────────────────────────────────────────────────
-  pageCover() {
-    this.page = this.doc.addPage([PW, PH]);
-    this.pageNum = 1;
-    const p = this.page;
+  // Shared header + footer drawn on every page
+  drawChrome(page: PDFPage, pageLabel: string, pageNum: number) {
     const d = this.data;
 
-    // Dark navy background
-    p.drawRectangle({ x: 0, y: 0, width: PW, height: PH, color: C.navyDark });
+    // ── Header ──
+    // "RELIANT" in red, "SUPPORT" in white, same baseline
+    const reliantW = this.bold.widthOfTextAtSize("RELIANT ", 14);
+    page.drawText("RELIANT", {
+      x: ML, y: this.yb(34),
+      font: this.bold, size: 14, color: C.accentRed,
+    });
+    page.drawText("SUPPORT", {
+      x: ML + reliantW, y: this.yb(34),
+      font: this.bold, size: 14, color: C.white,
+    });
+    page.drawText("AI Voice Receptionist for HVAC", {
+      x: ML, y: this.yb(48),
+      font: this.regular, size: 8, color: C.slate2,
+    });
 
-    // Brand mark
-    p.drawText("RELIANT SUPPORT", {
-      x: ML, y: this.yb(MT + 6 + 12),
-      font: this.bold, size: 12, color: C.white,
+    // Right side: page label, company name, date — all right-aligned
+    const labelW   = this.bold.widthOfTextAtSize(pageLabel, 8);
+    const companyW = this.bold.widthOfTextAtSize(d.company_name, 11);
+    const dateW    = this.regular.widthOfTextAtSize(d.prepared_date, 8);
+
+    page.drawText(pageLabel, {
+      x: PW - MR - labelW, y: this.yb(30),
+      font: this.bold, size: 8, color: C.slate2,
     });
-    p.drawText("AI Voice Receptionist for HVAC", {
-      x: ML, y: this.yb(MT + 22 + 9),
-      font: this.regular, size: 9, color: C.accentCyan,
+    page.drawText(d.company_name, {
+      x: PW - MR - companyW, y: this.yb(43),
+      font: this.bold, size: 11, color: C.white,
     });
+    page.drawText(d.prepared_date, {
+      x: PW - MR - dateW, y: this.yb(56),
+      font: this.regular, size: 8, color: C.slate2,
+    });
+
+    // Header rule
+    page.drawLine({
+      start: { x: ML,       y: this.yb(68) },
+      end:   { x: PW - MR,  y: this.yb(68) },
+      color: C.ruleColor, thickness: 0.75,
+    });
+
+    // ── Footer ──
+    page.drawLine({
+      start: { x: ML,       y: this.yb(PH - 28) },
+      end:   { x: PW - MR,  y: this.yb(PH - 28) },
+      color: C.ruleColor, thickness: 0.5,
+    });
+    page.drawText("RELIANT SUPPORT  |  reliantsupport.net", {
+      x: ML, y: this.yb(PH - 16),
+      font: this.regular, size: 7, color: C.slate2,
+    });
+    const pgStr = `PAGE ${pageNum} OF 3`;
+    const pgW   = this.bold.widthOfTextAtSize(pgStr, 7);
+    page.drawText(pgStr, {
+      x: PW - MR - pgW, y: this.yb(PH - 16),
+      font: this.bold, size: 7, color: C.slate2,
+    });
+  }
+
+  // ── Page 1: YOUR AUDIT ────────────────────────────────────────────────────
+  page1() {
+    const page = this.doc.addPage([PW, PH]);
+    const d    = this.data;
+
+    page.drawRectangle({ x: 0, y: 0, width: PW, height: PH, color: C.navyDark });
+    this.drawChrome(page, "YOUR AUDIT", 1);
+
+    let y = 88;
 
     // Eyebrow
-    p.drawText("YOUR MISSED REVENUE AUDIT", {
-      x: ML, y: PH / 2 + 100,
-      font: this.bold, size: 10, color: C.accentCyan,
-    });
-
-    // Main title
-    p.drawText("Here's what those", { x: ML, y: PH / 2 + 50,  font: this.bold, size: 38, color: C.white });
-    p.drawText("missed calls are",   { x: ML, y: PH / 2 + 10,  font: this.bold, size: 38, color: C.white });
-    p.drawText("actually costing you.", { x: ML, y: PH / 2 - 30, font: this.bold, size: 38, color: C.white });
-
-    // Red accent line
-    p.drawLine({
-      start: { x: ML,       y: PH / 2 - 52 },
-      end:   { x: ML + 60, y: PH / 2 - 52 },
-      color: C.accentRed,
-      thickness: 3,
-    });
-
-    // Subtitle
-    const subtitleColor = rgb(0.796, 0.835, 0.886); // #CBD5E1
-    p.drawText("Your numbers, exposing what's being lost.",       { x: ML, y: PH / 2 - 80,  font: this.regular, size: 12, color: subtitleColor });
-    p.drawText("Four steps you need to take to fix the problem.", { x: ML, y: PH / 2 - 100, font: this.regular, size: 12, color: subtitleColor });
-    p.drawText("Or one smart choice that will fix it for you.",   { x: ML, y: PH / 2 - 120, font: this.regular, size: 12, color: subtitleColor });
-
-    // Prepared for block
-    p.drawText("PREPARED FOR", { x: ML, y: MB + 88, font: this.regular, size: 9, color: C.slate2 });
-    p.drawText(d.company_name,  { x: ML, y: MB + 64, font: this.bold,    size: 16, color: C.white });
-    p.drawText(`Report date: ${d.prepared_date}`, { x: ML, y: MB + 44, font: this.regular, size: 10, color: C.slate2 });
-    p.drawText("Built by Greg — 25+ years in HVAC  ·  reliantsupport.net", {
-      x: ML, y: MB + 18,
-      font: this.italic, size: 9, color: C.textMute,
-    });
-  }
-
-  // ── PAGE 2: INTRO ──────────────────────────────────────────────────────────
-  pageIntro() {
-    this.newPage(false);   // no footer on page after cover
-    // Actually draw footer — page_num incremented by newPage
-    this.drawEyebrow("What this report is");
-    this.drawH1("Four things you can do — and how we'd do it for you.");
-    this.drawBody("You ran the calculator. You saw a number. This report puts that number in writing and gives you four things you can do this week to start plugging the leak.");
-    this.drawBody("Then it shows you the power of having Reliant Support catch your missed calls — usually for less than it'd cost to have someone in-house do it, and without you having to think about it.");
-    this.drawBody("Up to you which route you take. Both are on the table.");
-    this.drawRule(8, 18);
-    this.drawH3("A note on where this comes from");
-    this.drawBody("I've spent my career in the HVAC and home services industries. So I understand how important it is to make sure the phone gets answered when it rings. I've experienced firsthand what it costs when you can't.");
-    this.drawBody("I built Reliant Support because I knew I could put together something better than anything else out there. Something that does a lot more than just answer the phone — it brings your customer management and your field operations into one place so your whole business runs more efficiently.", { bottomPad: 4 });
-  }
-
-  // ── PAGE 3: NUMBERS ───────────────────────────────────────────────────────
-  pageNumbers() {
-    this.newPage();
-    const d = this.data;
-    this.drawEyebrow("Section 1  ·  Your numbers", C.accentCyan);
-    this.drawH1("Here's what you're losing.");
-
-    // Big red callout card
-    const cardH = 130;
-    const cardY = this.y + cardH;
-    this.page.drawRectangle({
-      x: ML, y: this.yb(cardY),
-      width: CW, height: cardH,
-      color: C.slate,
-      borderRadius: 10,
-    });
-
-    this.page.drawText("ESTIMATED LOST REVENUE PER MONTH", {
-      x: ML + 24, y: this.yb(this.y + 26),
-      font: this.bold, size: 9, color: C.slate2,
-    });
-    const bigText = `$${fmt(d.lost_revenue_per_month)}`;
-    this.page.drawText(bigText, {
-      x: ML + 24, y: this.yb(this.y + 88),
-      font: this.bold, size: 52, color: C.accentRed,
-    });
-    this.page.drawText(`That's $${fmt(d.lost_revenue_per_year)} per year walking out the door.`, {
-      x: ML + 24, y: this.yb(cardY - 20),
-      font: this.regular, size: 12,
-      color: rgb(0.886, 0.910, 0.949),
-    });
-    this.y = cardY + 24;
-
-    this.drawBody(`Based on what you entered — ${d.missed_calls_per_day} missed calls per day, $${fmt(d.avg_job_value)} average job value, and a ${d.booking_rate}% booking rate — your business is leaving about $${fmt(d.lost_revenue_per_month)} a month on the table.`);
-    this.drawBody("Not from bad work. Not from bad pricing. From calls that didn't get answered.", { font: this.italic, color: C.textDark, bottomPad: 14 });
-
-    this.drawH3("How we got to that number");
-    this.drawBullet(`${d.missed_calls_per_day} missed calls per day × 24 working days = ${fmt(d.missed_calls_per_month)} missed calls per month`);
-    this.drawBullet(`${fmt(d.missed_calls_per_month)} missed calls × ${d.booking_rate}% booking rate = ${fmt(d.lost_jobs_per_month)} lost jobs per month`);
-    this.drawBullet(`${fmt(d.lost_jobs_per_month)} lost jobs × $${fmt(d.avg_job_value)} average job value = $${fmt(d.lost_revenue_per_month)} per month in lost revenue`);
-
-    this.y += 10;
-    this.drawRule(4, 14);
-    this.drawBody("That's the number. Next up: four things you can do about it.", { font: this.bold, color: C.textDark, size: 12, bottomPad: 4 });
-  }
-
-  // ── SECTION 2 OPENER ─────────────────────────────────────────────────────
-  pageSection2Opener() {
-    this.newPage();
-    this.drawEyebrow("Section 2  ·  What you can do about it", C.accentCyan);
-    this.drawH1("Four things, in order.");
-    this.drawBody("Start with #1 even if you think you've got it covered. The whole thing falls apart if you skip it.");
-    this.drawBody("Each step is something you can do this week without buying anything. Some take an hour. Some take a hard conversation with your team. None of them are theoretical.", { bottomPad: 18 });
-
-    const steps = [
-      ["1.", "Measure what you're not measuring"],
-      ["2.", "Stop letting calls go to voicemail"],
-      ["3.", "Systematize how the phone gets answered"],
-      ["4.", "Get out of your own way"],
-    ];
-    const tocH = steps.length * 24 + 28;
-    const cardY = this.y + tocH;
-    this.page.drawRectangle({
-      x: ML, y: this.yb(cardY),
-      width: CW, height: tocH,
-      color: C.panelLight,
-      borderColor: C.rule,
-      borderWidth: 1,
-      borderRadius: 8,
-    });
-    let ty = this.y + 22;
-    for (const [num, rest] of steps) {
-      this.page.drawText(num, {
-        x: ML + 20, y: this.yb(ty),
-        font: this.bold, size: 11, color: C.accentCyan,
-      });
-      this.page.drawText(rest, {
-        x: ML + 50, y: this.yb(ty),
-        font: this.regular, size: 11, color: C.textDark,
-      });
-      ty += 24;
-    }
-    this.y = cardY + 8;
-  }
-
-  // ── STEP TEMPLATE ─────────────────────────────────────────────────────────
-  drawStep(
-    n: number,
-    title: string,
-    bodyParagraphs: string[],
-    actionLabel: string,
-    actionSteps: string[],
-    takeaway?: string,
-  ) {
-    this.newPage();
-    this.page.drawText(`STEP ${n} OF 4`, {
-      x: ML, y: this.yb(this.y + 10),
-      font: this.bold, size: 10, color: C.accentCyan,
-    });
-    this.y += 18;
-    this.drawH1(title);
-    for (const p of bodyParagraphs) this.drawBody(p);
-    this.drawEyebrow(actionLabel, C.textMute);
-    actionSteps.forEach((s, i) => this.drawNumbered(i + 1, s));
-    if (takeaway) this.drawTakeaway(takeaway);
-  }
-
-  // ── BRIDGE PAGE ───────────────────────────────────────────────────────────
-  pageBridge() {
-    this.newPage();
-    this.drawEyebrow("Section 3  ·  Or — let us handle it", C.accentCyan);
-    this.drawH1("This is where we fit in.");
-    this.drawBody("Those four steps work. The catch is they all need someone to actually do them — measure the missed calls every week, answer the phone every time, keep the script consistent, hold the rotation together, watch the numbers.");
-    this.drawBody("That's a job. And if you're the one doing it, it's eating hours out of your day that are worth more than what it'd cost to hand off.");
-    this.drawBody("Here's how Reliant Support handles it.", { font: this.bold, color: C.textDark, bottomPad: 16 });
-
-    const colGap = 12;
-    const colW   = (CW - colGap * 2) / 3;
-    const cardH  = 220;
-    const cardY  = this.y + cardH;
-
-    const columns = [
-      {
-        label: "COVERAGE",
-        headline: "Every missed call gets caught.",
-        body: "Every call you can't get to is answered, 24/7. Booking rate stays consistent because the AI follows the same script every time. After-hours is covered without an on-call rotation. The dashboard tracks where your leads come from automatically.",
-      },
-      {
-        label: "COST",
-        headline: "Less than the labor.",
-        body: "A part-time receptionist runs $2,000–$3,000 a month. A traditional answering service runs $400–$800 and doesn't book jobs. Reliant Support starts at $495 a month — and actually books the jobs.",
-      },
-      {
-        label: "TIME",
-        headline: "You get out from behind the phone.",
-        body: "No more pressure to answer when it's not convenient. And missed calls don't disappear into voicemail anymore. They get answered, booked, and added to your schedule while you're doing something else.",
-      },
-    ];
-
-    for (let i = 0; i < columns.length; i++) {
-      const col = columns[i];
-      const x   = ML + i * (colW + colGap);
-
-      this.page.drawRectangle({
-        x, y: this.yb(cardY),
-        width: colW, height: cardH,
-        color: C.navyDark,
-        borderRadius: 8,
-      });
-
-      // Label
-      this.page.drawText(col.label, {
-        x: x + 14, y: this.yb(this.y + 22),
-        font: this.bold, size: 9, color: C.accentCyan,
-      });
-
-      // Headline (wrapped to column width)
-      const hLines = wrapText(col.headline, 13, colW - 28);
-      let hy = this.y + 44;
-      for (const line of hLines) {
-        this.page.drawText(line, {
-          x: x + 14, y: this.yb(hy),
-          font: this.bold, size: 13, color: C.white,
-        });
-        hy += 17;
-      }
-
-      // Body
-      const bLines = wrapText(col.body, 9.5, colW - 28);
-      let by = hy + 10;
-      for (const line of bLines) {
-        this.page.drawText(line, {
-          x: x + 14, y: this.yb(by),
-          font: this.regular, size: 9.5,
-          color: rgb(0.796, 0.835, 0.886),
-        });
-        by += 12;
-      }
-    }
-
-    this.y = cardY + 18;
-    this.drawBody("Cheaper than doing it yourself. Cheaper than hiring it out. And you stop being the receptionist.", { font: this.bold, color: C.textDark, size: 12, bottomPad: 4 });
-  }
-
-  // ── CLOSING ───────────────────────────────────────────────────────────────
-  pageClosing() {
-    this.newPage();
-    this.drawEyebrow("What happens next", C.accentCyan);
-    this.drawH1("Here's how I'd suggest we move forward.");
-    this.drawBody("Now that you've seen what those missed calls are costing and what we'd do about it, I think the next step is worth a quick conversation.");
-    this.drawBody("Someone from our team will reach out personally in the next day or two — either by phone or email, whichever you respond to first — to walk you through what setup would look like for a shop like yours, answer questions, and see if we're a fit. No high-pressure pitch. If it's not right, we'll tell you that too.");
-
-    // CTA card
-    this.y += 6;
-    const ctaH  = 140;
-    const cardY = this.y + ctaH;
-    this.page.drawRectangle({
-      x: ML, y: this.yb(cardY),
-      width: CW, height: ctaH,
-      color: C.navyDark,
-      borderRadius: 10,
-    });
-    this.page.drawText("WANT TO SKIP THE WAIT?", {
-      x: ML + 24, y: this.yb(this.y + 26),
+    page.drawText("YOUR MISSED REVENUE", {
+      x: ML, y: this.yb(y),
       font: this.bold, size: 9, color: C.accentCyan,
     });
-    this.page.drawText("Book a walkthrough yourself.", {
-      x: ML + 24, y: this.yb(this.y + 56),
-      font: this.bold, size: 20, color: C.white,
-    });
-    this.page.drawText("Pick a time that works for you. 15 minutes. See the dashboard,", {
-      x: ML + 24, y: this.yb(this.y + 82),
-      font: this.regular, size: 11,
-      color: rgb(0.796, 0.835, 0.886),
-    });
-    this.page.drawText("hear the AI answer a real call, ask whatever you want.", {
-      x: ML + 24, y: this.yb(this.y + 98),
-      font: this.regular, size: 11,
-      color: rgb(0.796, 0.835, 0.886),
-    });
-    this.page.drawText("reliantsupport.net/demo", {
-      x: ML + 24, y: this.yb(cardY - 24),
-      font: this.bold, size: 12, color: C.accentCyan,
-    });
-    this.y = cardY + 24;
+    y += 16;
 
-    this.drawH3("A few things to know before we talk");
-    this.drawBullet("Setup takes about a week. We do the work; you review and approve.");
-    this.drawBullet("Month-to-month. No long contracts. Cancel anytime if it's not working.");
-    this.drawBullet("First 30 days are guaranteed — if it doesn't pay for itself, we refund it.");
+    // Giant revenue number
+    const revStr  = `$${fmt(d.lost_revenue_per_month)}`;
+    const revSize = 64;
+    page.drawText(revStr, {
+      x: ML, y: this.yb(y + revSize),
+      font: this.bold, size: revSize, color: C.accentRed,
+    });
+    y += revSize + 8;
 
-    this.y += 4;
-    this.drawRule(4, 14);
+    // "per month"
+    page.drawText("per month", {
+      x: ML, y: this.yb(y),
+      font: this.regular, size: 16, color: C.white,
+    });
+    y += 22;
 
-    this.page.drawText("Talk soon,", {
-      x: ML, y: this.yb(this.y + 13),
-      font: this.boldItalic, size: 13, color: C.textDark,
+    // Annual figure
+    page.drawText(`That's $${fmt(d.lost_revenue_per_year)} per year walking out the door.`, {
+      x: ML, y: this.yb(y),
+      font: this.italic, size: 10.5, color: C.slate2,
     });
-    this.y += 24;
-    this.page.drawText("— Greg", {
-      x: ML, y: this.yb(this.y + 14),
-      font: this.bold, size: 14, color: C.textDark,
+    y += 26;
+
+    // ── Three stat tiles ──
+    const tileGap = 8;
+    const tileW   = (CW - tileGap * 2) / 3;
+    const tileH   = 70;
+    const tiles   = [
+      { label: "Missed calls/day",   value: fmt(d.missed_calls_per_day) },
+      { label: "Missed calls/mo",    value: fmt(d.missed_calls_per_month) },
+      { label: "Lost jobs/mo",       value: fmt(d.lost_jobs_per_month) },
+    ];
+
+    for (let i = 0; i < 3; i++) {
+      const tx = ML + i * (tileW + tileGap);
+
+      page.drawRectangle({
+        x: tx, y: this.yb(y + tileH),
+        width: tileW, height: tileH,
+        color: C.slate,
+        borderRadius: 6,
+      });
+
+      // Cyan number — centered horizontally, upper third of tile
+      const numSize = 26;
+      const numStr  = tiles[i].value;
+      const numW    = this.bold.widthOfTextAtSize(numStr, numSize);
+      page.drawText(numStr, {
+        x: tx + (tileW - numW) / 2, y: this.yb(y + 34),
+        font: this.bold, size: numSize, color: C.accentCyan,
+      });
+
+      // Label — centered horizontally, lower half of tile
+      const lblSize = 8.5;
+      const lblW    = this.regular.widthOfTextAtSize(tiles[i].label, lblSize);
+      page.drawText(tiles[i].label, {
+        x: tx + (tileW - lblW) / 2, y: this.yb(y + 54),
+        font: this.regular, size: lblSize, color: C.slate2,
+      });
+    }
+    y += tileH + 18;
+
+    // Formula line
+    const formula =
+      `${fmt(d.missed_calls_per_day)} missed calls/day x 24 days x ` +
+      `${d.booking_rate}% booking rate x $${fmt(d.avg_job_value)} avg job value`;
+    page.drawText(formula, {
+      x: ML, y: this.yb(y),
+      font: this.italic, size: 8.5, color: C.slate2,
     });
-    this.y += 18;
-    this.page.drawText("Founder, Reliant Support", {
-      x: ML, y: this.yb(this.y + 10),
-      font: this.regular, size: 10, color: C.textMute,
+    y += 22;
+
+    // Horizontal rule
+    page.drawLine({
+      start: { x: ML,       y: this.yb(y) },
+      end:   { x: PW - MR,  y: this.yb(y) },
+      color: C.ruleColor, thickness: 0.5,
     });
-    this.y += 24;
+    y += 20;
+
+    // Quote with left cyan bar
+    const quoteLines = [
+      "Those calls aren't going to nobody.",
+      "They're going to your competitors.",
+    ];
+    const lineH  = 22;
+    const blockH = quoteLines.length * lineH + 8;
+
+    page.drawRectangle({
+      x: ML, y: this.yb(y + blockH),
+      width: 3, height: blockH,
+      color: C.accentCyan,
+    });
+
+    let qy = y + 16;
+    for (const line of quoteLines) {
+      page.drawText(line, {
+        x: ML + 14, y: this.yb(qy),
+        font: this.boldItalic, size: 14, color: C.white,
+      });
+      qy += lineH;
+    }
+    y += blockH + 20;
+
+    // "Turn the page" nudge
+    page.drawText("Turn the page -- here's what to do about it.", {
+      x: ML, y: this.yb(y),
+      font: this.italic, size: 10, color: C.slate2,
+    });
   }
 
-  // ── BUILD ─────────────────────────────────────────────────────────────────
+  // ── Page 2: FOUR STEPS ────────────────────────────────────────────────────
+  page2() {
+    const page = this.doc.addPage([PW, PH]);
+
+    page.drawRectangle({ x: 0, y: 0, width: PW, height: PH, color: C.navyDark });
+    this.drawChrome(page, "FOUR STEPS", 2);
+
+    let y = 88;
+
+    // Eyebrow
+    page.drawText("WHAT YOU CAN DO", {
+      x: ML, y: this.yb(y),
+      font: this.bold, size: 9, color: C.accentCyan,
+    });
+    y += 16;
+
+    // Headline
+    page.drawText("Four things to fix it.", {
+      x: ML, y: this.yb(y + 26),
+      font: this.bold, size: 30, color: C.white,
+    });
+    y += 40;
+
+    // Subhead
+    const subLines = wrapText(
+      "Start with #1 even if you think you've got it covered. The whole thing falls apart if you skip it.",
+      10.5, CW
+    );
+    for (const line of subLines) {
+      page.drawText(line, {
+        x: ML, y: this.yb(y + 10.5),
+        font: this.regular, size: 10.5, color: C.slate3,
+      });
+      y += 15;
+    }
+    y += 8;
+
+    // Horizontal rule
+    page.drawLine({
+      start: { x: ML,       y: this.yb(y) },
+      end:   { x: PW - MR,  y: this.yb(y) },
+      color: C.ruleColor, thickness: 0.5,
+    });
+    y += 18;
+
+    const steps = [
+      {
+        num: "01",
+        title: "Measure",
+        body: "Pull your missed call count and booking rate. Write them down. You can't fix what you're not tracking, and both numbers are probably worse than you think.",
+      },
+      {
+        num: "02",
+        title: "Voicemail",
+        body: "Stop letting calls go to voicemail. A customer needing AC repair in July isn't leaving a message -- they're dialing the next company on the list.",
+      },
+      {
+        num: "03",
+        title: "Systematize",
+        body: "Write a five-line intake script. Set an on-call rotation if you have multiple techs. Build the system once and the phone behaves the same way every time.",
+      },
+      {
+        num: "04",
+        title: "Get out of your own way",
+        body: "If you're a $150/hr tech spending 2 hrs/day on the phone, you're paying $300/day to be your own receptionist. Almost any answering solution is cheaper than your billable time.",
+      },
+    ];
+
+    for (const step of steps) {
+      const bodyLines = wrapText(step.body, 9.5, CW - 68);
+      const cardH     = Math.max(76, 36 + bodyLines.length * 13 + 10);
+
+      page.drawRectangle({
+        x: ML, y: this.yb(y + cardH),
+        width: CW, height: cardH,
+        color: C.navy,
+        borderRadius: 6,
+      });
+
+      // Big red number — vertically centered on left
+      const numSize = 22;
+      page.drawText(step.num, {
+        x: ML + 14, y: this.yb(y + cardH / 2 + numSize / 2),
+        font: this.bold, size: numSize, color: C.accentRed,
+      });
+
+      // Title
+      page.drawText(step.title, {
+        x: ML + 60, y: this.yb(y + 20),
+        font: this.bold, size: 13, color: C.white,
+      });
+
+      // Body
+      let by = y + 36;
+      for (const line of bodyLines) {
+        page.drawText(line, {
+          x: ML + 60, y: this.yb(by),
+          font: this.regular, size: 9.5, color: C.slate3,
+        });
+        by += 13;
+      }
+
+      y += cardH + 8;
+    }
+  }
+
+  // ── Page 3: A NOTE FROM GREG ──────────────────────────────────────────────
+  page3() {
+    const page = this.doc.addPage([PW, PH]);
+
+    page.drawRectangle({ x: 0, y: 0, width: PW, height: PH, color: C.navyDark });
+    this.drawChrome(page, "A NOTE FROM GREG", 3);
+
+    let y = 88;
+
+    // Eyebrow
+    page.drawText("FROM THE FOUNDER", {
+      x: ML, y: this.yb(y),
+      font: this.bold, size: 9, color: C.accentCyan,
+    });
+    y += 16;
+
+    // Headline
+    page.drawText("Why I built this.", {
+      x: ML, y: this.yb(y + 26),
+      font: this.bold, size: 30, color: C.white,
+    });
+    y += 40;
+
+    // Horizontal rule
+    page.drawLine({
+      start: { x: ML,       y: this.yb(y) },
+      end:   { x: PW - MR,  y: this.yb(y) },
+      color: C.ruleColor, thickness: 0.5,
+    });
+    y += 16;
+
+    const paragraphs = [
+      "I spent 25+ years in the HVAC industry. I've run crews, dispatched techs, and answered the phone myself at 11pm because there was nobody else to do it.",
+      "I know exactly what it costs when that call doesn't get answered -- not just the job, but the customer you didn't know you lost.",
+      "I built Reliant Support because I knew I could put together something better than what was out there. Something that does more than just answer the phone -- it books the job, tracks the customer, and brings your whole operation into one place.",
+      "We're not a call center. We're not a voicemail service. We're an AI receptionist that works like a great employee -- one that never calls in sick, never misses a call, and never costs you a $350 job because it wasn't paying attention.",
+      "Someone from my team will reach out in the next day or two. If you'd rather not wait, the buttons below will get you there faster.",
+    ];
+
+    for (const para of paragraphs) {
+      const lines = wrapText(para, 10.5, CW);
+      for (const line of lines) {
+        page.drawText(line, {
+          x: ML, y: this.yb(y + 10.5),
+          font: this.regular, size: 10.5, color: C.slate3,
+        });
+        y += 15;
+      }
+      y += 8;
+    }
+
+    // Signature
+    y += 4;
+    page.drawText("-- Greg", {
+      x: ML, y: this.yb(y + 14),
+      font: this.boldItalic, size: 14, color: C.white,
+    });
+    y += 22;
+    page.drawText("Greg MacDonald, Founder", {
+      x: ML, y: this.yb(y + 10),
+      font: this.regular, size: 9, color: C.slate2,
+    });
+    y += 24;
+
+    // Rule before CTAs
+    page.drawLine({
+      start: { x: ML,       y: this.yb(y) },
+      end:   { x: PW - MR,  y: this.yb(y) },
+      color: C.ruleColor, thickness: 0.5,
+    });
+    y += 16;
+
+    // Two CTA buttons side by side
+    const btnW = (CW - 12) / 2;
+    const btnH = 38;
+
+    // Button 1: "Call the receptionist"
+    page.drawRectangle({
+      x: ML, y: this.yb(y + btnH),
+      width: btnW, height: btnH,
+      color: C.accentCyan,
+      borderRadius: 6,
+    });
+    const btn1 = "Call the receptionist";
+    const btn1W = this.bold.widthOfTextAtSize(btn1, 11);
+    page.drawText(btn1, {
+      x: ML + (btnW - btn1W) / 2, y: this.yb(y + 23),
+      font: this.bold, size: 11, color: C.navyDark,
+    });
+
+    // Button 2: "Try the dashboard"
+    const btn2X = ML + btnW + 12;
+    page.drawRectangle({
+      x: btn2X, y: this.yb(y + btnH),
+      width: btnW, height: btnH,
+      color: C.accentCyan,
+      borderRadius: 6,
+    });
+    const btn2 = "Try the dashboard";
+    const btn2W = this.bold.widthOfTextAtSize(btn2, 11);
+    page.drawText(btn2, {
+      x: btn2X + (btnW - btn2W) / 2, y: this.yb(y + 23),
+      font: this.bold, size: 11, color: C.navyDark,
+    });
+
+    y += btnH + 10;
+
+    // URL labels under buttons
+    const url1 = "reliantsupport.net/demo";
+    const url2 = "app.reliantsupport.net";
+    const url1W = this.regular.widthOfTextAtSize(url1, 8);
+    const url2W = this.regular.widthOfTextAtSize(url2, 8);
+
+    page.drawText(url1, {
+      x: ML + (btnW - url1W) / 2, y: this.yb(y),
+      font: this.regular, size: 8, color: C.slate2,
+    });
+    page.drawText(url2, {
+      x: btn2X + (btnW - url2W) / 2, y: this.yb(y),
+      font: this.regular, size: 8, color: C.slate2,
+    });
+  }
+
   async build(data: LeadData): Promise<Uint8Array> {
     this.data = data;
     await this.init();
-
-    this.pageCover();
-    this.pageIntro();
-    this.pageNumbers();
-    this.pageSection2Opener();
-
-    this.drawStep(1, "Measure what you're not measuring.",
-      [
-        "Most owners are guessing on two numbers that should be the foundation of how they run the phone: how many calls they're actually missing, and what their booking rate is on the ones they answer.",
-        "Both numbers are usually worse than the guess. You can't fix what you haven't measured.",
-      ],
-      "Do this week",
-      [
-        "Pull last month's call log from your phone provider. Count the calls marked missed, unanswered, or under 5 seconds. Divide by 30. That's your real missed-call rate per day.",
-        "Of the last 50 calls you did answer, count how many became scheduled jobs. Divide by 50. That's your booking rate.",
-        "Write both numbers down. They're the baseline that you can use to measure against.",
-      ],
-      "If you are missing calls, you are leaving money on the table. If you don't know these numbers, you don't know how much.",
-    );
-
-    this.drawStep(2, "Stop letting calls go to voicemail.",
-      [
-        "Voicemail in home services is pointless. The customer needing AC repair in July isn't leaving a message and waiting — they're hanging up and dialing the next company on the list.",
-        "Your phone needs to be answered every time it rings. You need a backup plan for when you aren't able to do it.",
-      ],
-      "Your real options",
-      [
-        "Forward to a backup person — spouse, office manager, retired tech. Cheapest. Works if they're reliable, trained, and always available.",
-        "Use a traditional answering service. Real humans, but they don't book jobs — they just take messages and pass them along. By the time you call back, the customer has booked someone else. Not much better than voicemail. Plus the per-minute pricing adds up.",
-        "Use an AI receptionist. Picks up every call, 24/7. Books the job on the spot. No sick days, no missed nights, no per-minute fees, and no relying on someone else to be available. Often cheaper than both options above — and the jobs it captures usually pay for it several times over.",
-      ],
-      "Whatever you pick, pick something. Voicemail isn't a choice. It's a leak.",
-    );
-
-    this.drawStep(3, "Systematize how the phone gets answered.",
-      [
-        "If everyone who answers your phone is winging it, your booking rate is suffering. Same goes for after-hours, where most shops just hope somebody picks up. And same goes for tracking where your calls come from — most owners genuinely don't know.",
-        "All three are the same problem: no system. Fix the system once and the phone starts behaving the same way every time.",
-      ],
-      "Build the system",
-      [
-        "Write a five-line intake script — greeting, address, callback number, urgency, booking. Tape it next to the phone. Everyone reads from the same card.",
-        "Set up an on-call rotation if you have more than one tech. Written. Paid stipend. Phone forwards to whoever's up that week.",
-        "Add one line to the script: \"How'd you hear about us?\" Write down the answer every time. After 30 days, you'll know where your money is actually coming from.",
-      ],
-      "A good system will answer the phone the same way at 9 a.m. as it does at 9 p.m.",
-    );
-
-    this.drawStep(4, "Get out of your own way.",
-      [
-        "This one is more mindset than tactic. Hard to do, but a good system makes it easier.",
-        "Most owners in this trade are technicians first and businesspeople second. They got into it because they're good with their hands, and they default to doing everything themselves.",
-        "If you're a $150/hour tech and you spend two hours a day on the phone, you're costing the business $300 a day to be your own receptionist. That's $7,200 a month. Almost any answering solution out there is cheaper than your billable time.",
-      ],
-      "The math test",
-      [
-        "Track every minute you spend on the phone for one week.",
-        "Multiply by your hourly billable rate.",
-        "Compare to what an answering service or AI receptionist costs per month.",
-      ],
-      "The math rarely favors the owner answering the phone himself. Shops that grow are the ones that hand it off.",
-    );
-
-    this.pageBridge();
-    this.pageClosing();
-
-    // Draw footer on last page
-    this.drawFooter();
-
+    this.page1();
+    this.page2();
+    this.page3();
     return this.doc.save();
   }
 }
 
-// ── CORS headers ─────────────────────────────────────────────────────────────
+// ── CORS headers ──────────────────────────────────────────────────────────────
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -824,7 +640,7 @@ Deno.serve(async (req) => {
         "",
         "Talk soon,",
         "",
-        "— Greg",
+        "-- Greg",
         "Founder, Reliant Support",
         "reliantsupport.net",
       ].join("\n");
@@ -841,7 +657,7 @@ Deno.serve(async (req) => {
           from: "Greg at Reliant Support <noreply@reliantsupport.net>",
           reply_to: "greg@reliantsupport.net",
           to: [lead.email],
-          subject: `Your Missed Revenue Audit — ${lead.company}`,
+          subject: `Your Missed Revenue Audit -- ${lead.company}`,
           text: prospectText,
           attachments: [
             {
@@ -901,7 +717,7 @@ Lead in dashboard: https://app.reliantsupport.net/leads/${lead.id}
       body: JSON.stringify({
         from: "Reliant Support <noreply@reliantsupport.net>",
         to: ["greg@reliantsupport.net"],
-        subject: `🔥 New warm lead: ${lead.company} ($${lostRev}/mo at risk)${pdfFailed ? " ⚠️ PDF failed" : ""}`,
+        subject: `New warm lead: ${lead.company} ($${lostRev}/mo at risk)${pdfFailed ? " -- PDF failed" : ""}`,
         text: gregText,
       }),
     });
@@ -927,7 +743,6 @@ Lead in dashboard: https://app.reliantsupport.net/leads/${lead.id}
 function parseFirstName(name: string): string {
   const trimmed = name.trim();
   if (!trimmed) return "there";
-  // If first token looks like a name word (no numbers, not all caps), use it
   const first = trimmed.split(/\s+/)[0];
   if (/^[A-Za-z]{1,20}$/.test(first)) return first;
   return "there";
