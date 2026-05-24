@@ -84,6 +84,10 @@ const DispatcherDashboard = ({
   // The effective client data — uses demo client when in demo mode
   const effectiveClientData = demoMode && demoClientData ? demoClientData : clientData;
 
+  // Feature flag — tabs still in development are only visible to the developer account.
+  // Remove this flag (and the .filter() calls below) when a tab is ready for clients.
+  const isDeveloper = user?.email === 'gmacdonald63@gmail.com';
+
   const getTodayStr = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
   const [todayStr, setTodayStr] = useState(getTodayStr);
 
@@ -1747,6 +1751,9 @@ const DispatcherDashboard = ({
   // Demo viewers are routed through the owner path (role='owner' set on token validation in App.jsx).
   const teamTab = { id: 'team', label: 'Team', icon: Users };
 
+  // Tabs gated behind isDeveloper — not shown to client accounts until ready to launch
+  const devOnlyTabs = ['pricing', 'estimates'];
+
   const ownerNavItems = [
     { id: 'appointments', label: 'Appointments', icon: Calendar },
     { id: 'customers', label: 'Customers', icon: Users },
@@ -1757,7 +1764,7 @@ const DispatcherDashboard = ({
     { id: 'estimates', label: 'Estimates', icon: FileText },
     { id: 'billing', label: 'Billing', icon: DollarSign },
     { id: 'settings', label: 'Settings', icon: Settings },
-  ];
+  ].filter(item => isDeveloper || !devOnlyTabs.includes(item.id));
 
   const dispatcherNavItems = [
     { id: 'appointments', label: 'Appointments', icon: Calendar },
@@ -1766,7 +1773,7 @@ const DispatcherDashboard = ({
     teamTab,
     { id: 'map', label: 'Map', icon: MapPin },
     { id: 'estimates', label: 'Estimates', icon: FileText },
-  ];
+  ].filter(item => isDeveloper || !devOnlyTabs.includes(item.id));
 
   const activeNavItems = role === 'dispatcher' ? dispatcherNavItems : ownerNavItems;
 
