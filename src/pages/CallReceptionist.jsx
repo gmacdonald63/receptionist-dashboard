@@ -4,18 +4,16 @@ import { RetellWebClient } from 'retell-client-js-sdk';
 
 const SUPABASE_URL = 'https://zmppdmfdhknnwzwdfhwf.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InptcHBkbWZkaGtubnd6d2RmaHdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk4MzQyMDYsImV4cCI6MjA4NTQxMDIwNn0.mXfuz8mEZhizFen78gUaakBDbrzANn4ZM1a7KuDiKJs';
-const DEMO_AGENT_ID = 'agent_c48b68df1da80f01e2c1eea6aa';
-
 const VOICES = [
-  { id: '11labs-Kate', label: 'Kate' },
-  { id: '11labs-Jason', label: 'Jason' },
+  { agentId: 'agent_c48b68df1da80f01e2c1eea6aa', label: 'Kate' },
+  { agentId: 'agent_320fc02880a375cc8ce443ee89', label: 'Jason' },
 ];
 
 const CallReceptionist = () => {
   const [callStatus, setCallStatus] = useState('idle'); // idle | connecting | connected | ended
   const [isMuted, setIsMuted] = useState(false);
   const [isAgentTalking, setIsAgentTalking] = useState(false);
-  const [selectedVoice, setSelectedVoice] = useState(VOICES[0].id);
+  const [selectedVoice, setSelectedVoice] = useState(VOICES[0].agentId);
   const retellClientRef = useRef(null);
 
   useEffect(() => {
@@ -51,7 +49,7 @@ const CallReceptionist = () => {
           'apikey': SUPABASE_ANON_KEY,
           'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
         },
-        body: JSON.stringify({ agent_id: DEMO_AGENT_ID, voice_id: selectedVoice }),
+        body: JSON.stringify({ agent_id: selectedVoice }),
       });
 
       if (!response.ok) {
@@ -102,9 +100,9 @@ const CallReceptionist = () => {
                 {VOICES.map((voice) => (
                   <button
                     key={voice.id}
-                    onClick={() => setSelectedVoice(voice.id)}
+                    onClick={() => setSelectedVoice(voice.agentId)}
                     className={`px-8 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-                      selectedVoice === voice.id
+                      selectedVoice === voice.agentId
                         ? 'bg-green-600 text-white shadow'
                         : 'text-gray-400 hover:text-white'
                     }`}
