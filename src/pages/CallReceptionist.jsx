@@ -6,10 +6,16 @@ const SUPABASE_URL = 'https://zmppdmfdhknnwzwdfhwf.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InptcHBkbWZkaGtubnd6d2RmaHdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk4MzQyMDYsImV4cCI6MjA4NTQxMDIwNn0.mXfuz8mEZhizFen78gUaakBDbrzANn4ZM1a7KuDiKJs';
 const DEMO_AGENT_ID = 'agent_c48b68df1da80f01e2c1eea6aa';
 
+const VOICES = [
+  { id: '11labs-Kate', label: 'Kate' },
+  { id: '11labs-Jason', label: 'Jason' },
+];
+
 const CallReceptionist = () => {
   const [callStatus, setCallStatus] = useState('idle'); // idle | connecting | connected | ended
   const [isMuted, setIsMuted] = useState(false);
   const [isAgentTalking, setIsAgentTalking] = useState(false);
+  const [selectedVoice, setSelectedVoice] = useState(VOICES[0].id);
   const retellClientRef = useRef(null);
 
   useEffect(() => {
@@ -45,7 +51,7 @@ const CallReceptionist = () => {
           'apikey': SUPABASE_ANON_KEY,
           'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
         },
-        body: JSON.stringify({ agent_id: DEMO_AGENT_ID }),
+        body: JSON.stringify({ agent_id: DEMO_AGENT_ID, voice_id: selectedVoice }),
       });
 
       if (!response.ok) {
@@ -89,13 +95,34 @@ const CallReceptionist = () => {
         </div>
 
         {callStatus === 'idle' && (
-          <button
-            onClick={startCall}
-            className="w-full bg-green-600 hover:bg-green-700 text-white font-bold text-lg py-5 px-8 rounded-2xl shadow-xl transition-colors flex items-center justify-center gap-3"
-          >
-            <Phone className="w-6 h-6" />
-            Start the Call
-          </button>
+          <div className="space-y-5">
+            <div>
+              <p className="text-sm font-medium text-gray-400 mb-3">Choose your receptionist</p>
+              <div className="inline-flex bg-gray-800 border border-gray-700 rounded-xl p-1 gap-1">
+                {VOICES.map((voice) => (
+                  <button
+                    key={voice.id}
+                    onClick={() => setSelectedVoice(voice.id)}
+                    className={`px-8 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                      selectedVoice === voice.id
+                        ? 'bg-green-600 text-white shadow'
+                        : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    {voice.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <button
+              onClick={startCall}
+              className="w-full bg-green-600 hover:bg-green-700 text-white font-bold text-lg py-5 px-8 rounded-2xl shadow-xl transition-colors flex items-center justify-center gap-3"
+            >
+              <Phone className="w-6 h-6" />
+              Start the Call
+            </button>
+          </div>
         )}
 
         {callStatus === 'connecting' && (
