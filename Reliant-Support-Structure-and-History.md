@@ -65,7 +65,7 @@
 ═══════════════════════════════════════════════════════════════════════════ -->
 
 # Reliant Support — Structure, History & Progress
-**Last Updated:** June 5, 2026 (reconciliation pass — feature-gating + service_types table added)
+**Last Updated:** June 5, 2026 (Time picker implemented — `src/TimePickerDropdown.jsx` built and shipped)
 **Maintained by:** All sessions — see Section 13 (Session Log) for contribution history
 
 ---
@@ -169,19 +169,36 @@ Built a complete system for hiring commission-only remote sales reps:
 
 ### Phase 4 — Location, GPS & Dispatch Map (April 2026)
 The biggest feature phase — turned the dashboard into a real field service management tool:
-- **GPS tracking** (always-on in TechDashboard): `locationService.js` — `watchPosition`, handles Chrome Android silent hang bug, GPS warmup
+- **GPS tracking** (`src/utils/locationService.js`, 203 lines): `watchPosition` with Chrome Android silent-hang workaround, GPS warmup via `getCurrentPosition`, screen wake lock to prevent sleep, 60s heartbeat (force-write when stationary), iOS watchdog timer (re-registers if 45s silence), 50m distance filter, 200 km/h speed sanity reject, stationary detection at 3 km/h (switches to low-accuracy mode), offline queue up to 200 fixes with flush-on-reconnect
 - **Dispatcher Map tab** (`DispatcherMap.jsx`): live map of all active techs using Leaflet + Stadia Maps; real-time updates via Supabase Realtime subscriptions
 - **Customer tracking page** (`TrackingPage.jsx`): public-facing page (no auth) where customers watch their tech approaching in real time
 - **"On My Way" flow**: tech taps button → generates one-time token → sends SMS to customer with tracking link → customer sees live map
 - SMS via Twilio initially, then **migrated to Telnyx** *(Greg's Twilio numbers were owned by Retell AI)*
 - `generate-tracking-token`, `get-tracking-data`, `send-sms` Edge Functions
 - `tech_locations` table, `tracking_tokens` table
-- GPS status dot in tech header
+- GPS status dot in tech header (tappable — opens GPS diagnostic modal showing tracking status, queue length, GPS errors, and real-time coordinates)
 - Map tab in dispatcher nav
+- **Tech Dashboard** (`src/TechDashboard.jsx`, 750 lines):
+  - **Job list with date navigation**: previous/next day buttons, native date picker, blue dot for "today", "(past)" label for historical dates, auto-refresh at midnight
+  - **Job cards**: show customer name, service type badge, time range, address — tap to open Job Detail
+  - **Job Detail bottom sheet** (permission-gated panels):
+    - Job notes (`job_notes`) — default ON
+    - Prior visits (`view_customer_history`) — last 5 appointments for same customer, default OFF
+    - Customer notes (`view_customer_notes`) — 5 most recent from `customer_notes` table, default OFF
+    - Call transcript (`view_call_transcript`) — full transcript scrollable, default OFF
+    - Call recording (`view_call_recording`) — HTML5 audio player for CloudFront URL, default OFF
+  - **Action buttons** (all disabled for past dates — "View Only" badge shown instead):
+    - Navigate → opens Google Maps with job address
+    - On My Way (`on_my_way` permission) → updates status to `en_route`, generates tracking token, sends customer SMS
+    - Mark Complete (`mark_complete` permission) → updates status to `complete`, revokes tracking token, triggers review SMS if `auto` mode configured
+    - Create Estimate → opens EstimateBuilder in full-screen modal
+  - **Non-job status / destinations modal**: if `client_destinations` rows exist, "Set Status" button appears — tech selects e.g. "Back at Office", "Lunch Break" — writes dummy lat/lng + destination label to `tech_locations` so dispatcher map shows the status
+  - **Two-tier permission system** (`technician_permissions` table): Phase 1 permissions default ON when no row exists; Phase 2 permissions default OFF — owner/admin enables them per-tech via the Team tab
+  - **Loading skeleton** (3 animated bars), **error state** with Retry button, **toast notifications** (auto-dismiss 3s)
 
 ### Phase 5 — Calendar UX & Appointment Features (April–May 2026)
 - **Drag-and-drop appointment rescheduling**: pointer events system with drag intent detection, drag overlay ghost, drop preview, clamped grid snapping, iOS context menu prevention
-- Google Calendar-style time picker dropdown *(replaced native HTML time input)*
+- Google Calendar-style time picker dropdown *(replaced native HTML time input — `src/TimePickerDropdown.jsx`, built June 5, 2026)*
 - Fixed date handling (local date not UTC for "today")
 - 12-hour AM/PM time formatting
 
@@ -263,14 +280,17 @@ The PDF went through multiple design iterations before the v5 dark design was ap
 ### Field Service
 | Feature | Status |
 |---------|--------|
-| Tech dashboard (own jobs only, read-only) | Live |
-| Tech GPS tracking (always-on) | Live |
+| Tech dashboard (own jobs only — date nav, job cards, job detail, action buttons) | Live |
+| Tech GPS tracking (always-on when `gps_tracking` permission enabled) | Live |
 | Dispatcher map tab (live tech positions) | Live |
 | "On My Way" SMS → customer tracking link | Live |
 | Customer tracking page (public, live map) | Live |
 | Assigned tech on appointments | Live |
-| Review request SMS after job | Live |
+| Review request SMS after job (auto mode configurable per client) | Live |
 | Create estimate from tech dashboard | Live |
+| Non-job status destinations (e.g. "Lunch Break", "At Warehouse") | Live |
+| Job detail: prior visits, customer notes, call transcript + recording (per-tech permission gates) | Live |
+| Past-date view-only mode (action buttons disabled for historical jobs) | Live |
 
 ### Team Management
 | Feature | Status |
@@ -356,9 +376,9 @@ The PDF went through multiple design iterations before the v5 dark design was ap
 | `invite-user` | Invites new staff/dispatcher via Supabase auth |
 | `invite-rep` | Invites commission-only sales rep (custom link, no Supabase auth email) |
 | `send-notification` | Central notification sender (email templates) |
-| `send-sms` | SMS delivery via Telnyx |
-| `send-review-sms` | Sends review request SMS to customer |
-| `generate-tracking-token` | Creates one-time token + sends "On My Way" SMS |
+| `send-sms` | SMS delivery via Telnyx *(now effectively a passthrough — all callers call Telnyx directly; see Section 8)* |
+| `send-review-sms` | Sends review request SMS to customer — calls Telnyx directly (no send-sms hop) |
+| `generate-tracking-token` | Creates one-time token + sends "On My Way" SMS — calls Telnyx directly |
 | `get-tracking-data` | Returns live tech location for public tracking page |
 | `geocode-appointments` | Geocodes appointment addresses for map |
 | `save-onboarding-data` | Saves new client onboarding form data |
@@ -372,7 +392,7 @@ The PDF went through multiple design iterations before the v5 dark design was ap
 | `generate-estimate-token` | Creates public token for estimate sharing |
 | `get-estimate` | Returns estimate data for public viewer |
 | `approve-estimate` | Marks estimate as customer-approved |
-| `send-estimate` | Emails estimate link to customer |
+| `send-estimate` | Emails + SMS estimate link to customer — calls Telnyx directly |
 | `notify-new-lead` | Triggers PDF generation when a lead submits the form |
 | `send-audit-pdf` | Generates personalized PDF, stores + emails it |
 | `generate-demo-token` | Creates demo access token |
@@ -469,8 +489,23 @@ No upfront payroll risk. Reps are paid only when they close a deal. The system a
 **Why Vercel?**
 SPA-friendly (handles React Router-style redirects via `vercel.json`). Free tier covers current traffic. Easy environment variable management.
 
+**CLAUDE.md is stale on App.jsx** *(discovered June 5, 2026)*
+CLAUDE.md describes App.jsx as ~1230 lines that owns the tab bar and all render functions. As of the current codebase, App.jsx is ~389 lines and is a thin auth router only. The tab bar, `activeTab` state, role gating, and all per-tab content rendering live in `src/DispatcherDashboard.jsx` (~1875 lines). Key locations in DispatcherDashboard.jsx: `activeTab` state at ~line 117; `ownerNavItems` array at ~lines 1412–1420 (7 tabs); `dispatcherNavItems` at ~lines 1422–1428 (5 tabs); authenticated tab content render at ~lines 1789+. Any future plan or session that references App.jsx for tab integration should target DispatcherDashboard.jsx instead. The Phase 1 invoicing plan was corrected to reflect this.
+
 **Why hardcode the Supabase anon key in client-side code?**
 This is standard practice for Supabase. The anon key is a *publishable* key — it only enables RLS-gated operations. All sensitive operations are protected by RLS policies on the database. The key is not a secret.
+
+**Why TELNYX_API_KEY is a Supabase secret, not a DB column** → **[FINAL: Supabase secret]**
+Originally `telnyx_api_key` was stored per-row in the `clients` table alongside `telnyx_from_number`. During Phase 8 SMS debugging this was changed: the API key is now stored as a Supabase Edge Function secret (`TELNYX_API_KEY`), read via `Deno.env.get("TELNYX_API_KEY")`. The `telnyx_from_number` remains per-client in `clients` because each client will have their own dedicated Telnyx number. The `SmsConfigForm` in `DispatcherDashboard.jsx` was updated to remove the API key field — it now only shows the from-number field.
+
+**Why SMS functions call Telnyx directly instead of going through `send-sms`**
+Supabase's Edge Function gateway strips `Authorization` headers on intra-function HTTP calls, regardless of the target function's `verify_jwt` setting. When `send-estimate`, `generate-tracking-token`, and `send-review-sms` called `send-sms` as an intermediary, every call returned 401. Fix: each function calls the Telnyx API (`api.telnyx.com/v2/messages`) directly using the `TELNYX_API_KEY` secret. The `send-sms` function still exists but is no longer used by other functions.
+
+**Why `company_name` not `business_name` in clients queries**
+The `clients` table column is `company_name`. An early version of `send-estimate` queried `business_name` (which doesn't exist). Supabase silently returns null for unknown select columns, so the entire query returned null with no error — causing "SMS not configured" failures downstream. Fixed by correcting the column name in all Edge Functions that query the `clients` table.
+
+**Why a custom TimePickerDropdown instead of native `<input type="time">`** *(added June 5, 2026)*
+The native HTML time input is inconsistently styled across browsers and has no support for dark themes. More importantly, it requires a hidden "change time" toggle — users had to discover and click a small link before a time field appeared at all. The replacement (`src/TimePickerDropdown.jsx`) renders as a clickable badge matching the existing date badge style, opens a scrollable dropdown of all times in 15-minute increments formatted as 12-hour AM/PM, and auto-scrolls to the current selection. The `showCustomTime` toggle state was removed entirely — time is always editable without extra steps.
 
 ---
 
@@ -489,10 +524,27 @@ This is standard practice for Supabase. The anon key is a *publishable* key — 
 
 *When something here gets completed, move it to the relevant section above and note the completion date. Do not delete it — update it.*
 
-### Invoicing (in progress)
+### Invoicing (in progress — Phase 1 plan ready to execute)
 Pricing catalog and estimates are built but **dev-gated** (see Phase 8). Invoicing V1 (no Stripe Connect — shops collect payment via their own methods) is the next build.
 
-Planning reference: `docs/invoicing-plan.md` on branch `claude/plan-product-features-83iq2` (commit `f5b3327`). The doc captures 8 decision forks for the invoicing build, plus the "Monday walkthrough" gap analysis. **Caveat:** that planning doc was written in a session that didn't yet know estimates were already built and gated — Forks 3 (multi-option), 4 (tech-in-field), 7 (service-type duration), and 8 (customer portal) are effectively already resolved by the existing build. The still-open decisions for invoicing-proper: Fork 1 (payment processing scope — invoice-only vs. Stripe Connect), Fork 2 (pricing model — flat-rate vs. T&M vs. hybrid), Fork 6 (tax handling).
+**Fork decisions — all locked as of June 5, 2026:**
+| Fork | Decision |
+|------|----------|
+| Fork 1 — Payment processing | **Deferred to Phase 4.** Phase 1–3 build invoice-only (no Stripe Connect). Shops collect payment via their own methods. Revisit when first client asks for integrated payments. |
+| Fork 2 — Pricing model | **Hybrid.** Both flat-rate line items (parts, diagnostic fees) and hourly labor in the same estimate/invoice. One catalog, two unit types: `each` and `hour`. |
+| Fork 6 — Tax handling | **Per-client rate + per-line flag.** `clients.default_tax_rate` (NUMERIC 6,5, stored as decimal e.g. 0.08750) + `pricing_catalog.taxable` boolean per line item. Already in DB from Phase 7. |
+| Fork 8 — Customer portal | **V1 scoped.** Customer can view and approve estimates online (already built in Phase 8). Full payment portal deferred to Phase 4 with Fork 1. |
+| Forks 3, 4, 7 | Already resolved by existing Phase 8 build. |
+
+**Active planning branch: `claude/invoicing-v1` (commit `1fd8ce7`)**
+Three planning docs committed:
+- `docs/superpowers/specs/2026-04-26-invoicing-estimates-spec.md` — original discovery spec with all 8 forks
+- `docs/superpowers/plans/2026-04-26-invoicing-estimates-roadmap.md` — master 4-phase roadmap with locked decisions + cross-cutting conventions
+- `docs/superpowers/plans/2026-04-26-invoicing-phase-1-catalog.md` — detailed Phase 1 (Pricing Catalog) implementation plan in 4 chunks, fully reviewer-hardened
+
+**To start building:** Open the `claude/invoicing-v1` worktree in a new session and say: *"Read `docs/superpowers/plans/2026-04-26-invoicing-phase-1-catalog.md` then execute it starting at Chunk 1."*
+
+**Old planning doc superseded:** `docs/invoicing-plan.md` on `claude/plan-product-features-83iq2` (commit `f5b3327`) is the original discovery doc. It has been superseded by the three docs above. The new plan incorporates all fork decisions and was written with full knowledge of the existing Phase 8 build.
 
 ### Rollout of Pricing + Estimates tabs (blocked on launch decision)
 The Pricing and Estimates tabs are built and functional but hidden from all client accounts behind `isDeveloper` / `devOnlyTabs` in `src/DispatcherDashboard.jsx`. Removing both will roll them out to all clients. Greg has not yet committed to a launch date.
@@ -509,6 +561,22 @@ A new/alternate PDF variant — same pages 1 and 2, but a shorter, punchier page
 ### v5 Light PDF (saved, not yet wired)
 The light/cream editorial variant (`v5_Light_PersonalLetter_generator.py`) is saved in the repo but not yet wired into production. Ready to deploy alongside or instead of the dark version when needed.
 
+### SMS Carrier Approval — Blocked (10DLC rejected, toll-free recommended)
+SMS code is fully deployed and working at the Telnyx API level (functions call Telnyx, Telnyx returns 200), but messages are silently blocked by carriers because no campaign is registered.
+
+**What was tried:** Registered a 10DLC campaign under brand "Reliant Support LLC" (TCR ID: `C7LLQQS`, Telnyx campaign `4b30019d-dfc0-4f09-8711-b992bdda6915`). Rejected with error 710: *"Reseller / Non-compliant KYC. Register the brand info, not the agency behind the brand."*
+
+**Why it failed:** Greg does not own an HVAC company. Reliant Support is a pure SaaS platform sending SMS on behalf of client HVAC shops. TCR correctly identified this as an ISV/reseller scenario. The brand that needs to be registered is the *end client's* brand, not Reliant Support.
+
+**Recommended path: Toll-Free Numbers (TFV)**
+- Switch from 10-digit local numbers to toll-free (+1-800/888/etc.) for each client
+- Toll-Free Verification (TFV) is the correct registration path for ISVs/platforms
+- Free to register, simpler process, designed for exactly this use case (transactional SMS sent on behalf of business clients)
+- Each client gets their own toll-free number; `clients.telnyx_from_number` stays per-client
+- Until this is resolved, all three SMS features (tracking links, estimates, review requests) will silently fail to deliver on most carriers (T-Mobile, Verizon, AT&T)
+
+**Alternative long-term path:** 10DLC ISV/reseller registration — Telnyx supports this but requires each client brand to be individually registered ($4 one-time brand + $15 campaign + ~$10/month per client). More expensive and operationally complex.
+
 ### Missed-Call-to-Text (future idea)
 Discussed as a viable future feature — auto-text a prospect if they hang up before being answered.
 
@@ -524,10 +592,13 @@ Retell AI recognizing returning customers by phone number during the call. Resea
 | Original | Changed To | Reason | Status |
 |----------|-----------|--------|--------|
 | Twilio SMS | Telnyx SMS | Greg's Twilio numbers were owned by Retell AI, not him | **[FINAL: Telnyx]** |
-| Native HTML time input | Google Calendar-style dropdown | Better UX, more polished | **[FINAL: Dropdown]** |
+| Native HTML time input | Google Calendar-style dropdown (`TimePickerDropdown.jsx`) | Native input required a hidden toggle to reveal; inconsistent browser styling; no dark theme support | **[FINAL: Dropdown]** |
 | PDF generator (drifted implementation) | v5 Dark Personal Letter (exact Python port) | Previous implementation drifted from approved design | **[FINAL: v5 Dark]** |
 | Supabase auth email for rep invites | Custom invite link + `RepSetPasswordPage` | More branded experience, avoids Supabase email styling limits | **[FINAL: Custom link]** |
 | Pricing + Estimates launched to all clients | Dev-gated to gmacdonald63@ only | Tabs built but not ready for general rollout (commit `32bcc40`, May 24, 2026) | **[FINAL pending launch decision]** |
+| `telnyx_api_key` stored in `clients` DB table | Stored as Supabase Edge Function secret `TELNYX_API_KEY` | Security + intra-function call auth issue (Supabase gateway strips Authorization headers) | **[FINAL: Supabase secret]** |
+| SMS functions routing through `send-sms` intermediary | Each function calls Telnyx API directly | Supabase gateway strips Authorization headers on intra-function calls, causing 401 regardless of verify_jwt setting | **[FINAL: Direct Telnyx calls]** |
+| 10DLC for Telnyx SMS carrier registration | Toll-free numbers + TFV (recommended) | Reliant Support is an ISV/platform — TCR rejected 10DLC brand as "reseller" (error 710). Greg has no HVAC company of his own. | **[FINAL pending implementation]** |
 
 ---
 
@@ -555,3 +626,7 @@ Retell AI recognizing returning customers by phone number during the call. Resea
 | June 5, 2026 | Claude Code (receptionist-dashboard) | Initial document created. Compiled from 94 git commits, CLAUDE.md, all source files, and conversation context. Covers full project history from Phase 0 through Phase 9. |
 | June 5, 2026 | Claude Code (receptionist-dashboard) | Added AI instructions block at top, renamed file, added Sections 11–13 (changed decisions log, context for future sessions, session log), converted to living document format. |
 | June 5, 2026 | Claude Code (receptionist-dashboard, branch `claude/plan-product-features-83iq2`) | Reconciliation pass. Verified Phases 7–8 file existence against the repo. **Added:** `service_types` table to Section 6 (was missing — 157 seeded HVAC services drive booking durations); Phase 7 expanded with service_types details + category breakdown + corrected migration row count (file named "156" actually inserts 157 rows); Phase 8 noted that Pricing + Estimates tabs are dev-gated to `gmacdonald63@gmail.com` only via commit `32bcc40` (May 24, 2026) — this was previously undocumented; Section 4 Estimates/Invoicing rows updated from "Live" → "Built — dev-gated"; Section 10 split invoicing pending work into (a) invoicing-proper and (b) rollout of pricing/estimates tabs; Customer Recognition pending note enriched with normalizePhone gotcha (`src/utils/addressNormalization.js:122-127` exists but no Edge Function uses it); Section 11 added a row for the dev-gating decision; pointer to `docs/invoicing-plan.md` (branch `claude/plan-product-features-83iq2`, commit `f5b3327`) added under Section 10 with explicit caveat that 4 of its 8 forks are already resolved by the existing build. |
+| June 5, 2026 | Claude Code (receptionist-dashboard, branch `claude/dreamy-mcnulty`) | **SMS architecture session.** Fixed `business_name`→`company_name` column bug in `send-estimate`. Moved `TELNYX_API_KEY` from DB to Supabase secret. Discovered and fixed Supabase intra-function auth bug (gateway strips Authorization headers — all SMS functions now call Telnyx API directly). Diagnosed 10DLC campaign rejection (error 710 — Reliant Support is an ISV/platform, not an end brand; Greg has no HVAC company). **Added to doc:** Section 8 — three new architectural decisions (Telnyx secret, direct Telnyx calls, company_name bug); Section 10 — SMS carrier approval blocker with full diagnosis and toll-free/TFV recommended path; Section 11 — three new changed-decisions rows; Section 5 — updated send-sms, send-review-sms, generate-tracking-token, send-estimate descriptions. |
+| June 5, 2026 | Claude Code (receptionist-dashboard, worktree `invoicing-v1` / branch `claude/invoicing-v1`) | **Invoicing Phase 1 planning session.** Reviewed discovery spec (8 forks). Locked all open forks: Fork 1 deferred to Phase 4 (no Stripe Connect in Phase 1–3), Fork 2 = Hybrid pricing, Fork 6 = per-client tax rate + per-line taxable flag, Fork 8 = customer portal V1 already built. Created fresh worktree `claude/invoicing-v1`. Wrote and committed three planning docs: master roadmap (4 phases), Phase 1 detailed plan (4 chunks, ~1700 lines), and original spec. Plan was run through a reviewer pass across all 4 chunks; 14 issues fixed including: reuse existing DB trigger function, IN-clause RLS guards, DispatcherDashboard.jsx wiring (CLAUDE.md was stale — App.jsx is now a thin 389-line router), Tag icon instead of DollarSign collision, re-sort on save, FK 23503 user-friendly error, Windows-friendly paths, explicit Settings file pointers, branch-confirm before push. **Added to doc:** Section 8 — CLAUDE.md staleness note about App.jsx vs DispatcherDashboard.jsx; Section 10 — full invoicing pending work rewrite with locked fork table and new branch/plan references. |
+| June 5, 2026 | Claude Code (receptionist-dashboard, worktree `zealous-panini`) | **Tech dashboard documentation pass.** Read `TechDashboard.jsx` (750 lines) and `locationService.js` (203 lines) in full. **Added to Phase 4:** full tech dashboard feature list — date navigation, job detail bottom sheet with all 5 permission-gated info panels (prior visits, customer notes, call transcript, call recording, job notes), all 4 action buttons with their conditions, non-job status/destinations modal, two-tier permission system (Phase 1 default ON / Phase 2 default OFF), loading/error/toast states, GPS diagnostic modal details, locationService.js specifics (50m filter, 200 km/h reject, 200-position offline queue, screen wake lock, iOS watchdog, stationary detection). **Updated Section 4 Feature Inventory:** corrected "read-only" description (techs update statuses and create estimates), added non-job destinations row, past-date view-only row, permission-gated job detail row; updated GPS tracking note to reflect permission gate. |
+| June 5, 2026 | Claude Code (receptionist-dashboard, branch `claude/improve-appointment-time-picker-DJONT`) | **Time picker implementation.** Greg noted the appointment time picker felt awkward compared to Google Calendar. Built `src/TimePickerDropdown.jsx` (108 lines): clickable badge trigger, scrollable dropdown with all times in 15-minute increments, 12-hour AM/PM format, auto-scroll to current selection on open, arrow-key navigation, Escape to close, click-outside to close, dark theme matching existing UI. Modified `src/AppointmentSidePanel.jsx`: removed `showCustomTime` state and the "change time" / "reset" button pattern entirely — the time badge is now the picker and is always directly interactive. Committed `9444914`, pushed. **Updated doc:** Phase 5 (noted implementation date), Section 8 (new architectural decision entry explaining the why), Section 11 (updated native→dropdown row with more detail). |
