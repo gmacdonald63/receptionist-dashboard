@@ -1,9 +1,65 @@
-# Reliant Support — Structure, History & Progress
-**Source:** Claude Code session — compiled from git history, codebase, CLAUDE.md, and conversation context
-**Compiled:** June 5, 2026
-**Session:** Claude Code (receptionist-dashboard repo)
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     INSTRUCTIONS FOR ANY AI SESSION RECEIVING THIS FILE
+     ═══════════════════════════════════════════════════════════════════════════
 
-> **Note on memory:** Claude Code sessions do not share memory with each other or with Claude.ai Chat. Each session only knows what's in the codebase, git history, and the current conversation. To get the fullest picture, run this same exercise in every active Claude Code session AND in Claude.ai Chat (which may have separate conversation history). ChatGPT sessions are fully separate.
+     This is a living master document for Reliant Support. It is the single
+     source of truth for the project's history, decisions, features, and
+     current state. It is intentionally shared across Claude Code sessions,
+     Claude Chat, and ChatGPT so that any session can be fully oriented.
+
+     WHEN YOU RECEIVE THIS FILE, DO THE FOLLOWING:
+
+     1. READ THE ENTIRE DOCUMENT before doing anything else.
+
+     2. SEARCH YOUR CONTEXT for anything not already captured here:
+        - Conversations from this session (decisions made, features discussed,
+          work completed, anything Greg said about plans or intent)
+        - Code, git commits, files, or database changes you can see
+        - Any rationale, constraints, or tradeoffs that were discussed
+
+     3. UPDATE THIS DOCUMENT IN PLACE — do not create a new file:
+        - Add new features to the Feature Inventory (Section 4) with status
+        - Add new Edge Functions to Section 5
+        - Add new database tables to Section 6
+        - Add new phases or extend existing phases in the Timeline (Section 3)
+        - Add new architectural decisions to Section 8 with the "why"
+        - Move completed items out of Pending Work (Section 10) and into
+          the appropriate section, noting when they were completed
+        - Update the "Last Updated" line at the top of the document
+
+     4. HANDLE CONFLICTS — where something was planned one way in one session
+        and done a different way in another:
+        - Keep both versions briefly noted
+        - Clearly mark which was the FINAL DECISION with → **[FINAL]**
+        - Example: "Initially planned X, later changed to Y → **[FINAL: Y]**"
+
+     5. HANDLE CHANGED OR REPLACED WORK — where something was built, then
+        later revised or replaced:
+        - Update the entry to reflect the current state
+        - Add a brief note: "*(replaced [old approach] — [reason])*"
+        - Example: "SMS via Telnyx *(replaced Twilio — Greg's Twilio numbers
+          were owned by Retell AI, not him)*"
+
+     6. AVOID DUPLICATION — before adding anything, check whether it already
+        exists. Update the existing entry rather than adding a duplicate.
+
+     7. LOG YOUR CONTRIBUTION at the bottom of the document in Section 13
+        (Session Log). Add one entry per session with:
+        - Date
+        - Session type (Claude Code / Claude Chat / ChatGPT / other)
+        - A brief list of what you added or changed
+
+     8. SAVE AND DELIVER the updated file back to Greg when done.
+
+     GOAL: After running this through every active session, the document
+     should contain everything known about this project from every source —
+     with no duplicates, no contradictions, and a clear record of what the
+     final state of every decision is.
+═══════════════════════════════════════════════════════════════════════════ -->
+
+# Reliant Support — Structure, History & Progress
+**Last Updated:** June 5, 2026
+**Maintained by:** All sessions — see Section 13 (Session Log) for contribution history
 
 ---
 
@@ -47,7 +103,7 @@ The full dashboard goes beyond call answering — it also handles appointment ma
 | Backend / DB | Supabase (Postgres + Auth + Storage + Edge Functions) |
 | AI Voice | Retell AI (GPT-4.1 LLM, tool call strict mode) |
 | Email | Resend (from: noreply@reliantsupport.net) |
-| SMS | Telnyx (replaced Twilio — Greg's Twilio numbers were owned by Retell AI, not him) |
+| SMS | Telnyx *(replaced Twilio — Greg's Twilio numbers were owned by Retell AI, not him)* |
 | Payments | Stripe (subscriptions + payment links) |
 | Map Tiles | Stadia Maps (domain-auth, no API key in code) |
 | Map Library | Leaflet + react-leaflet |
@@ -110,7 +166,7 @@ The biggest feature phase — turned the dashboard into a real field service man
 - **Dispatcher Map tab** (`DispatcherMap.jsx`): live map of all active techs using Leaflet + Stadia Maps; real-time updates via Supabase Realtime subscriptions
 - **Customer tracking page** (`TrackingPage.jsx`): public-facing page (no auth) where customers watch their tech approaching in real time
 - **"On My Way" flow**: tech taps button → generates one-time token → sends SMS to customer with tracking link → customer sees live map
-- SMS via Twilio initially, then **migrated to Telnyx** (Greg's Twilio numbers were owned by Retell AI)
+- SMS via Twilio initially, then **migrated to Telnyx** *(Greg's Twilio numbers were owned by Retell AI)*
 - `generate-tracking-token`, `get-tracking-data`, `send-sms` Edge Functions
 - `tech_locations` table, `tracking_tokens` table
 - GPS status dot in tech header
@@ -118,7 +174,7 @@ The biggest feature phase — turned the dashboard into a real field service man
 
 ### Phase 5 — Calendar UX & Appointment Features (April–May 2026)
 - **Drag-and-drop appointment rescheduling**: pointer events system with drag intent detection, drag overlay ghost, drop preview, clamped grid snapping, iOS context menu prevention
-- Google Calendar-style time picker dropdown (replaced native HTML time input)
+- Google Calendar-style time picker dropdown *(replaced native HTML time input)*
 - Fixed date handling (local date not UTC for "today")
 - 12-hour AM/PM time formatting
 
@@ -146,7 +202,7 @@ Building toward full front-office replacement for HVAC shops:
 - Estimate approval flow: customer approves online → status updates → ready to convert to invoice
 - `estimate_legal_text` in Settings tab
 
-### Phase 9 — Marketing Funnel (June 2026 — current branch)
+### Phase 9 — Marketing Funnel (June 2026)
 Built a complete lead generation and nurturing system:
 - **`/missed-revenue` landing page** (`MissedRevenuePage.jsx`) — React page in the main app
 - **`missed-revenue.html`** — standalone HTML for HostGator hosting at `reliantsupport.net/missed-revenue` (no React needed, connects directly to Supabase)
@@ -158,14 +214,15 @@ Built a complete lead generation and nurturing system:
 - Fixed 401 bug (JWT was being used as `apikey` header instead of separate publishable key)
 
 #### The PDF Design — v5 Dark Personal Letter
+The PDF went through multiple design iterations before the v5 dark design was approved:
 - **3 pages**, dark editorial style (navy/dark background)
 - **Page 1 — The Audit**: Large `$XX,XXX` missed revenue number at 96pt, 3 stat tiles (missed calls/day, missed calls/month, lost jobs/month), calculation formula, closing quote
 - **Page 2 — Four Steps**: Eyebrow, headline, 4 numbered steps as plain text (no boxes — spec requirement)
-- **Page 3 — Note from Greg**: Eyebrow, "Why I built this." headline, 5 body paragraphs, Greg's signature, 2 side-by-side clickable CTA buttons
+- **Page 3 — Note from Greg**: Eyebrow, "Why I built this." headline, body paragraphs, Greg's signature, 2 side-by-side clickable CTA buttons
   - Cyan button: "Call the receptionist" → `app.reliantsupport.net/try-receptionist`
   - Blue button: "Try the dashboard" → `app.reliantsupport.net/try-demo`
-- Logo: RELIANT SUPPORT logo (red on transparent) embedded as base64 PNG
-- Exact port of approved Python/ReportLab design (`v5_Dark_PersonalLetter_generator.py`)
+- Logo: RELIANT SUPPORT logo (red on transparent) embedded as base64 PNG in the Edge Function
+- Exact port of approved Python/ReportLab design (`v5_Dark_PersonalLetter_generator.py`) into TypeScript
 - **v5 Light variant** (`v5_Light_PersonalLetter_generator.py`) also saved in repo for future use — cream/warm paper style, not yet wired into production
 
 ---
@@ -258,11 +315,11 @@ Built a complete lead generation and nurturing system:
 |---------|--------|
 | /missed-revenue landing page (React) | Live |
 | missed-revenue.html (standalone HostGator) | Live |
-| Personalized PDF audit generation | Live |
+| Personalized 3-page PDF audit generation | Live |
 | PDF email delivery to prospect via Resend | Live |
 | Greg notification email on each lead | Live |
-| Supabase Storage for PDFs | Live |
-| v5 Light PDF variant (saved, not yet wired) | Saved |
+| Supabase Storage for PDFs (`audit-pdfs` bucket) | Live |
+| v5 Light PDF variant (saved, not yet wired) | Saved for future |
 
 ### Demo System
 | Feature | Status |
@@ -381,8 +438,8 @@ Connected to HubSpot for deal tracking. When a rep closes a client, a deal is cr
 **Why no router library?**
 Navigation is pure React state in App.jsx. This was a deliberate choice to keep the bundle simple and avoid router configuration overhead for a dashboard that doesn't need deep linking.
 
-**Why Telnyx instead of Twilio?**
-Greg's Twilio phone numbers were registered under Retell AI's account, not Greg's. When it came time to send SMS from the dashboard, switching to Telnyx meant owning the phone numbers outright.
+**Why Telnyx instead of Twilio?** → **[FINAL: Telnyx]**
+Greg's Twilio phone numbers were registered under Retell AI's account, not Greg's. When it came time to send SMS from the dashboard, switching to Telnyx meant owning the phone numbers outright. Twilio was used briefly during Phase 4 development but fully replaced.
 
 **Why Stadia Maps instead of Google Maps?**
 Domain-based authentication (no API key in code, no per-request billing). Free plan covers current usage.
@@ -418,7 +475,9 @@ This is standard practice for Supabase. The anon key is a *publishable* key — 
 
 ---
 
-## 10. Known Pending Work (as of June 5, 2026)
+## 10. Known Pending Work
+
+*When something here gets completed, move it to the relevant section above and note the completion date. Do not delete it — update it.*
 
 ### Invoicing (in progress)
 The pricing catalog and estimates are live. Invoicing V1 (no Stripe Connect — shops collect payment via their own methods) is the next build.
@@ -428,39 +487,54 @@ The pricing catalog and estimates are live. Invoicing V1 (no Stripe Connect — 
 1. Snapshot all data from client_id=1 (appointments, customers, notes, calls with real transcripts/recordings)
 2. Rewrite the function to re-insert with client_id=9999 and relative dates (so appointments always look current)
 
-### 3-Page "Why I Built This" PDF Variant (requested)
-A new PDF variant was in progress at the time of this compilation:
-- Pages 1 and 2: same as current v5 dark design
-- Page 3: replaces the current page 3 (longer Greg note + buttons) with a shorter, punchier "Why I built this" note:
-  > *"If you got value from this audit, that's the whole point. Take the four steps and run with them. The math is solid, the work is real. But Reliant Support is a solution that does so much more. Other solutions fall short — voicemail loses jobs, and the services that took messages didn't actually book anything. So I built what I wished I'd had: something that answers every call, books appointments straight to your schedule, and costs less than what you're losing right now. If that sounds like something worth a fifteen-minute conversation, I'd be glad to walk you through it."*
+### 3-Page "Why I Built This" PDF Variant (requested June 2026)
+A new/alternate PDF variant — same pages 1 and 2, but a shorter, punchier page 3 replacing the current longer Greg note. The approved text direction:
+> *"If you got value from this audit, that's the whole point. Take the four steps and run with them. The math is solid, the work is real. But Reliant Support is a solution that does so much more. Other solutions fall short — voicemail loses jobs, and the services that took messages didn't actually book anything. So I built what I wished I'd had: something that answers every call, books appointments straight to your schedule, and costs less than what you're losing right now. If that sounds like something worth a fifteen-minute conversation, I'd be glad to walk you through it."*
 
-### v5 Light PDF
+### v5 Light PDF (saved, not yet wired)
 The light/cream editorial variant (`v5_Light_PersonalLetter_generator.py`) is saved in the repo but not yet wired into production. Ready to deploy alongside or instead of the dark version when needed.
 
-### Missed-Call-to-Text (future)
+### Missed-Call-to-Text (future idea)
 Discussed as a viable future feature — auto-text a prospect if they hang up before being answered.
 
-### Customer Recognition (future)
+### Customer Recognition (future idea)
 Retell AI recognizing returning customers by phone number during the call.
 
 ---
 
-## 11. Current Git Branch
+## 11. Known Decisions That Changed
 
-`claude/build-missed-revenue-page-ULyAC`
+*A record of things that were planned or built one way, then changed. Preserves the history.*
 
-This branch contains all the marketing funnel work (missed-revenue page, PDF pipeline, v5 dark generator). Not yet merged to main.
+| Original | Changed To | Reason | Status |
+|----------|-----------|--------|--------|
+| Twilio SMS | Telnyx SMS | Greg's Twilio numbers were owned by Retell AI, not him | **[FINAL: Telnyx]** |
+| Native HTML time input | Google Calendar-style dropdown | Better UX, more polished | **[FINAL: Dropdown]** |
+| PDF generator (drifted implementation) | v5 Dark Personal Letter (exact Python port) | Previous implementation drifted from approved design | **[FINAL: v5 Dark]** |
+| Supabase auth email for rep invites | Custom invite link + `RepSetPasswordPage` | More branded experience, avoids Supabase email styling limits | **[FINAL: Custom link]** |
 
 ---
 
-## 12. Advice on Other Sessions
+## 12. Context for Future Sessions
 
-To get the most complete picture across all your AI tools:
+**Memory warning:** Claude Code sessions do not share memory with each other or with Claude.ai Chat. Each session only knows what's in the codebase, git history, and the current conversation. This document exists to bridge that gap.
 
-**Other Claude Code sessions:** Each session that has worked on this repo will have its own conversation history that may contain additional rationale, decisions, and context not captured in git commits. Run the same "compile history" request in each one.
+**To orient a new session quickly:**
+1. Upload or paste this document at the start of the session
+2. Ask the session to read it before doing any work
+3. At the end of the session, ask the session to update this document with anything new and re-download it
 
-**Claude.ai Chat (claude.ai):** Completely separate from Claude Code. If you've had design discussions, brainstorming sessions, or planning conversations there, those exist only in that context. Claude Chat has no access to this repo.
+**Claude.ai Chat:** Completely separate from Claude Code. Design discussions, brainstorming, and planning conversations there are not visible here.
 
-**ChatGPT:** Fully separate memory system. If you've used ChatGPT for any part of this project, those conversations exist only there.
+**ChatGPT:** Fully separate memory system. Conversations there are not visible here.
 
-**Recommendation:** After collecting all three outputs (this file + Claude Chat summary + ChatGPT summary), the most useful thing to do is merge them into a single master document and store it in the repo as a permanent context file. That way any new session — in any tool — can be primed with the full picture in seconds.
+---
+
+## 13. Session Log
+
+*Each session that updates this document adds an entry here.*
+
+| Date | Session Type | What Was Added / Changed |
+|------|-------------|--------------------------|
+| June 5, 2026 | Claude Code (receptionist-dashboard) | Initial document created. Compiled from 94 git commits, CLAUDE.md, all source files, and conversation context. Covers full project history from Phase 0 through Phase 9. |
+| June 5, 2026 | Claude Code (receptionist-dashboard) | Added AI instructions block at top, renamed file, added Sections 11–13 (changed decisions log, context for future sessions, session log), converted to living document format. |
