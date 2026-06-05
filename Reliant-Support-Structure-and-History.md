@@ -58,7 +58,7 @@
 ═══════════════════════════════════════════════════════════════════════════ -->
 
 # Reliant Support — Structure, History & Progress
-**Last Updated:** June 5, 2026
+**Last Updated:** June 5, 2026 (reconciliation pass — feature-gating + service_types table added)
 **Maintained by:** All sessions — see Section 13 (Session Log) for contribution history
 
 ---
@@ -184,23 +184,25 @@ The biggest feature phase — turned the dashboard into a real field service man
 - **Business hours management** — saved to Supabase `business_hours` table AND pushed to Retell LLM system prompt
 - **Review request SMS** — after job completion, tech can send customer a review request SMS via Telnyx
 
-### Phase 7 — Pricing Catalog & Invoicing V1 (May 2026)
+### Phase 7 — Pricing Catalog & Invoicing V1 (late April 2026)
 Building toward full front-office replacement for HVAC shops:
-- `pricing_catalog` table with RLS
-- **PricingCatalog tab** (`PricingCatalog.jsx`): read and add/edit/delete catalog items
+- `service_types` table seeded with **157 HVAC services** (migration `20260314_replace_service_types_with_156.sql` — note: filename says 156, actual row count is 157, one extra Emergency entry over the 156-row `service-types-proposed.md` spec). 13 categories: Diagnostics 24, Maintenance 24, Repairs 27, Installation 20, Indoor Air Quality 11, Commercial 11, Ductwork 10, Ventilation 7, Controls 5, Hydronic 5, Emergency 5, System Design 4, Geothermal 4. Each carries `duration_minutes`, drives the appointment-booking dropdown (`DispatcherDashboard.jsx:522` fetches active rows ordered by `sort_order`) and the Retell agent's slot-duration calculation in `check-availability` + `book-appointment` Edge Functions. RLS: admin-only writes, all roles read.
+- `pricing_catalog` table with RLS (migrations `20260426001` + `20260426002`)
+- **PricingCatalog tab** (`PricingCatalog.jsx`, 637 lines): read and add/edit/delete catalog items
 - CSV import with validation preview + CSV export (`papaparse` library)
 - `clients.default_tax_rate` column for per-client tax settings
 - Planning doc: invoicing + estimates roadmap (8 decision forks documented)
 
-### Phase 8 — Estimates (May–June 2026)
-- `estimates` and `estimate_line_items` tables, `estimate_tokens` for public sharing
-- `EstimateBuilder.jsx` — office-side estimate creation with line items from pricing catalog
-- `EstimatesTab.jsx` — list view of all estimates with status tracking
-- `EstimateViewerPublic.jsx` — public customer-facing estimate view (no auth required)
+### Phase 8 — Estimates (early May 2026)
+- `estimates` and `estimate_line_items` tables, `estimate_tokens` for public sharing (migrations `20260501001`–`20260501004`)
+- `src/EstimateBuilder.jsx` (954 lines) — office-side estimate creation with line items from pricing catalog
+- `src/EstimatesTab.jsx` (157 lines) — list view of all estimates with status tracking
+- `src/pages/EstimateViewerPublic.jsx` — public customer-facing estimate view (no auth required)
 - Tech field entry: techs can create estimates from `TechDashboard`
 - `generate-estimate-token`, `get-estimate`, `approve-estimate`, `send-estimate` Edge Functions
 - Estimate approval flow: customer approves online → status updates → ready to convert to invoice
 - `estimate_legal_text` in Settings tab
+- **Feature-gated (May 24, 2026, commit `32bcc40`):** Pricing and Estimates tabs are visible **only** to `gmacdonald63@gmail.com`. Hidden from all client-facing accounts pending launch. Gate lives in `src/DispatcherDashboard.jsx` (`isDeveloper` flag + `devOnlyTabs` filter — remove both to roll out). See Section 10 Pending Work.
 
 ### Phase 9 — Marketing Funnel (June 2026)
 Built a complete lead generation and nurturing system:
@@ -274,12 +276,12 @@ The PDF went through multiple design iterations before the v5 dark design was ap
 ### Estimates & Invoicing
 | Feature | Status |
 |---------|--------|
-| Pricing catalog (CRUD, CSV import/export) | Live |
-| Estimate builder (line items from catalog) | Live |
-| Estimates tab (list, status) | Live |
-| Public estimate viewer (customer approves online) | Live |
-| Tech field estimate creation | Live |
-| Estimate legal text (customizable) | Live |
+| Pricing catalog (CRUD, CSV import/export) | Built — **dev-gated** (only gmacdonald63@) |
+| Estimate builder (line items from catalog) | Built — **dev-gated** |
+| Estimates tab (list, status) | Built — **dev-gated** |
+| Public estimate viewer (customer approves online) | Built — **dev-gated** |
+| Tech field estimate creation | Built — **dev-gated** |
+| Estimate legal text (customizable) | Built — **dev-gated** |
 | Invoicing | In development |
 
 ### Billing & Subscriptions
@@ -395,6 +397,7 @@ The PDF went through multiple design iterations before the v5 dark design was ap
 | `estimate_tokens` | Public share tokens for estimates |
 | `client_destinations` | Custom non-job status options (e.g. "At Warehouse") |
 | `calls` | Call records with transcripts (used by demo for pre-loaded call data) |
+| `service_types` | 157 HVAC services seeded per client — `name`, `category`, `duration_minutes`, `urgency`, `customer_phrases[]`, `sort_order`, `is_active`. Drives appointment-booking dropdown and Retell agent slot-duration lookups (`check-availability:189-244`, `book-appointment:116-165`). Admin-only writes via RLS. |
 
 **Critical RLS rule:** All policies must use `auth.email()` — NOT a subquery to `auth.users`. The authenticated role cannot read `auth.users` directly; the subquery causes "permission denied" at runtime.
 
@@ -480,7 +483,12 @@ This is standard practice for Supabase. The anon key is a *publishable* key — 
 *When something here gets completed, move it to the relevant section above and note the completion date. Do not delete it — update it.*
 
 ### Invoicing (in progress)
-The pricing catalog and estimates are live. Invoicing V1 (no Stripe Connect — shops collect payment via their own methods) is the next build.
+Pricing catalog and estimates are built but **dev-gated** (see Phase 8). Invoicing V1 (no Stripe Connect — shops collect payment via their own methods) is the next build.
+
+Planning reference: `docs/invoicing-plan.md` on branch `claude/plan-product-features-83iq2` (commit `f5b3327`). The doc captures 8 decision forks for the invoicing build, plus the "Monday walkthrough" gap analysis. **Caveat:** that planning doc was written in a session that didn't yet know estimates were already built and gated — Forks 3 (multi-option), 4 (tech-in-field), 7 (service-type duration), and 8 (customer portal) are effectively already resolved by the existing build. The still-open decisions for invoicing-proper: Fork 1 (payment processing scope — invoice-only vs. Stripe Connect), Fork 2 (pricing model — flat-rate vs. T&M vs. hybrid), Fork 6 (tax handling).
+
+### Rollout of Pricing + Estimates tabs (blocked on launch decision)
+The Pricing and Estimates tabs are built and functional but hidden from all client accounts behind `isDeveloper` / `devOnlyTabs` in `src/DispatcherDashboard.jsx`. Removing both will roll them out to all clients. Greg has not yet committed to a launch date.
 
 ### Demo Reset Rewrite (planned)
 `reset_demo_data()` needs to be rewritten to produce an exact replica of the real production dashboard's frozen state. The plan:
@@ -498,7 +506,7 @@ The light/cream editorial variant (`v5_Light_PersonalLetter_generator.py`) is sa
 Discussed as a viable future feature — auto-text a prospect if they hang up before being answered.
 
 ### Customer Recognition (future idea)
-Retell AI recognizing returning customers by phone number during the call.
+Retell AI recognizing returning customers by phone number during the call. Research already completed (prior session): Retell's inbound webhook is supported, response shape is `{call_inbound:{dynamic_variables:{...}}}`, 10-second timeout, 3 retries, all dynamic variables must be strings. **Implementation gotcha for whoever picks this up:** the codebase has `normalizePhone()` in `src/utils/addressNormalization.js:122-127` but no Edge Function currently uses it — phone-number matching across the customers table will need this normalizer wired in before lookups will reliably hit.
 
 ---
 
@@ -512,6 +520,7 @@ Retell AI recognizing returning customers by phone number during the call.
 | Native HTML time input | Google Calendar-style dropdown | Better UX, more polished | **[FINAL: Dropdown]** |
 | PDF generator (drifted implementation) | v5 Dark Personal Letter (exact Python port) | Previous implementation drifted from approved design | **[FINAL: v5 Dark]** |
 | Supabase auth email for rep invites | Custom invite link + `RepSetPasswordPage` | More branded experience, avoids Supabase email styling limits | **[FINAL: Custom link]** |
+| Pricing + Estimates launched to all clients | Dev-gated to gmacdonald63@ only | Tabs built but not ready for general rollout (commit `32bcc40`, May 24, 2026) | **[FINAL pending launch decision]** |
 
 ---
 
@@ -538,3 +547,4 @@ Retell AI recognizing returning customers by phone number during the call.
 |------|-------------|--------------------------|
 | June 5, 2026 | Claude Code (receptionist-dashboard) | Initial document created. Compiled from 94 git commits, CLAUDE.md, all source files, and conversation context. Covers full project history from Phase 0 through Phase 9. |
 | June 5, 2026 | Claude Code (receptionist-dashboard) | Added AI instructions block at top, renamed file, added Sections 11–13 (changed decisions log, context for future sessions, session log), converted to living document format. |
+| June 5, 2026 | Claude Code (receptionist-dashboard, branch `claude/plan-product-features-83iq2`) | Reconciliation pass. Verified Phases 7–8 file existence against the repo. **Added:** `service_types` table to Section 6 (was missing — 157 seeded HVAC services drive booking durations); Phase 7 expanded with service_types details + category breakdown + corrected migration row count (file named "156" actually inserts 157 rows); Phase 8 noted that Pricing + Estimates tabs are dev-gated to `gmacdonald63@gmail.com` only via commit `32bcc40` (May 24, 2026) — this was previously undocumented; Section 4 Estimates/Invoicing rows updated from "Live" → "Built — dev-gated"; Section 10 split invoicing pending work into (a) invoicing-proper and (b) rollout of pricing/estimates tabs; Customer Recognition pending note enriched with normalizePhone gotcha (`src/utils/addressNormalization.js:122-127` exists but no Edge Function uses it); Section 11 added a row for the dev-gating decision; pointer to `docs/invoicing-plan.md` (branch `claude/plan-product-features-83iq2`, commit `f5b3327`) added under Section 10 with explicit caveat that 4 of its 8 forks are already resolved by the existing build. |
