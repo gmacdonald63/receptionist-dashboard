@@ -49,7 +49,14 @@
         - Session type (Claude Code / Claude Chat / ChatGPT / other)
         - A brief list of what you added or changed
 
-     8. SAVE AND DELIVER the updated file back to Greg when done.
+     8. SAVE AND DELIVER — when you are done updating, do both of these
+        without waiting to be asked:
+        a. Commit the file to git and push to the current branch
+        b. Use the SendUserFile tool to deliver the file directly to Greg
+           so it appears in the chat and he can download it immediately.
+        The file path is always:
+        /home/user/receptionist-dashboard/Reliant-Support-Structure-and-History.md
+        (For non-Claude-Code sessions that can't commit: just deliver the file.)
 
      GOAL: After running this through every active session, the document
      should contain everything known about this project from every source —
