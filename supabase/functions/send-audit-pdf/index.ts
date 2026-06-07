@@ -430,12 +430,12 @@ function page3(doc: any, fonts: any, logoImage: any, data: LeadData) {
     + "your schedule. It costs less than what you're losing right now.",
 
     "If anything in this audit caught your attention, Samantha from our "
-    + "team will reach out in the next day or two to answer any questions "
-    + "you have. She's a real person, not a sales pipeline. No pressure, "
-    + "no follow-up if it's not a fit.",
+    + "team will reach out in the next day or two. She's a real person, "
+    + "not a sales pipeline. No pressure, no follow-up if it's not a fit.",
 
-    "If you'd rather get a feel for it before Samantha calls, there are "
-    + "two ways to do that below.",
+    "If you'd rather not wait, you can schedule a 15-minute call with "
+    + "Samantha directly, or get a feel for it yourself with the two "
+    + "options below.",
   ];
 
   let iy = letterY;
@@ -456,15 +456,25 @@ function page3(doc: any, fonts: any, logoImage: any, data: LeadData) {
     x: 0.75 * INCH, y: iy - 18, font: fonts.regular, size: 10, color: TEXT_MUTE,
   });
 
-  // ── Side-by-side buttons (centered, matching Python dimensions exactly) ──
-  const btnY   = 2.0 * INCH;
-  const btnW   = 2.7 * INCH;
+  // ── Buttons: Calendly (top, centered) + two self-serve side-by-side (below) ──
   const btnH   = 0.55 * INCH;
   const gap    = 0.2 * INCH;
+  const btnW   = 2.7 * INCH;
   const totalW = btnW * 2 + gap;
   const btnXL  = (PAGE_W - totalW) / 2;
   const btnXR  = btnXL + btnW + gap;
 
+  // Calendly — primary CTA, centered, one row above
+  const calW = totalW;           // same total width as the two buttons below
+  const calX = btnXL;
+  const calY = 2.75 * INCH;
+  drawButton(page, fonts, calX, calY, calW, btnH,
+    ACCENT_RED, TEXT_WHITE,
+    "Schedule a 15-min call with Samantha",
+    "https://calendly.com/samhennett/new-meeting");
+
+  // Self-serve pair — below the Calendly button
+  const btnY = 2.0 * INCH;
   drawButton(page, fonts, btnXL, btnY, btnW, btnH,
     BTN_CALL_BG, BTN_CALL_TXT,
     "Call the receptionist",
@@ -602,10 +612,10 @@ Deno.serve(async (req) => {
         "  - How Reliant Support would handle it for you if you'd rather not",
         "    do it yourself",
         "",
-        "I'll reach out personally in the next day or two. If you'd rather skip",
-        "the wait, you can book a 15-minute walkthrough here:",
+        "Samantha from our team will reach out in the next day or two. If you'd",
+        "rather not wait, you can book a 15-minute call with her right now:",
         "",
-        "reliantsupport.net/demo",
+        "https://calendly.com/samhennett/new-meeting",
         "",
         "Talk soon,",
         "",
