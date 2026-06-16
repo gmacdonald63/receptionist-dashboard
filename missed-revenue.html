@@ -43,6 +43,7 @@
     <!-- CALCULATOR INPUTS -->
     <div class="mb-8">
       <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Your Numbers</p>
+      <p class="text-sm text-white mb-4">Enter your numbers below — we've pre-filled typical averages to get you started.</p>
       <div class="grid grid-cols-3 gap-4">
         <div>
           <label class="block text-sm text-gray-400 mb-1">Missed calls/day</label>
@@ -91,7 +92,7 @@
     </div>
 
     <!-- AI MINUTES CALLOUT -->
-    <div class="bg-gray-800 border border-gray-700 rounded-xl p-4 flex items-start gap-3 mb-10">
+    <div class="bg-gray-800 border border-gray-700 rounded-xl p-4 flex items-start gap-3 mb-6">
       <span class="text-xl mt-0.5">📞</span>
       <div>
         <p class="text-sm font-medium text-white">
@@ -103,8 +104,21 @@
       </div>
     </div>
 
+    <!-- OFFER -->
+    <div class="bg-gradient-to-br from-blue-900/30 to-gray-800 border border-blue-500/40 rounded-xl p-5 mb-10">
+      <p class="text-xs font-semibold text-blue-400 uppercase tracking-wider mb-2">Pricing</p>
+      <p class="text-white text-base leading-relaxed mb-3">
+        I'm taking on the next <span class="font-semibold">5 shops</span> at
+        <span class="font-semibold">$295/mo</span> with a one-time
+        <span class="font-semibold">$245 setup</span> — and your monthly rate stays locked for as long as you're a customer.
+      </p>
+      <p class="text-sm text-gray-400">
+        Once those 5 spots are taken, pricing moves to $495/mo plus a $345 setup fee.
+      </p>
+    </div>
+
     <!-- LEAD CAPTURE FORM -->
-    <div class="bg-gray-800 border border-blue-500/20 rounded-xl p-6 shadow-lg shadow-blue-900/10 mb-16">
+    <div class="bg-gray-800 border border-blue-500/20 rounded-xl p-6 shadow-lg shadow-blue-900/10 mb-4">
 
       <h2 class="text-xl font-bold text-white mb-2">Get a report on what this means.</h2>
       <p class="text-gray-400 text-sm mb-6">
@@ -133,6 +147,7 @@
           <div>
             <label class="block text-sm text-gray-400 mb-1">Phone</label>
             <input type="tel" id="f_phone" required placeholder="(555) 123-4567"
+              inputmode="tel" autocomplete="tel-national" maxlength="14"
               class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500 placeholder-gray-600" />
           </div>
         </div>
@@ -165,6 +180,13 @@
       </div>
 
     </div>
+
+    <!-- ALT PATH: TALK TO SAMANTHA -->
+    <p class="text-center text-sm text-gray-400 mb-16">
+      Prefer to talk it through first? Grab a few minutes with my colleague Samantha —
+      <a href="https://calendly.com/samhennett/new-meeting" target="_blank" rel="noopener"
+         class="text-blue-400 hover:text-blue-300 underline">pick a time on her calendar</a>.
+    </p>
   </div><!-- end max-w-3xl -->
 
   <script>
@@ -181,6 +203,22 @@
       medium:   params.get('utm_medium')   || null,
       campaign: params.get('utm_campaign') || null,
     };
+
+    // -- Email parameter capture --
+    const emailFromUrl = params.get('email') || null;
+
+    // ── Clicked Link tracking (fires once on page load when email is in URL) ──
+    if (emailFromUrl) {
+      fetch(SUPABASE_URL + '/functions/v1/track-calculator-engagement', {
+        method: 'POST',
+        headers: {
+          'apikey':        SUPABASE_ANON_KEY,
+          'Authorization': 'Bearer ' + SUPABASE_ANON_JWT,
+          'Content-Type':  'application/json',
+        },
+        body: JSON.stringify({ trigger: 'clicked', email: emailFromUrl }),
+      }).catch(function(err) { console.error('track-calculator-engagement clicked failed:', err); });
+    }
 
     // ── Calculator ────────────────────────────────────────────────────────────
     const WORK_DAYS    = 24;
@@ -214,9 +252,64 @@
     );
     calc();
 
+    // ── Engagement tracking ───────────────────────────────────────────────────
+    let engagementFired = false;
+
+    function checkEngagement() {
+      if (engagementFired) return;
+      if (!emailFromUrl) return; // can't track without email from URL param
+
+      const mpd = parseFloat(document.getElementById('missedPerDay').value) || 0;
+      const ajv = parseFloat(document.getElementById('avgJobValue').value) || 0;
+      const br  = parseFloat(document.getElementById('bookingRate').value) || 0;
+
+      const changed = (mpd !== 5 || ajv !== 350 || br !== 35);
+      if (!changed) return;
+
+      engagementFired = true;
+
+      const calced = calc();
+
+      fetch(SUPABASE_URL + '/functions/v1/track-calculator-engagement', {
+        method: 'POST',
+        headers: {
+          'apikey':        SUPABASE_ANON_KEY,
+          'Authorization': 'Bearer ' + SUPABASE_ANON_JWT,
+          'Content-Type':  'application/json',
+        },
+        body: JSON.stringify({
+          trigger:                'engaged',
+          email:                  emailFromUrl,
+          missed_calls_per_day:   Math.round(calced.mpd),
+          avg_job_value:          calced.ajv,
+          booking_rate:           calced.br,
+          lost_revenue_per_month: calced.lostRev,
+        }),
+      }).catch(function(err) { console.error('track-calculator-engagement failed:', err); });
+    }
+
+    ['missedPerDay', 'avgJobValue', 'bookingRate'].forEach(function(id) {
+      document.getElementById(id).addEventListener('input', checkEngagement);
+    });
+
     // ── Validation ────────────────────────────────────────────────────────────
     function validEmail(e) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim()); }
     function validPhone(p) { return /^\+?1?\s?\(?\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4}$/.test(p.trim()); }
+
+    // ── Phone auto-format: (555) 123-4567 ─────────────────────────────────────
+    const phoneInput = document.getElementById('f_phone');
+    function formatPhone(raw) {
+      let d = raw.replace(/\D/g, '');
+      if (d.length > 0 && d[0] === '1') d = d.slice(1); // drop leading country code
+      d = d.slice(0, 10);
+      if (d.length === 0) return '';
+      if (d.length < 4)   return '(' + d;
+      if (d.length < 7)   return '(' + d.slice(0,3) + ') ' + d.slice(3);
+      return '(' + d.slice(0,3) + ') ' + d.slice(3,6) + '-' + d.slice(6);
+    }
+    phoneInput.addEventListener('input', function () {
+      phoneInput.value = formatPhone(phoneInput.value);
+    });
 
     // ── Form submit ───────────────────────────────────────────────────────────
     const form      = document.getElementById('leadForm');
@@ -272,16 +365,19 @@
       };
 
       try {
-        // Insert lead row
-        const res = await fetch(SUPABASE_URL + '/rest/v1/landing_page_leads', {
+        // Insert lead via SECURITY DEFINER RPC. We go through an RPC instead
+        // of POSTing directly to /rest/v1/landing_page_leads because direct
+        // anon inserts kept tripping RLS in a way we couldn't reproduce at
+        // the SQL level — and the RPC is also stricter about which columns
+        // anon is allowed to write.
+        const res = await fetch(SUPABASE_URL + '/rest/v1/rpc/submit_landing_page_lead', {
           method: 'POST',
           headers: {
             'apikey':        SUPABASE_ANON_KEY,
             'Authorization': 'Bearer ' + SUPABASE_ANON_JWT,
             'Content-Type':  'application/json',
-            'Prefer':        'return=representation',
           },
-          body: JSON.stringify(payload),
+          body: JSON.stringify({ payload: payload }),
         });
 
         if (!res.ok) {
@@ -289,8 +385,7 @@
           throw new Error(err.message || 'Insert failed (' + res.status + ')');
         }
 
-        const rows = await res.json();
-        const leadId = rows[0]?.id;
+        const leadId = await res.json();
 
         // Fire-and-forget: trigger PDF generation + emails
         if (leadId) {
