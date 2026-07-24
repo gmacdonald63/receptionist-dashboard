@@ -7,13 +7,15 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#000000",
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "net.reliantsupport.teleprompter",
       "infoPlist": {
         "NSCameraUsageDescription": "The teleprompter shows a live camera preview so you can read your script and frame yourself while recording.",
-        "NSMicrophoneUsageDescription": "The microphone records your audio and lets the teleprompter follow along as you speak.",
+        "NSMicrophoneUsageDescription": "The teleprompter listens to your speech so it can auto-scroll the script as you talk.",
         "NSSpeechRecognitionUsageDescription": "Speech recognition auto-scrolls the script to follow the words you speak.",
         "NSPhotoLibraryAddUsageDescription": "Saves your finished recordings to your photo library."
       }
@@ -22,7 +24,14 @@
       "package": "net.reliantsupport.teleprompter",
       "permissions": [
         "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+        "android.permission.ACCESS_MEDIA_LOCATION",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO"
       ],
       "adaptiveIcon": {
         "backgroundColor": "#000000",
@@ -48,9 +57,17 @@
         {
           "microphonePermission": "The teleprompter listens to your speech so it can auto-scroll the script as you talk.",
           "speechRecognitionPermission": "Speech recognition auto-scrolls the script to follow the words you speak.",
-          "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox"]
+          "androidSpeechServicePackages": [
+            "com.google.android.googlequicksearchbox"
+          ]
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "2d944acc-6479-4024-99bd-e1152ac46b22"
+      }
+    },
+    "owner": "gmacdonald63s-team"
   }
 }
