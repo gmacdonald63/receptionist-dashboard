@@ -62,12 +62,8 @@ export default function Teleprompter({
 
   return (
     <View style={[styles.root, { height, width }]}>
-      {/* Reading band sits behind the text so words stay readable on top of it. */}
-      <View
-        pointerEvents="none"
-        style={[styles.band, { top: bandCenter - bandHeight / 2, height: bandHeight }]}
-      />
-
+      {/* No visible reading band — the current line simply scrolls to a fixed
+          vertical position and spoken words dim, which reads cleanly. */}
       <ScrollView
         ref={scrollRef}
         style={StyleSheet.absoluteFill}

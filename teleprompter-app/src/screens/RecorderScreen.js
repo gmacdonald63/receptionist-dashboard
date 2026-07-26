@@ -38,25 +38,11 @@ function fmtTime(sec) {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-// Next matchable (real word) token index at or after `from`.
-function nextMatchable(tokens, from) {
-  for (let i = from; i < tokens.length; i++) {
-    if (tokens[i]?.matchable) return i;
-  }
-  return tokens.length - 1;
-}
-
-export default function RecorderScreen({ script, settings, onChangeSettings, onExit, onFinish }) {
+export default function RecorderScreen({ script, settings, onExit, onFinish }) {
   useKeepAwake();
   const insets = useSafeAreaInsets();
 
   const tokens = useMemo(() => tokenize(script?.body || ''), [script]);
-
-  const wpm = settings.autoScrollWpm || 130;
-  const setWpm = (v) => {
-    const next = Math.max(60, Math.min(260, v));
-    if (onChangeSettings) onChangeSettings({ ...settings, autoScrollWpm: next });
-  };
 
   const device = useCameraDevice('front');
   const targetResolution =
@@ -139,38 +125,6 @@ export default function RecorderScreen({ script, settings, onChangeSettings, onE
     return () => clearInterval(id);
   }, [recording]);
 
-  // Auto-scroll while recording. Live voice tracking can't run during recording
-  // (the recorder holds the mic), so the script advances at a steady, adjustable
-  // words-per-minute pace that the reader follows. Voice tracking still drives
-  // scrolling in Practice mode.
-  useEffect(() => {
-    if (!recording || paused) return;
-    const perWord = Math.max(120, Math.round(60000 / wpm));
-    let timer;
-    let cancelled = false;
-    const step = () => {
-      if (cancelled) return;
-      const cur = pointerRef.current;
-      const next = nextMatchable(tokens, cur + 1);
-      if (next <= cur) return; // reached the end
-      // Blank lines the writer inserted become pauses: dwell longer before the
-      // next word for each blank line crossed.
-      let blanks = 0;
-      for (let i = cur + 1; i < next; i++) {
-        if (tokens[i]?.isSpacer) blanks++;
-      }
-      pointerRef.current = next;
-      setPointer(next);
-      const delay = perWord + blanks * Math.max(700, perWord * 3);
-      timer = setTimeout(step, delay);
-    };
-    timer = setTimeout(step, perWord);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [recording, paused, wpm, tokens]);
-
   // ---- Speech recognition events -------------------------------------------
   useSpeechRecognitionEvent('result', (e) => {
     if (!listeningRef.current || pausedRef.current) return;
@@ -188,13 +142,17 @@ export default function RecorderScreen({ script, settings, onChangeSettings, onE
 
   useSpeechRecognitionEvent('end', () => {
     consumedRef.current = 0;
-    // Android's recognizer stops on pauses — restart to stay continuous.
+    // Android's recognizer stops on pauses — restart to stay continuous, with a
+    // small delay so it can't tight-loop if the mic is unavailable.
     if (listeningRef.current) {
-      try {
-        startRecognizer();
-      } catch (e) {
-        // ignore
-      }
+      setTimeout(() => {
+        if (!listeningRef.current) return;
+        try {
+          startRecognizer();
+        } catch (e) {
+          // ignore
+        }
+      }, 350);
     }
   });
 
@@ -287,8 +245,10 @@ export default function RecorderScreen({ script, settings, onChangeSettings, onE
       );
       setPhase('recording');
       setRecording(true);
-      // No speech recognition here — the recorder holds the mic, so scrolling
-      // during a take is handled by the auto-scroll effect above.
+      // Start voice tracking so the script follows the speaker during the take.
+      // (Recording started first so the video keeps its audio even if the phone
+      // won't let the recognizer share the mic.)
+      startListening();
     } catch (e) {
       recorderRef.current = null;
       setPhase('idle');
@@ -303,16 +263,6 @@ export default function RecorderScreen({ script, settings, onChangeSettings, onE
     } catch (e) {
       setRecording(false);
       setPhase('idle');
-    }
-  }
-
-  function togglePractice() {
-    if (recording) return;
-    if (listening) {
-      stopListening();
-    } else {
-      resetToTop();
-      startListening();
     }
   }
 
@@ -424,18 +374,7 @@ export default function RecorderScreen({ script, settings, onChangeSettings, onE
           <View />
         )}
 
-        <View style={styles.topRight} pointerEvents="box-none">
-          <Pressable style={styles.topBtn} onPress={resetToTop} hitSlop={10}>
-            <Text style={styles.topBtnText}>⟲</Text>
-          </Pressable>
-          <Pressable
-            style={[styles.topBtn, listening && !recording && styles.topBtnActive]}
-            onPress={togglePractice}
-            hitSlop={10}
-          >
-            <Text style={styles.topBtnLabel}>Practice</Text>
-          </Pressable>
-        </View>
+        <View style={{ width: 40 }} />
       </View>
 
       {/* Status line */}
@@ -445,7 +384,7 @@ export default function RecorderScreen({ script, settings, onChangeSettings, onE
         </View>
       ) : null}
 
-      {/* Bottom controls */}
+      {/* Bottom control — a single Record / Stop button. */}
       <View
         style={[
           styles.bottomBar,
@@ -457,26 +396,11 @@ export default function RecorderScreen({ script, settings, onChangeSettings, onE
         ]}
         pointerEvents="box-none"
       >
-        <Pressable style={styles.sideBtn} onPress={() => setPaused((p) => !p)} hitSlop={10}>
-          <Text style={styles.sideBtnText}>{paused ? 'Resume' : 'Pause'}</Text>
-        </Pressable>
-
-        <Pressable style={styles.recordOuter} onPress={onRecordPress}>
-          <View style={[styles.recordInner, recording && styles.recordInnerStop]} />
-        </Pressable>
-
-        {/* Auto-scroll speed for recording (words per minute). */}
-        <View style={styles.speed}>
-          <Pressable style={styles.speedBtn} onPress={() => setWpm(wpm - 10)} hitSlop={8}>
-            <Text style={styles.speedBtnText}>−</Text>
+        <View style={styles.recordWrap}>
+          <Pressable style={styles.recordOuter} onPress={onRecordPress}>
+            <View style={[styles.recordInner, recording && styles.recordInnerStop]} />
           </Pressable>
-          <View style={styles.speedLabelWrap}>
-            <Text style={styles.speedValue}>{wpm}</Text>
-            <Text style={styles.speedUnit}>wpm</Text>
-          </View>
-          <Pressable style={styles.speedBtn} onPress={() => setWpm(wpm + 10)} hitSlop={8}>
-            <Text style={styles.speedBtnText}>+</Text>
-          </Pressable>
+          <Text style={styles.recordLabel}>{recording ? 'Stop & save' : 'Record'}</Text>
         </View>
       </View>
     </View>
@@ -609,18 +533,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  sideBtn: {
-    minWidth: 84,
-    height: 44,
-    paddingHorizontal: 16,
-    borderRadius: radius.pill,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    alignItems: 'center',
     justifyContent: 'center',
   },
-  sideBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  recordWrap: { alignItems: 'center' },
+  recordLabel: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+    marginTop: 8,
+    textShadowColor: 'rgba(0,0,0,0.85)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
   recordOuter: {
     width: 78,
     height: 78,

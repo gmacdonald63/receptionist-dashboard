@@ -74,7 +74,7 @@ export default function SettingsScreen({ settings, onChange, onBack }) {
           <Stepper value={settings.fontSize} onChange={(v) => set({ fontSize: v })} min={20} max={64} step={2} />
         </Row>
 
-        <Row label="Band position" hint="Higher = closer to the camera (better eyeline)">
+        <Row label="Reading position" hint="Where the current line sits — higher = closer to the camera">
           <Stepper
             value={settings.bandPosition}
             onChange={(v) => set({ bandPosition: v })}
@@ -101,16 +101,6 @@ export default function SettingsScreen({ settings, onChange, onBack }) {
           />
         </Row>
 
-        <Row label="Auto-scroll speed" hint="Pace while recording (voice drives Practice mode)">
-          <Stepper
-            value={settings.autoScrollWpm}
-            onChange={(v) => set({ autoScrollWpm: v })}
-            min={60}
-            max={260}
-            step={10}
-            format={(v) => `${v} wpm`}
-          />
-        </Row>
 
         <Row label="Scroll smoothing" hint="How gently the text catches up">
           <Stepper
