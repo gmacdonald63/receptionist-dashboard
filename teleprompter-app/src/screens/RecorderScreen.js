@@ -312,6 +312,7 @@ export default function RecorderScreen({ script, settings, onExit, onFinish }) {
           outputs={[videoOutput]}
           isActive
           mirrorMode="off"
+          orientationSource="device"
           implementationMode="compatible"
           onError={(e) => setStatus(`Camera: ${e?.message || 'error'}`)}
           onStarted={() => setStatus('')}

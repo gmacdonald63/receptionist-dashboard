@@ -28,7 +28,7 @@ export default function ScriptsScreen({ scripts, onSave, onDelete, onRecord, onO
     const isNew = !editing.id;
     return (
       <KeyboardAvoidingView
-        style={styles.root}
+        style={[styles.root, { paddingLeft: insets.left, paddingRight: insets.right }]}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <View style={[styles.editorHeader, { paddingTop: insets.top + spacing.sm }]}>
@@ -80,7 +80,7 @@ export default function ScriptsScreen({ scripts, onSave, onDelete, onRecord, onO
   }
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { paddingLeft: insets.left, paddingRight: insets.right }]}>
       <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
         <Text style={styles.headerTitle}>Teleprompter</Text>
         <Pressable hitSlop={12} onPress={onOpenSettings}>

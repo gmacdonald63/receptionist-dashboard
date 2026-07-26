@@ -58,7 +58,7 @@ export default function ReviewScreen({ video, onRetake, onDone }) {
   }
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { paddingLeft: insets.left, paddingRight: insets.right }]}>
       <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
         <Text style={styles.headerTitle}>Review take</Text>
       </View>
