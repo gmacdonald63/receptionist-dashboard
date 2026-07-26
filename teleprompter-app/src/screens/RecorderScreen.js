@@ -227,8 +227,11 @@ export default function RecorderScreen({ script, settings, onExit, onFinish }) {
       return;
     }
     try {
+      setStatus('Preparing recorder…');
+      if (!videoOutput) throw new Error('video output not ready');
       const recorder = await videoOutput.createRecorder({});
       recorderRef.current = recorder;
+      setStatus('Starting recording…');
       await recorder.startRecording(
         (filePath) => {
           recorderRef.current = null;
@@ -240,9 +243,10 @@ export default function RecorderScreen({ script, settings, onExit, onFinish }) {
           recorderRef.current = null;
           setRecording(false);
           setPhase('idle');
-          setStatus(`Recording error: ${error?.message || 'unknown'}`);
+          setStatus(`Recording error: ${error?.message || error}`);
         }
       );
+      setStatus('');
       setPhase('recording');
       setRecording(true);
       // Start voice tracking so the script follows the speaker during the take.
@@ -252,25 +256,61 @@ export default function RecorderScreen({ script, settings, onExit, onFinish }) {
     } catch (e) {
       recorderRef.current = null;
       setPhase('idle');
-      setStatus(`Could not start recording: ${e?.message || e}`);
+      setStatus(`Couldn’t start recording: ${e?.message || e}`);
     }
   }
 
-  async function endTake() {
+  // Stop = pause: hold the recording but stay on-screen so the user can resume
+  // (tap Record again) or Save.
+  async function pauseTake() {
     stopListening();
+    setRecording(false);
+    setPhase('paused');
+    try {
+      if (recorderRef.current) await recorderRef.current.pauseRecording();
+    } catch (e) {
+      setStatus(`Pause failed: ${e?.message || e}`);
+    }
+  }
+
+  async function resumeTake() {
+    setPhase('recording');
+    setRecording(true);
+    try {
+      if (recorderRef.current) await recorderRef.current.resumeRecording();
+      startListening();
+    } catch (e) {
+      setStatus(`Resume failed: ${e?.message || e}`);
+    }
+  }
+
+  // Finalize the take and go to the review/save screen.
+  async function saveTake() {
+    stopListening();
+    setStatus('Finishing…');
     try {
       if (recorderRef.current) await recorderRef.current.stopRecording();
     } catch (e) {
-      setRecording(false);
-      setPhase('idle');
+      setStatus(`Save failed: ${e?.message || e}`);
     }
   }
 
+  async function discardAndExit() {
+    stopListening();
+    try {
+      if (recorderRef.current) await recorderRef.current.cancelRecording();
+    } catch (e) {
+      // ignore
+    }
+    recorderRef.current = null;
+    onExit();
+  }
+
   function onRecordPress() {
-    if (recording) endTake();
-    else if (phase === 'countdown') {
-      cancelCountdown.current = true;
-    } else beginTake();
+    if (phase === 'recording') pauseTake();
+    else if (phase === 'paused') resumeTake();
+    else if (phase === 'countdown') cancelCountdown.current = true;
+    else beginTake();
   }
 
   // ---- Permission / device gates -------------------------------------------
@@ -361,7 +401,7 @@ export default function RecorderScreen({ script, settings, onExit, onFinish }) {
         ]}
         pointerEvents="box-none"
       >
-        <Pressable style={styles.topBtn} onPress={onExit} hitSlop={10}>
+        <Pressable style={styles.topBtn} onPress={discardAndExit} hitSlop={10}>
           <Text style={styles.topBtnText}>✕</Text>
         </Pressable>
 
@@ -396,12 +436,18 @@ export default function RecorderScreen({ script, settings, onExit, onFinish }) {
         ]}
         pointerEvents="box-none"
       >
-        <View style={styles.recordWrap}>
-          <Pressable style={styles.recordOuter} onPress={onRecordPress}>
-            <View style={[styles.recordInner, recording && styles.recordInnerStop]} />
+        {phase === 'paused' && (
+          <Pressable style={[styles.pill, styles.pillSave]} onPress={saveTake}>
+            <Text style={styles.pillText}>Save</Text>
           </Pressable>
-          <Text style={styles.recordLabel}>{recording ? 'Stop & save' : 'Record'}</Text>
-        </View>
+        )}
+
+        <Pressable style={[styles.pill, styles.pillRecord]} onPress={onRecordPress}>
+          <View style={phase === 'recording' ? styles.iconSquare : styles.iconCircle} />
+          <Text style={styles.pillText}>
+            {phase === 'recording' ? 'Stop' : phase === 'countdown' ? 'Cancel' : 'Record'}
+          </Text>
+        </Pressable>
       </View>
     </View>
   );
@@ -477,18 +523,21 @@ const styles = StyleSheet.create({
 
   statusWrap: {
     position: 'absolute',
-    top: 92,
-    left: 0,
-    right: 0,
+    top: 100,
+    left: 16,
+    right: 16,
     alignItems: 'center',
+    zIndex: 20,
   },
   statusText: {
     color: '#fff',
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: radius.sm,
-    fontSize: 13,
+    backgroundColor: 'rgba(200,30,30,0.92)',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: radius.md,
+    fontSize: 15,
+    fontWeight: '700',
+    textAlign: 'center',
     overflow: 'hidden',
   },
 
@@ -534,35 +583,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: spacing.md,
+    zIndex: 10,
   },
-  recordWrap: { alignItems: 'center' },
-  recordLabel: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '700',
-    marginTop: 8,
-    textShadowColor: 'rgba(0,0,0,0.85)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
-  },
-  recordOuter: {
-    width: 78,
-    height: 78,
-    borderRadius: 39,
-    borderWidth: 4,
-    borderColor: '#fff',
+  pill: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 10,
+    minWidth: 150,
+    paddingVertical: 15,
+    paddingHorizontal: 24,
+    borderRadius: radius.pill,
   },
-  recordInner: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: colors.danger,
-  },
-  recordInnerStop: {
-    width: 34,
-    height: 34,
-    borderRadius: 6,
-  },
+  pillRecord: { backgroundColor: colors.danger },
+  pillSave: { backgroundColor: colors.success },
+  pillText: { color: '#fff', fontSize: 18, fontWeight: '800' },
+  iconCircle: { width: 18, height: 18, borderRadius: 9, backgroundColor: '#fff' },
+  iconSquare: { width: 16, height: 16, borderRadius: 3, backgroundColor: '#fff' },
 });
