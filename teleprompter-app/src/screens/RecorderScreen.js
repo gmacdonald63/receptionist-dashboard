@@ -352,7 +352,20 @@ export default function RecorderScreen({ script, settings, onExit, onFinish }) {
     <View style={styles.root} onLayout={(e) => setLayout(e.nativeEvent.layout)}>
       {/* Mirrored preview (scaleX flips the on-screen view only; mirrorMode
           'off' keeps the recorded file un-mirrored). */}
-      <View style={[StyleSheet.absoluteFill, settings.mirrorPreview ? styles.mirror : null]}>
+      <View
+        style={[
+          StyleSheet.absoluteFill,
+          {
+            // Mirror the preview (selfie feel) and, in landscape, rotate the
+            // *preview only* 180° — the saved recording is already upright, so
+            // this transform never touches the file.
+            transform: [
+              ...(settings.mirrorPreview ? [{ scaleX: -1 }] : []),
+              ...(layout.width > layout.height ? [{ rotate: '180deg' }] : []),
+            ],
+          },
+        ]}
+      >
         <Camera
           style={StyleSheet.absoluteFill}
           device={device}
