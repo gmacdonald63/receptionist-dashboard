@@ -12,6 +12,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radius, spacing } from '../theme';
 
 function snippet(body) {
@@ -21,6 +22,7 @@ function snippet(body) {
 
 export default function ScriptsScreen({ scripts, onSave, onDelete, onRecord, onOpenSettings }) {
   const [editing, setEditing] = useState(null); // null = list view; object = editor
+  const insets = useSafeAreaInsets();
 
   if (editing) {
     const isNew = !editing.id;
@@ -29,7 +31,7 @@ export default function ScriptsScreen({ scripts, onSave, onDelete, onRecord, onO
         style={styles.root}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <View style={styles.editorHeader}>
+        <View style={[styles.editorHeader, { paddingTop: insets.top + spacing.sm }]}>
           <Pressable hitSlop={12} onPress={() => setEditing(null)}>
             <Text style={styles.headerAction}>Cancel</Text>
           </Pressable>
@@ -64,7 +66,7 @@ export default function ScriptsScreen({ scripts, onSave, onDelete, onRecord, onO
 
         {!isNew && (
           <Pressable
-            style={styles.recordBtn}
+            style={[styles.recordBtn, { marginBottom: insets.bottom + spacing.md }]}
             onPress={() => {
               onSave(editing);
               onRecord(editing);
@@ -79,7 +81,7 @@ export default function ScriptsScreen({ scripts, onSave, onDelete, onRecord, onO
 
   return (
     <View style={styles.root}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
         <Text style={styles.headerTitle}>Teleprompter</Text>
         <Pressable hitSlop={12} onPress={onOpenSettings}>
           <Text style={styles.headerAction}>Settings</Text>
@@ -89,7 +91,7 @@ export default function ScriptsScreen({ scripts, onSave, onDelete, onRecord, onO
       <FlatList
         data={scripts}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={{ padding: spacing.md, paddingBottom: 120 }}
+        contentContainerStyle={{ padding: spacing.md, paddingBottom: insets.bottom + 96 }}
         ListEmptyComponent={
           <Text style={styles.empty}>
             No scripts yet. Tap “New script” to write your first one.
@@ -122,7 +124,7 @@ export default function ScriptsScreen({ scripts, onSave, onDelete, onRecord, onO
       />
 
       <Pressable
-        style={styles.newBtn}
+        style={[styles.newBtn, { bottom: insets.bottom + spacing.md }]}
         onPress={() => setEditing({ title: '', body: '' })}
       >
         <Text style={styles.newBtnText}>+ New script</Text>

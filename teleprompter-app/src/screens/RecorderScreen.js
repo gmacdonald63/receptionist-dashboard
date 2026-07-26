@@ -12,6 +12,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useKeepAwake } from 'expo-keep-awake';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import {
   Camera,
@@ -39,6 +40,7 @@ function fmtTime(sec) {
 
 export default function RecorderScreen({ script, settings, onExit, onFinish }) {
   useKeepAwake();
+  const insets = useSafeAreaInsets();
 
   const tokens = useMemo(() => tokenize(script?.body || ''), [script]);
 
@@ -339,7 +341,7 @@ export default function RecorderScreen({ script, settings, onExit, onFinish }) {
       )}
 
       {/* Top bar */}
-      <View style={styles.topBar} pointerEvents="box-none">
+      <View style={[styles.topBar, { paddingTop: insets.top + spacing.sm }]} pointerEvents="box-none">
         <Pressable style={styles.topBtn} onPress={onExit} hitSlop={10}>
           <Text style={styles.topBtnText}>✕</Text>
         </Pressable>
@@ -375,7 +377,10 @@ export default function RecorderScreen({ script, settings, onExit, onFinish }) {
       ) : null}
 
       {/* Bottom controls */}
-      <View style={styles.bottomBar} pointerEvents="box-none">
+      <View
+        style={[styles.bottomBar, { paddingBottom: insets.bottom + spacing.md }]}
+        pointerEvents="box-none"
+      >
         <Pressable style={styles.sideBtn} onPress={() => setPaused((p) => !p)} hitSlop={10}>
           <Text style={styles.sideBtnText}>{paused ? 'Resume' : 'Pause'}</Text>
         </Pressable>

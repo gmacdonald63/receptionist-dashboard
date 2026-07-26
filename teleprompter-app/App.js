@@ -5,6 +5,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import ScriptsScreen from './src/screens/ScriptsScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
@@ -66,16 +67,19 @@ export default function App() {
 
   if (!ready) {
     return (
-      <View style={styles.loading}>
-        <StatusBar style="light" />
-        <ActivityIndicator color={colors.accent} size="large" />
-      </View>
+      <SafeAreaProvider>
+        <View style={styles.loading}>
+          <StatusBar style="light" />
+          <ActivityIndicator color={colors.accent} size="large" />
+        </View>
+      </SafeAreaProvider>
     );
   }
 
   return (
-    <View style={styles.root}>
-      <StatusBar style="light" hidden={screen === 'record'} />
+    <SafeAreaProvider>
+      <View style={styles.root}>
+        <StatusBar style="light" hidden={screen === 'record'} />
 
       {screen === 'scripts' && (
         <ScriptsScreen
@@ -107,14 +111,15 @@ export default function App() {
         />
       )}
 
-      {screen === 'review' && (
-        <ReviewScreen
-          video={lastVideo}
-          onRetake={() => setScreen('record')}
-          onDone={() => setScreen('scripts')}
-        />
-      )}
-    </View>
+        {screen === 'review' && (
+          <ReviewScreen
+            video={lastVideo}
+            onRetake={() => setScreen('record')}
+            onDone={() => setScreen('scripts')}
+          />
+        )}
+      </View>
+    </SafeAreaProvider>
   );
 }
 

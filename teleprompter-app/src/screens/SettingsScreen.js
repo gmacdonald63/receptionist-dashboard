@@ -3,6 +3,7 @@
 
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radius, spacing } from '../theme';
 
 function Row({ label, hint, children }) {
@@ -54,10 +55,11 @@ function Segment({ value, options, onChange }) {
 
 export default function SettingsScreen({ settings, onChange, onBack }) {
   const set = (patch) => onChange({ ...settings, ...patch });
+  const insets = useSafeAreaInsets();
 
   return (
     <View style={styles.root}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
         <Pressable hitSlop={12} onPress={onBack}>
           <Text style={[styles.headerAction, { color: colors.accent }]}>Done</Text>
         </Pressable>
@@ -65,7 +67,7 @@ export default function SettingsScreen({ settings, onChange, onBack }) {
         <View style={{ width: 48 }} />
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: spacing.md, paddingBottom: 60 }}>
+      <ScrollView contentContainerStyle={{ padding: spacing.md, paddingBottom: insets.bottom + 60 }}>
         <Text style={styles.section}>Reading</Text>
 
         <Row label="Text size">

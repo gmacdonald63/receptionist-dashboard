@@ -6,6 +6,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { useVideoPlayer, VideoView } from 'expo-video';
 import * as MediaLibrary from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radius, spacing } from '../theme';
 
 function toUri(path) {
@@ -14,6 +15,7 @@ function toUri(path) {
 }
 
 export default function ReviewScreen({ video, onRetake, onDone }) {
+  const insets = useSafeAreaInsets();
   const uri = toUri(video?.path);
   const player = useVideoPlayer(uri, (p) => {
     p.loop = true;
@@ -57,7 +59,7 @@ export default function ReviewScreen({ video, onRetake, onDone }) {
 
   return (
     <View style={styles.root}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
         <Text style={styles.headerTitle}>Review take</Text>
       </View>
 
@@ -77,7 +79,7 @@ export default function ReviewScreen({ video, onRetake, onDone }) {
 
       {msg ? <Text style={styles.msg}>{msg}</Text> : null}
 
-      <View style={styles.actions}>
+      <View style={[styles.actions, { paddingBottom: insets.bottom + spacing.md }]}>
         <Pressable
           style={[styles.btn, styles.btnPrimary, (saving || saved) && styles.btnDisabled]}
           onPress={saveToGallery}
