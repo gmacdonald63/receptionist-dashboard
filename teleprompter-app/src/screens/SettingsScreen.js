@@ -99,6 +99,14 @@ export default function SettingsScreen({ settings, onChange, onBack }) {
           />
         </Row>
 
+        <Row label="Follow my voice" hint="Auto-scroll from speech while recording">
+          <Switch
+            value={settings.voiceTracking}
+            onValueChange={(v) => set({ voiceTracking: v })}
+            trackColor={{ true: colors.accent }}
+          />
+        </Row>
+
         <Row label="Scroll smoothing" hint="How gently the text catches up">
           <Stepper
             value={settings.scrollSmoothing}

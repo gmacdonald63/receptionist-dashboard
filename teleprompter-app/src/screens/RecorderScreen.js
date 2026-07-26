@@ -3,8 +3,11 @@
 // tracking that scrolls the script as you speak.
 //
 // The teleprompter text is a UI overlay only — VisionCamera records the raw
-// sensor feed, so the saved file is clean (no text) and un-mirrored regardless
-// of the mirrored preview.
+// sensor feed with mirrorMode 'off', so the saved file is clean (no text) and
+// un-mirrored regardless of the mirrored on-screen preview.
+//
+// Uses VisionCamera v5's outputs API: a preview output + a video output whose
+// Recorder handles start/stop.
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -12,10 +15,12 @@ import { useKeepAwake } from 'expo-keep-awake';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import {
   Camera,
+  CommonResolutions,
   useCameraDevice,
-  useCameraFormat,
   useCameraPermission,
   useMicrophonePermission,
+  usePreviewOutput,
+  useVideoOutput,
 } from 'react-native-vision-camera';
 import {
   ExpoSpeechRecognitionModule,
@@ -38,16 +43,17 @@ export default function RecorderScreen({ script, settings, onExit, onFinish }) {
   const tokens = useMemo(() => tokenize(script?.body || ''), [script]);
 
   const device = useCameraDevice('front');
-  const targetRes =
+  const previewOutput = usePreviewOutput();
+  const targetResolution =
     settings.targetResolution === 'uhd'
-      ? { width: 3840, height: 2160 }
-      : { width: 1920, height: 1080 };
-  const format = useCameraFormat(device, [{ videoResolution: targetRes }, { fps: 30 }]);
+      ? CommonResolutions.UHD_16_9
+      : CommonResolutions.FHD_16_9;
+  const videoOutput = useVideoOutput({ targetResolution, enableAudio: true });
 
   const { hasPermission: hasCam, requestPermission: reqCam } = useCameraPermission();
   const { hasPermission: hasMic, requestPermission: reqMic } = useMicrophonePermission();
 
-  const cam = useRef(null);
+  const recorderRef = useRef(null);
 
   const [layout, setLayout] = useState({ width: 0, height: 0 });
   const [phase, setPhase] = useState('idle'); // 'idle' | 'countdown' | 'recording'
@@ -207,22 +213,27 @@ export default function RecorderScreen({ script, settings, onExit, onFinish }) {
       return;
     }
     try {
-      cam.current.startRecording({
-        onRecordingFinished: (video) => {
+      const recorder = await videoOutput.createRecorder({});
+      recorderRef.current = recorder;
+      await recorder.startRecording(
+        (filePath) => {
+          recorderRef.current = null;
           setRecording(false);
           setPhase('idle');
-          onFinish(video);
+          onFinish({ path: filePath });
         },
-        onRecordingError: (error) => {
+        (error) => {
+          recorderRef.current = null;
           setRecording(false);
           setPhase('idle');
           setStatus(`Recording error: ${error?.message || 'unknown'}`);
-        },
-      });
+        }
+      );
       setPhase('recording');
       setRecording(true);
-      startListening();
+      if (settings.voiceTracking) startListening();
     } catch (e) {
+      recorderRef.current = null;
       setPhase('idle');
       setStatus(`Could not start recording: ${e?.message || e}`);
     }
@@ -231,7 +242,7 @@ export default function RecorderScreen({ script, settings, onExit, onFinish }) {
   async function endTake() {
     stopListening();
     try {
-      await cam.current.stopRecording();
+      if (recorderRef.current) await recorderRef.current.stopRecording();
     } catch (e) {
       setRecording(false);
       setPhase('idle');
@@ -291,26 +302,16 @@ export default function RecorderScreen({ script, settings, onExit, onFinish }) {
   }
 
   return (
-    <View
-      style={styles.root}
-      onLayout={(e) => setLayout(e.nativeEvent.layout)}
-    >
-      {/* Mirrored preview (scaleX flips the on-screen view only; the recording
-          uses the raw sensor feed and stays un-mirrored). */}
-      <View
-        style={[
-          StyleSheet.absoluteFill,
-          settings.mirrorPreview ? styles.mirror : null,
-        ]}
-      >
+    <View style={styles.root} onLayout={(e) => setLayout(e.nativeEvent.layout)}>
+      {/* Mirrored preview (scaleX flips the on-screen view only; mirrorMode
+          'off' keeps the recorded file un-mirrored). */}
+      <View style={[StyleSheet.absoluteFill, settings.mirrorPreview ? styles.mirror : null]}>
         <Camera
-          ref={cam}
           style={StyleSheet.absoluteFill}
           device={device}
-          format={format}
+          outputs={[previewOutput, videoOutput]}
           isActive
-          video
-          audio
+          mirrorMode="off"
         />
       </View>
 
@@ -375,11 +376,7 @@ export default function RecorderScreen({ script, settings, onExit, onFinish }) {
 
       {/* Bottom controls */}
       <View style={styles.bottomBar} pointerEvents="box-none">
-        <Pressable
-          style={styles.sideBtn}
-          onPress={() => setPaused((p) => !p)}
-          hitSlop={10}
-        >
+        <Pressable style={styles.sideBtn} onPress={() => setPaused((p) => !p)} hitSlop={10}>
           <Text style={styles.sideBtnText}>{paused ? 'Resume' : 'Pause'}</Text>
         </Pressable>
 
