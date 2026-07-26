@@ -13,38 +13,37 @@ export function normalizeWord(w) {
     .replace(/^'+|'+$/g, '');
 }
 
-// Split a script into renderable tokens. Each token keeps its raw text (with
-// trailing spaces / punctuation) plus a normalized form and the paragraph it
-// belongs to, so the UI can render it verbatim while matching on `norm`.
+// Split a script into renderable tokens, preserving the writer's line breaks
+// and blank lines. Word tokens keep their raw text plus a normalized form (for
+// matching). Two structural tokens preserve layout:
+//   - isBreak:  a hard line break (wrap to the next line, no extra height)
+//   - isSpacer: a blank line the writer inserted (renders as vertical space,
+//               and the auto-scroll dwells here so the reader can pause)
 export function tokenize(text) {
   const tokens = [];
   if (!text) return tokens;
-  const paragraphs = String(text).replace(/\r\n/g, '\n').split('\n');
-  paragraphs.forEach((para, pIdx) => {
-    // Match runs of non-space (words+punctuation). Whitespace is folded into
-    // the preceding word's trailing space for rendering.
-    const matches = para.match(/\S+/g) || [];
-    matches.forEach((raw) => {
-      const norm = normalizeWord(raw);
-      tokens.push({
-        raw,
-        norm,
-        paragraph: pIdx,
-        index: tokens.length,
-        // Only tokens with a normalized form are matchable (skip pure punctuation).
-        matchable: norm.length > 0,
+  const lines = String(text).replace(/\r\n/g, '\n').split('\n');
+  const lastLine = lines.length - 1;
+  lines.forEach((line, li) => {
+    const matches = line.match(/\S+/g) || [];
+    if (matches.length > 0) {
+      matches.forEach((raw) => {
+        const norm = normalizeWord(raw);
+        tokens.push({
+          raw,
+          norm,
+          line: li,
+          index: tokens.length,
+          matchable: norm.length > 0, // pure punctuation isn't matchable
+        });
       });
-    });
-    // Paragraph break marker (not matchable, used by the renderer for newlines).
-    if (pIdx < paragraphs.length - 1) {
-      tokens.push({
-        raw: '\n',
-        norm: '',
-        paragraph: pIdx,
-        index: tokens.length,
-        matchable: false,
-        isBreak: true,
-      });
+      // Hard line break after a non-empty line (unless it's the very last line).
+      if (li < lastLine) {
+        tokens.push({ raw: '\n', norm: '', line: li, index: tokens.length, matchable: false, isBreak: true });
+      }
+    } else if (li < lastLine) {
+      // A blank line the writer inserted → visible vertical gap / pause cue.
+      tokens.push({ raw: '', norm: '', line: li, index: tokens.length, matchable: false, isSpacer: true });
     }
   });
   return tokens;

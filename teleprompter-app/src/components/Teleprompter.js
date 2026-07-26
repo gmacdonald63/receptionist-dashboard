@@ -85,6 +85,10 @@ export default function Teleprompter({
             if (t.isBreak) {
               return <View key={t.index} style={styles.break} />;
             }
+            if (t.isSpacer) {
+              // A blank line the writer inserted — full-width vertical gap.
+              return <View key={t.index} style={{ width: '100%', height: lineHeight }} />;
+            }
             const isSpoken = t.index < pointer;
             const isCurrent = t.index === pointer;
             const color = isSpoken ? colors.promptSpoken : colors.promptText;

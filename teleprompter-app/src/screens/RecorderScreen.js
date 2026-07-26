@@ -146,16 +146,29 @@ export default function RecorderScreen({ script, settings, onChangeSettings, onE
   useEffect(() => {
     if (!recording || paused) return;
     const perWord = Math.max(120, Math.round(60000 / wpm));
-    const id = setInterval(() => {
-      const next = nextMatchable(tokens, pointerRef.current + 1);
-      if (next <= pointerRef.current) {
-        clearInterval(id); // reached the end
-        return;
+    let timer;
+    let cancelled = false;
+    const step = () => {
+      if (cancelled) return;
+      const cur = pointerRef.current;
+      const next = nextMatchable(tokens, cur + 1);
+      if (next <= cur) return; // reached the end
+      // Blank lines the writer inserted become pauses: dwell longer before the
+      // next word for each blank line crossed.
+      let blanks = 0;
+      for (let i = cur + 1; i < next; i++) {
+        if (tokens[i]?.isSpacer) blanks++;
       }
       pointerRef.current = next;
       setPointer(next);
-    }, perWord);
-    return () => clearInterval(id);
+      const delay = perWord + blanks * Math.max(700, perWord * 3);
+      timer = setTimeout(step, delay);
+    };
+    timer = setTimeout(step, perWord);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [recording, paused, wpm, tokens]);
 
   // ---- Speech recognition events -------------------------------------------
