@@ -348,6 +348,8 @@ export default function RecorderScreen({ script, settings, onExit, onFinish }) {
     );
   }
 
+  const isLandscape = layout.width > layout.height;
+
   return (
     <View style={styles.root} onLayout={(e) => setLayout(e.nativeEvent.layout)}>
       {/* Mirrored preview (scaleX flips the on-screen view only; mirrorMode
@@ -361,7 +363,7 @@ export default function RecorderScreen({ script, settings, onExit, onFinish }) {
             // this transform never touches the file.
             transform: [
               ...(settings.mirrorPreview ? [{ scaleX: -1 }] : []),
-              ...(layout.width > layout.height ? [{ rotate: '180deg' }] : []),
+              ...(isLandscape ? [{ rotate: '180deg' }] : []),
             ],
           },
         ]}
@@ -379,14 +381,16 @@ export default function RecorderScreen({ script, settings, onExit, onFinish }) {
         />
       </View>
 
-      {/* Teleprompter overlay */}
+      {/* Teleprompter overlay. In landscape, keep the text to the left half of
+          the screen (the camera side after a counter-clockwise rotation) so the
+          reader's eyes stay near the lens instead of sweeping across. */}
       {layout.height > 0 && (
         <Teleprompter
           tokens={tokens}
           pointer={pointer}
           settings={settings}
           height={layout.height}
-          width={layout.width}
+          width={isLandscape ? Math.round(layout.width / 2) : layout.width}
           paused={paused}
           onResync={(i) => {
             pointerRef.current = i;
@@ -449,18 +453,20 @@ export default function RecorderScreen({ script, settings, onExit, onFinish }) {
         ]}
         pointerEvents="box-none"
       >
-        {phase === 'paused' && (
-          <Pressable style={[styles.pill, styles.pillSave]} onPress={saveTake}>
-            <Text style={styles.pillText}>Save</Text>
-          </Pressable>
-        )}
+        <View style={styles.controlStack}>
+          {phase === 'paused' && (
+            <Pressable style={[styles.pill, styles.pillSave]} onPress={saveTake}>
+              <Text style={styles.pillText}>Save</Text>
+            </Pressable>
+          )}
 
-        <Pressable style={[styles.pill, styles.pillRecord]} onPress={onRecordPress}>
-          <View style={phase === 'recording' ? styles.iconSquare : styles.iconCircle} />
-          <Text style={styles.pillText}>
-            {phase === 'recording' ? 'Stop' : phase === 'countdown' ? 'Cancel' : 'Record'}
-          </Text>
-        </Pressable>
+          <Pressable style={[styles.pill, styles.pillRecord]} onPress={onRecordPress}>
+            <View style={phase === 'recording' ? styles.iconSquare : styles.iconCircle} />
+            <Text style={styles.pillText}>
+              {phase === 'recording' ? 'Stop' : phase === 'countdown' ? 'Cancel' : 'Record'}
+            </Text>
+          </Pressable>
+        </View>
       </View>
     </View>
   );
@@ -596,9 +602,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.md,
     zIndex: 10,
   },
+  controlStack: { alignItems: 'center', gap: spacing.sm },
   pill: {
     flexDirection: 'row',
     alignItems: 'center',

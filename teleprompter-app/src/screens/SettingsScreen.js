@@ -2,7 +2,7 @@
 // in an extra native slider dependency.
 
 import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { BackHandler, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radius, spacing } from '../theme';
 
@@ -156,6 +156,10 @@ export default function SettingsScreen({ settings, onChange, onBack }) {
             format={(v) => `${v}s`}
           />
         </Row>
+
+        <Pressable style={styles.closeBtn} onPress={() => BackHandler.exitApp()}>
+          <Text style={styles.closeBtnText}>Close app</Text>
+        </Pressable>
       </ScrollView>
     </View>
   );
@@ -173,6 +177,15 @@ const styles = StyleSheet.create({
   },
   headerTitle: { color: colors.text, fontSize: 20, fontWeight: '800' },
   headerAction: { fontSize: 16, fontWeight: '700' },
+  closeBtn: {
+    marginTop: spacing.lg,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  closeBtnText: { color: colors.danger, fontSize: 16, fontWeight: '700' },
   section: {
     color: colors.textDim,
     fontSize: 13,
