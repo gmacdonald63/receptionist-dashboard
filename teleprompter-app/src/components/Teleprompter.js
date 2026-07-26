@@ -33,7 +33,10 @@ export default function Teleprompter({
     if (paused) return;
     const y = wordY.current[pointer];
     if (y == null) return;
-    const target = Math.max(0, y + lineHeight / 2 - bandCenter);
+    // wordY is measured inside the content's top padding (= bandCenter), so the
+    // scroll offset that lands this word's center on the band is simply
+    // y + lineHeight/2 (the paddingTop and the band offset cancel out).
+    const target = Math.max(0, y + lineHeight / 2);
     scrollRef.current?.scrollTo({ y: target, animated: true });
   }, [pointer, paused, bandCenter, lineHeight]);
 
@@ -47,8 +50,8 @@ export default function Teleprompter({
       const i = Number(key);
       const t = tokens[i];
       if (!t || !t.matchable) continue;
-      const screenY = wordY.current[i] + lineHeight / 2 - offset;
-      const dist = Math.abs(screenY - bandCenter);
+      // Distance of this word's center from the band, in scroll-offset terms.
+      const dist = Math.abs(wordY.current[i] + lineHeight / 2 - offset);
       if (dist < bestDist) {
         bestDist = dist;
         best = i;

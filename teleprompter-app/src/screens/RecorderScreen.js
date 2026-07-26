@@ -14,6 +14,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useKeepAwake } from 'expo-keep-awake';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ScreenOrientation from 'expo-screen-orientation';
+import * as NavigationBar from 'expo-navigation-bar';
 import {
   Camera,
   CommonResolutions,
@@ -37,11 +38,25 @@ function fmtTime(sec) {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-export default function RecorderScreen({ script, settings, onExit, onFinish }) {
+// Next matchable (real word) token index at or after `from`.
+function nextMatchable(tokens, from) {
+  for (let i = from; i < tokens.length; i++) {
+    if (tokens[i]?.matchable) return i;
+  }
+  return tokens.length - 1;
+}
+
+export default function RecorderScreen({ script, settings, onChangeSettings, onExit, onFinish }) {
   useKeepAwake();
   const insets = useSafeAreaInsets();
 
   const tokens = useMemo(() => tokenize(script?.body || ''), [script]);
+
+  const wpm = settings.autoScrollWpm || 130;
+  const setWpm = (v) => {
+    const next = Math.max(60, Math.min(260, v));
+    if (onChangeSettings) onChangeSettings({ ...settings, autoScrollWpm: next });
+  };
 
   const device = useCameraDevice('front');
   const targetResolution =
@@ -107,6 +122,15 @@ export default function RecorderScreen({ script, settings, onExit, onFinish }) {
     };
   }, [settings.orientationLock]);
 
+  // Hide the Android navigation bar while on the recorder screen (immersive),
+  // so long lines aren't clipped by it and the frame is uncluttered.
+  useEffect(() => {
+    NavigationBar.setVisibilityAsync('hidden').catch(() => {});
+    return () => {
+      NavigationBar.setVisibilityAsync('visible').catch(() => {});
+    };
+  }, []);
+
   // Recording timer.
   useEffect(() => {
     if (!recording) return;
@@ -114,6 +138,25 @@ export default function RecorderScreen({ script, settings, onExit, onFinish }) {
     const id = setInterval(() => setElapsed((e) => e + 1), 1000);
     return () => clearInterval(id);
   }, [recording]);
+
+  // Auto-scroll while recording. Live voice tracking can't run during recording
+  // (the recorder holds the mic), so the script advances at a steady, adjustable
+  // words-per-minute pace that the reader follows. Voice tracking still drives
+  // scrolling in Practice mode.
+  useEffect(() => {
+    if (!recording || paused) return;
+    const perWord = Math.max(120, Math.round(60000 / wpm));
+    const id = setInterval(() => {
+      const next = nextMatchable(tokens, pointerRef.current + 1);
+      if (next <= pointerRef.current) {
+        clearInterval(id); // reached the end
+        return;
+      }
+      pointerRef.current = next;
+      setPointer(next);
+    }, perWord);
+    return () => clearInterval(id);
+  }, [recording, paused, wpm, tokens]);
 
   // ---- Speech recognition events -------------------------------------------
   useSpeechRecognitionEvent('result', (e) => {
@@ -231,7 +274,8 @@ export default function RecorderScreen({ script, settings, onExit, onFinish }) {
       );
       setPhase('recording');
       setRecording(true);
-      if (settings.voiceTracking) startListening();
+      // No speech recognition here — the recorder holds the mic, so scrolling
+      // during a take is handled by the auto-scroll effect above.
     } catch (e) {
       recorderRef.current = null;
       setPhase('idle');
@@ -335,16 +379,6 @@ export default function RecorderScreen({ script, settings, onExit, onFinish }) {
         />
       )}
 
-      {/* TEMP debug line — remove once camera + script are confirmed working */}
-      <View
-        style={[styles.debug, { top: insets.top + 84, left: insets.left + spacing.md }]}
-        pointerEvents="none"
-      >
-        <Text style={styles.debugText}>
-          {`body:${(script?.body || '').length} words:${tokens.filter((t) => t.matchable).length} dev:${device ? 'y' : 'n'} vid:${videoOutput ? 'y' : 'n'} ${layout.width}x${layout.height}`}
-        </Text>
-      </View>
-
       {/* Countdown overlay */}
       {phase === 'countdown' && (
         <View style={styles.countdown} pointerEvents="none">
@@ -418,7 +452,19 @@ export default function RecorderScreen({ script, settings, onExit, onFinish }) {
           <View style={[styles.recordInner, recording && styles.recordInnerStop]} />
         </Pressable>
 
-        <View style={styles.sideBtn} />
+        {/* Auto-scroll speed for recording (words per minute). */}
+        <View style={styles.speed}>
+          <Pressable style={styles.speedBtn} onPress={() => setWpm(wpm - 10)} hitSlop={8}>
+            <Text style={styles.speedBtnText}>−</Text>
+          </Pressable>
+          <View style={styles.speedLabelWrap}>
+            <Text style={styles.speedValue}>{wpm}</Text>
+            <Text style={styles.speedUnit}>wpm</Text>
+          </View>
+          <Pressable style={styles.speedBtn} onPress={() => setWpm(wpm + 10)} hitSlop={8}>
+            <Text style={styles.speedBtnText}>+</Text>
+          </Pressable>
+        </View>
       </View>
     </View>
   );
@@ -509,14 +555,29 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
 
-  debug: {
-    position: 'absolute',
-    backgroundColor: 'rgba(0,0,0,0.6)',
+  speed: {
+    minWidth: 84,
+    height: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(0,0,0,0.45)',
   },
-  debugText: { color: '#7CFC00', fontSize: 12, fontWeight: '700' },
+  speedBtn: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  speedBtnText: { color: '#fff', fontSize: 18, fontWeight: '800' },
+  speedLabelWrap: { alignItems: 'center', minWidth: 34 },
+  speedValue: { color: '#fff', fontSize: 14, fontWeight: '800' },
+  speedUnit: { color: '#cbd2dc', fontSize: 9, fontWeight: '700', marginTop: -2 },
 
   countdown: {
     ...StyleSheet.absoluteFillObject,

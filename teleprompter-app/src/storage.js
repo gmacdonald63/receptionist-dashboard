@@ -11,7 +11,8 @@ export const DEFAULT_SETTINGS = {
   bandPosition: 0.32, // fraction of screen height for the reading band center (default HIGH, near the top camera)
   dimNonActive: false, // OFF by default — all text full brightness, only the band strip marks position
   wordHighlight: false, // OFF by default — highlight the whole current line, not individual words
-  voiceTracking: true, // drive the scroll from speech; if it ever misbehaves on-device, turn off to record without it
+  voiceTracking: true, // drive the scroll from speech in Practice mode (can't run while recording — mic is held by the recorder)
+  autoScrollWpm: 130, // words-per-minute pace for the auto-scroll used while recording
   mirrorPreview: true, // mirror the on-screen preview (natural selfie feel); the saved file is always un-mirrored
   countdown: 3, // seconds before recording starts
   orientationLock: 'default', // 'default' | 'portrait' | 'landscape'

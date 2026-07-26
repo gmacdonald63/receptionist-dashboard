@@ -38,6 +38,9 @@
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "runtimeVersion": {
+        "policy": "appVersion"
       }
     },
     "web": {
@@ -68,6 +71,9 @@
         "projectId": "2d944acc-6479-4024-99bd-e1152ac46b22"
       }
     },
-    "owner": "gmacdonald63s-team"
+    "owner": "gmacdonald63s-team",
+    "updates": {
+      "url": "https://u.expo.dev/2d944acc-6479-4024-99bd-e1152ac46b22"
+    }
   }
 }

@@ -101,11 +101,14 @@ export default function SettingsScreen({ settings, onChange, onBack }) {
           />
         </Row>
 
-        <Row label="Follow my voice" hint="Auto-scroll from speech while recording">
-          <Switch
-            value={settings.voiceTracking}
-            onValueChange={(v) => set({ voiceTracking: v })}
-            trackColor={{ true: colors.accent }}
+        <Row label="Auto-scroll speed" hint="Pace while recording (voice drives Practice mode)">
+          <Stepper
+            value={settings.autoScrollWpm}
+            onChange={(v) => set({ autoScrollWpm: v })}
+            min={60}
+            max={260}
+            step={10}
+            format={(v) => `${v} wpm`}
           />
         </Row>
 

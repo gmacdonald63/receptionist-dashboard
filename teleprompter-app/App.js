@@ -103,6 +103,7 @@ export default function App() {
         <RecorderScreen
           script={activeScript}
           settings={settings}
+          onChangeSettings={handleChangeSettings}
           onExit={() => setScreen('scripts')}
           onFinish={(video) => {
             setLastVideo(video);
