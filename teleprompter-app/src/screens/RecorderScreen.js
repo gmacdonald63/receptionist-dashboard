@@ -20,7 +20,6 @@ import {
   useCameraDevice,
   useCameraPermission,
   useMicrophonePermission,
-  usePreviewOutput,
   useVideoOutput,
 } from 'react-native-vision-camera';
 import {
@@ -45,7 +44,6 @@ export default function RecorderScreen({ script, settings, onExit, onFinish }) {
   const tokens = useMemo(() => tokenize(script?.body || ''), [script]);
 
   const device = useCameraDevice('front');
-  const previewOutput = usePreviewOutput();
   const targetResolution =
     settings.targetResolution === 'uhd'
       ? CommonResolutions.UHD_16_9
@@ -311,9 +309,12 @@ export default function RecorderScreen({ script, settings, onExit, onFinish }) {
         <Camera
           style={StyleSheet.absoluteFill}
           device={device}
-          outputs={[previewOutput, videoOutput]}
+          outputs={[videoOutput]}
           isActive
           mirrorMode="off"
+          implementationMode="compatible"
+          onError={(e) => setStatus(`Camera: ${e?.message || 'error'}`)}
+          onStarted={() => setStatus('')}
         />
       </View>
 
@@ -333,6 +334,16 @@ export default function RecorderScreen({ script, settings, onExit, onFinish }) {
         />
       )}
 
+      {/* TEMP debug line — remove once camera + script are confirmed working */}
+      <View
+        style={[styles.debug, { top: insets.top + 84, left: insets.left + spacing.md }]}
+        pointerEvents="none"
+      >
+        <Text style={styles.debugText}>
+          {`body:${(script?.body || '').length} words:${tokens.filter((t) => t.matchable).length} dev:${device ? 'y' : 'n'} vid:${videoOutput ? 'y' : 'n'} ${layout.width}x${layout.height}`}
+        </Text>
+      </View>
+
       {/* Countdown overlay */}
       {phase === 'countdown' && (
         <View style={styles.countdown} pointerEvents="none">
@@ -341,7 +352,17 @@ export default function RecorderScreen({ script, settings, onExit, onFinish }) {
       )}
 
       {/* Top bar */}
-      <View style={[styles.topBar, { paddingTop: insets.top + spacing.sm }]} pointerEvents="box-none">
+      <View
+        style={[
+          styles.topBar,
+          {
+            paddingTop: insets.top + spacing.sm,
+            paddingLeft: spacing.md + insets.left,
+            paddingRight: spacing.md + insets.right,
+          },
+        ]}
+        pointerEvents="box-none"
+      >
         <Pressable style={styles.topBtn} onPress={onExit} hitSlop={10}>
           <Text style={styles.topBtnText}>✕</Text>
         </Pressable>
@@ -378,7 +399,14 @@ export default function RecorderScreen({ script, settings, onExit, onFinish }) {
 
       {/* Bottom controls */}
       <View
-        style={[styles.bottomBar, { paddingBottom: insets.bottom + spacing.md }]}
+        style={[
+          styles.bottomBar,
+          {
+            paddingBottom: insets.bottom + spacing.md,
+            paddingLeft: spacing.lg + insets.left,
+            paddingRight: spacing.lg + insets.right,
+          },
+        ]}
         pointerEvents="box-none"
       >
         <Pressable style={styles.sideBtn} onPress={() => setPaused((p) => !p)} hitSlop={10}>
@@ -479,6 +507,15 @@ const styles = StyleSheet.create({
     fontSize: 13,
     overflow: 'hidden',
   },
+
+  debug: {
+    position: 'absolute',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  debugText: { color: '#7CFC00', fontSize: 12, fontWeight: '700' },
 
   countdown: {
     ...StyleSheet.absoluteFillObject,
