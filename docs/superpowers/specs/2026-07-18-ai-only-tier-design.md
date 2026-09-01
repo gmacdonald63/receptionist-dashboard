@@ -21,15 +21,43 @@ AI-only clients still **log in** and see the platform sections as locked "upgrad
 teasers — the land-with-AI, expand-to-platform hook. Upgrading is a live, in-app,
 no-re-onboarding action.
 
+### Naming — two layers, do not mix them
+
+**Decided 2026-08-31.** Customer-facing names are a product family, not a good/better
+ladder, so a third product can be added later (e.g. platform-without-receptionist)
+without renaming anything.
+
+| Layer | AI-only | Full platform | Where it appears |
+|---|---|---|---|
+| **Customer-facing** | **Reliant Reception** | **Reliant Operations** | Stripe products, pricing page, PDF, dashboard, invoices, sales copy |
+| **Internal identifier** | `ai_only` | `platform` | `clients.plan_tier`, `deals.tier`, price catalog keys, RLS policies, code |
+
+The internal values are already live in the database (migration `20260831001_plan_tier`)
+and are **not** being renamed — churn with no benefit, and they read fine in code.
+Every customer-visible surface uses the Reception / Operations names, and nothing else.
+
+Because the family names don't themselves signal that Operations contains Reception,
+the pricing copy must carry it explicitly:
+
+> **Reliant Operations** — everything in Reception, plus dispatch, tech tracking,
+> customer history, and estimates.
+
 ### Pricing
 
-| Tier | 1,000 min | 2,000 min |
+| Product | 1,000 min | 2,000 min |
 |---|---|---|
-| **AI-only** | $395/mo | $595/mo |
-| **Platform** (AI + dashboard) | $495/mo | $695/mo |
+| **Reliant Reception** (`ai_only`) | $395/mo | $595/mo |
+| **Reliant Operations** (`platform`) | $495/mo | $695/mo |
 
-The current live prices are already $495 / $695, so **today's product is the Platform
-tier**. This project adds the two lower AI-only prices and the gating that separates them.
+The current live prices are already $495 / $695, so **today's product is Reliant
+Operations**. This project adds the two lower Reception prices and the gating that
+separates them.
+
+**Open:** whether to ship two minute buckets at all, or launch with a single included
+allowance plus a published overage rate. A typical shop runs 250–500 min/month against
+a 1,000-min allowance, so the 2,000-min bucket may have no trigger and never sell —
+while still costing a qualifying question in every sales call and a branch in every
+price map. Pending Greg's Retell per-minute cost.
 
 ## 2. Scope
 
