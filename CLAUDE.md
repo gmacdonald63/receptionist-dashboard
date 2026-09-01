@@ -1026,7 +1026,7 @@ All functions are deployed with `--no-verify-jwt`. All require `apikey` + `Autho
 | `invite-user` | Called by TeamTab to invite a new tech/staff member. Uses `supabase.auth.admin.inviteUserByEmail()` with `redirectTo: https://app.reliantsupport.net`. Handles "already registered" response gracefully. Deployed with `--no-verify-jwt`. |
 
 ### Resend (Email)
-- **API key:** `re_79D5QfBH_7tc4rapZgmDwJ7DQoPQknaow`
+- **API key:** _(never store here. Lives as Supabase Edge Function secret `RESEND_API_KEY`, and as the SMTP password under Supabase → Auth → SMTP settings. Rotate in the Resend dashboard.)_
 - Configured as Supabase custom SMTP — replaces built-in mailer. All auth emails (invites, password resets) route through Resend.
 - **From address:** `noreply@reliantsupport.net`
 - Built-in Supabase SMTP is rate-limited to ~2 emails/hour for invites and signups — Resend removes this limit permanently.
@@ -1047,7 +1047,8 @@ All functions are deployed with `--no-verify-jwt`. All require `apikey` + `Autho
 - Free plan; upgrade as usage scales
 
 ### Retell AI
-- **API key:** `key_5b24ef502d4c3cd538001a59694e` (also in `.env` as `VITE_RETELL_API_KEY`)
+- **API key:** _(never store here. Local dev reads it from untracked `.env` as `VITE_RETELL_API_KEY`; production reads the Vercel env var of the same name; edge functions read the Supabase secret `RETELL_API_KEY`. Rotate in the Retell dashboard.)_
+- ⚠️ **Known exposure:** `VITE_*` vars are inlined into the client bundle by Vite, so `src/retellService.js` publishes this key to every dashboard visitor. Rotating does not fix it — the fix is to proxy Retell calls through an edge function (see `create-web-call` for the correct pattern). Tracked as Track B work.
 - **Agent:** HVAC Receptionist — `agent_3bec4ff7311350d9b19b93db05` → client_id `1` (gmacdonald63@gmail.com)
 - **LLM:** `llm_90e1cf752bfb2434d8fbb5279d76` (GPT-4.1, `tool_call_strict_mode: true`)
 - **Post-call webhook:** `https://zmppdmfdhknnwzwdfhwf.supabase.co/functions/v1/retell-webhook`
