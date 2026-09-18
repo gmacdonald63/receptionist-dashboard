@@ -1,0 +1,676 @@
+<title>Sidewall Math</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --bg:#EAEDF0; --surface:#FFFFFF; --surface-2:#F3F6F8; --inset:#E2E7EC;
+    --ink:#14181D; --ink-2:#4A5663; --ink-3:#7C8894;
+    --rule:#D2D9E0; --rule-2:#E5EAEF;
+    --one:#33586E; --one-soft:#E1E9EE; --one-ink:#2A4859;
+    --two:#C06010; --two-soft:#FAE9D6; --two-ink:#9E4E0C;
+    --rubber:#23272B; --rubber-2:#31363B; --tread:#41474D;
+    --wheel:#C3CAD1; --wheel-2:#9AA4AE; --hub:#7C8792;
+    --ok:#2C7A51; --ok-soft:#DEF0E7;
+    --bad:#AE3328; --bad-soft:#F8E4E1;
+    --shadow:0 1px 2px rgba(20,24,29,.05), 0 10px 26px -14px rgba(20,24,29,.32);
+    --mono:'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --sans:'Barlow', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --disp:'Oswald', 'Barlow Condensed', system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0F1317; --surface:#171C21; --surface-2:#1D232A; --inset:#11161A;
+      --ink:#E6EBEF; --ink-2:#A4B0BB; --ink-3:#78848F;
+      --rule:#2A323A; --rule-2:#222A31;
+      --one:#7FB3CF; --one-soft:#1B2A34; --one-ink:#9CC7DE;
+      --two:#F0A14A; --two-soft:#33240F; --two-ink:#F3B26C;
+      --rubber:#0C0F12; --rubber-2:#191D21; --tread:#2C3238;
+      --wheel:#7F8A95; --wheel-2:#5C6771; --hub:#48525B;
+      --ok:#5FBF8C; --ok-soft:#142620;
+      --bad:#E4726A; --bad-soft:#2B1715;
+      --shadow:0 1px 2px rgba(0,0,0,.5), 0 10px 26px -14px rgba(0,0,0,.8);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0F1317; --surface:#171C21; --surface-2:#1D232A; --inset:#11161A;
+    --ink:#E6EBEF; --ink-2:#A4B0BB; --ink-3:#78848F;
+    --rule:#2A323A; --rule-2:#222A31;
+    --one:#7FB3CF; --one-soft:#1B2A34; --one-ink:#9CC7DE;
+    --two:#F0A14A; --two-soft:#33240F; --two-ink:#F3B26C;
+    --rubber:#0C0F12; --rubber-2:#191D21; --tread:#2C3238;
+    --wheel:#7F8A95; --wheel-2:#5C6771; --hub:#48525B;
+    --ok:#5FBF8C; --ok-soft:#142620;
+    --bad:#E4726A; --bad-soft:#2B1715;
+    --shadow:0 1px 2px rgba(0,0,0,.5), 0 10px 26px -14px rgba(0,0,0,.8);
+  }
+
+  body{
+    background:var(--bg); color:var(--ink); font-family:var(--sans);
+    font-size:16px; line-height:1.5; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:860px; margin:0 auto; padding-inline:18px; padding-block:34px 72px;}
+  *{box-sizing:border-box;}
+  h1,h2,h3{font-family:var(--disp); font-weight:500; margin:0; text-wrap:balance; letter-spacing:.005em;}
+  h1{font-size:clamp(30px,6.4vw,46px); line-height:1.04; text-transform:uppercase; letter-spacing:.012em;}
+  h2{font-size:19px; text-transform:uppercase; letter-spacing:.09em;}
+  p{margin:0;}
+  .eyebrow{
+    font-family:var(--mono); font-size:11px; font-weight:500; letter-spacing:.2em;
+    text-transform:uppercase; color:var(--ink-3);
+  }
+  .lede{color:var(--ink-2); max-width:58ch; margin-top:10px; font-size:16.5px;}
+
+  header.page{display:flex; flex-direction:column; gap:6px; margin-bottom:26px;}
+
+  section{margin-top:34px;}
+  .sec-head{display:flex; align-items:baseline; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:14px;}
+  .sec-head p{color:var(--ink-3); font-size:13.5px;}
+
+  .card{background:var(--surface); border:1px solid var(--rule); border-radius:4px; box-shadow:var(--shadow);}
+  .pad{padding:20px;}
+  @media (max-width:480px){ .pad{padding:15px;} }
+
+  /* ---- size inputs: styled like a sidewall stamp ---- */
+  .sizes{display:flex; flex-direction:column; gap:12px;}
+  .size-row{display:flex; align-items:center; gap:14px; flex-wrap:wrap;}
+  .size-tag{
+    font-family:var(--mono); font-size:11px; font-weight:600; letter-spacing:.14em;
+    text-transform:uppercase; width:64px; flex:none;
+  }
+  .size-tag.one{color:var(--one-ink);} .size-tag.two{color:var(--two-ink);}
+  .stamp{
+    display:flex; align-items:center; gap:2px; background:var(--rubber);
+    border-radius:3px; padding:7px 12px; border:1px solid var(--rubber-2);
+    border-left:4px solid var(--edge);
+  }
+  .stamp.one{--edge:var(--one);} .stamp.two{--edge:var(--two);}
+  .stamp input{
+    font-family:var(--mono); font-size:22px; font-weight:500; letter-spacing:.02em;
+    background:transparent; border:0; color:#F2F4F6; width:3.6ch; text-align:center;
+    padding:3px 2px; border-radius:2px; -moz-appearance:textfield;
+  }
+  .stamp input.rim{width:2.6ch;}
+  .stamp input::-webkit-outer-spin-button,.stamp input::-webkit-inner-spin-button{-webkit-appearance:none; margin:0;}
+  .stamp input:focus{outline:2px solid var(--edge); outline-offset:2px; background:rgba(255,255,255,.07);}
+  .stamp .sep{font-family:var(--mono); font-size:20px; color:#8A949E; padding:0 1px; user-select:none;}
+  .stamp .sep.r{color:#B6BEC6; font-weight:600;}
+
+  .btn{
+    font-family:var(--mono); font-size:11px; font-weight:600; letter-spacing:.12em; text-transform:uppercase;
+    background:var(--surface-2); color:var(--ink-2); border:1px solid var(--rule);
+    border-radius:3px; padding:8px 12px; cursor:pointer;
+  }
+  .btn:hover{background:var(--inset); color:var(--ink);}
+  .btn:focus-visible{outline:2px solid var(--one); outline-offset:2px;}
+  .tools{display:flex; gap:8px; align-items:center; margin-top:16px; flex-wrap:wrap;}
+
+  .unit-toggle{display:inline-flex; border:1px solid var(--rule); border-radius:3px; overflow:hidden;}
+  .unit-toggle button{
+    font-family:var(--mono); font-size:11px; font-weight:600; letter-spacing:.1em; text-transform:uppercase;
+    background:var(--surface); color:var(--ink-3); border:0; padding:7px 13px; cursor:pointer;
+  }
+  .unit-toggle button+button{border-left:1px solid var(--rule);}
+  .unit-toggle button[aria-pressed="true"]{background:var(--ink); color:var(--surface);}
+  .unit-toggle button:focus-visible{outline:2px solid var(--one); outline-offset:-2px;}
+
+  .err{
+    color:var(--bad); background:var(--bad-soft); border:1px solid var(--bad);
+    border-radius:3px; padding:9px 12px; font-size:13.5px; margin-top:14px;
+  }
+
+  /* ---- verdict ---- */
+  .verdict{
+    display:flex; align-items:flex-start; gap:12px; margin-top:16px;
+    border-radius:3px; padding:13px 15px; border:1px solid;
+  }
+  .verdict .num{font-family:var(--mono); font-size:25px; font-weight:600; line-height:1; flex:none;}
+  .verdict .txt{font-size:14px; line-height:1.4;}
+  .verdict .txt b{font-family:var(--disp); font-weight:500; text-transform:uppercase; letter-spacing:.07em; font-size:13px; display:block;}
+  .verdict.ok{background:var(--ok-soft); border-color:var(--ok); color:var(--ok);}
+  .verdict.bad{background:var(--bad-soft); border-color:var(--bad); color:var(--bad);}
+  .verdict .txt{color:var(--ink-2);}
+
+  /* ---- tables ---- */
+  .scroll{overflow-x:auto;}
+  table{border-collapse:collapse; width:100%; font-variant-numeric:tabular-nums;}
+  th,td{text-align:right; padding:10px 12px; border-bottom:1px solid var(--rule-2); white-space:nowrap;}
+  th:first-child,td:first-child{text-align:left;}
+  thead th{
+    font-family:var(--mono); font-size:10.5px; font-weight:600; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--ink-3); border-bottom:1px solid var(--rule);
+    padding-bottom:8px;
+  }
+  tbody td{font-family:var(--mono); font-size:15px;}
+  tbody td:first-child{font-family:var(--sans); font-size:14.5px; color:var(--ink-2);}
+  tbody tr:last-child td{border-bottom:0;}
+  th.c1,td.c1{color:var(--one-ink); background:var(--one-soft);}
+  th.c2,td.c2{color:var(--two-ink); background:var(--two-soft);}
+  td.delta{font-weight:600;}
+  td.delta.up{color:var(--ok);} td.delta.down{color:var(--bad);} td.delta.flat{color:var(--ink-3);}
+  caption{caption-side:bottom; text-align:left; color:var(--ink-3); font-size:12.5px; padding-top:10px;}
+
+  /* ---- visualizer ---- */
+  .viz{display:flex; flex-direction:column; gap:4px;}
+  .viz svg{width:100%; height:auto; display:block;}
+  .viz-label{
+    font-family:var(--mono); font-size:10.5px; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--ink-3); padding-bottom:6px; border-bottom:1px solid var(--rule-2); margin-bottom:14px;
+  }
+  svg text{font-family:var(--mono); fill:var(--ink-2);}
+  svg .dim{font-size:13px; font-weight:500;}
+  svg .dim-1{fill:var(--one-ink);} svg .dim-2{fill:var(--two-ink);}
+  svg .sub{font-size:11px; fill:var(--ink-3); letter-spacing:.08em;}
+  svg .badge{font-family:'Oswald',sans-serif; font-size:30px; font-weight:500; fill:#EDF0F3;}
+
+  /* ---- speedo ---- */
+  .speedo-note{font-size:14px; color:var(--ink-2); margin-top:12px;}
+  .speedo-note b{color:var(--ink); font-family:var(--mono); font-weight:600;}
+
+  /* ---- alternates ---- */
+  .rim-group{margin-top:16px;}
+  .rim-group:first-child{margin-top:0;}
+  .rim-title{
+    font-family:var(--mono); font-size:10.5px; font-weight:600; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--ink-3); margin-bottom:8px;
+  }
+  .chips{display:grid; grid-template-columns:repeat(auto-fill,minmax(148px,1fr)); gap:7px;}
+  .chip{
+    display:flex; flex-direction:column; gap:2px; align-items:flex-start;
+    background:var(--surface-2); border:1px solid var(--rule); border-radius:3px;
+    padding:8px 10px; cursor:pointer; text-align:left; font-family:var(--mono);
+    color:var(--ink);
+  }
+  .chip:hover{border-color:var(--two); background:var(--two-soft);}
+  .chip:focus-visible{outline:2px solid var(--two); outline-offset:2px;}
+  .chip .sz{font-size:14.5px; font-weight:600;}
+  .chip .pc{font-size:11px; color:var(--ink-3);}
+  .chip .pc.tight{color:var(--ok);}
+  .empty{color:var(--ink-3); font-size:14px;}
+
+  footer.notes{
+    margin-top:44px; padding-top:18px; border-top:1px solid var(--rule);
+    color:var(--ink-3); font-size:13px; line-height:1.6;
+  }
+  footer.notes h3{font-size:13px; letter-spacing:.14em; color:var(--ink-2); margin-bottom:8px;}
+  footer.notes code{font-family:var(--mono); font-size:12px; color:var(--ink-2);}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important; animation:none!important;}}
+</style>
+
+<div class="wrap">
+
+  <header class="page">
+    <p class="eyebrow">Tire size calculator</p>
+    <h1>Compare two<br>tire sizes</h1>
+    <p class="lede">Type a size you have and a size you're thinking about. Everything below
+      recalculates as you type &mdash; diameter, sidewall, revolutions per mile, how far off your
+      speedometer will read, and which other sizes fit safely.</p>
+  </header>
+
+  <div class="card pad">
+    <div class="sizes">
+      <div class="size-row">
+        <span class="size-tag one">Size 1</span>
+        <div class="stamp one">
+          <input id="w1" class="w" type="number" inputmode="numeric" value="265" aria-label="Size 1 section width in millimetres">
+          <span class="sep">/</span>
+          <input id="a1" class="a" type="number" inputmode="numeric" value="65" aria-label="Size 1 aspect ratio">
+          <span class="sep r">R</span>
+          <input id="r1" class="rim" type="number" inputmode="numeric" value="18" aria-label="Size 1 wheel diameter in inches">
+        </div>
+      </div>
+      <div class="size-row">
+        <span class="size-tag two">Size 2</span>
+        <div class="stamp two">
+          <input id="w2" class="w" type="number" inputmode="numeric" value="225" aria-label="Size 2 section width in millimetres">
+          <span class="sep">/</span>
+          <input id="a2" class="a" type="number" inputmode="numeric" value="55" aria-label="Size 2 aspect ratio">
+          <span class="sep r">R</span>
+          <input id="r2" class="rim" type="number" inputmode="numeric" value="18" aria-label="Size 2 wheel diameter in inches">
+        </div>
+      </div>
+    </div>
+
+    <div class="tools">
+      <div class="unit-toggle" role="group" aria-label="Units">
+        <button id="unit-in" type="button" aria-pressed="true">Inches</button>
+        <button id="unit-mm" type="button" aria-pressed="false">mm</button>
+      </div>
+      <button id="swap" class="btn" type="button">&#8646;&nbsp; Swap sizes</button>
+      <button id="reset" class="btn" type="button">Reset</button>
+    </div>
+
+    <div id="error" class="err" hidden></div>
+    <div id="verdict" class="verdict ok" hidden>
+      <span class="num" id="verdict-num">&mdash;</span>
+      <span class="txt"><b id="verdict-head"></b><span id="verdict-body"></span></span>
+    </div>
+  </div>
+
+  <section id="spec-section">
+    <div class="sec-head">
+      <h2>Specifications</h2>
+      <p>Change is Size&nbsp;2 measured against Size&nbsp;1</p>
+    </div>
+    <div class="card pad">
+      <div class="scroll">
+        <table id="spec-table">
+          <thead>
+            <tr>
+              <th scope="col">Measurement</th>
+              <th scope="col" class="c1" id="h-size1">Size 1</th>
+              <th scope="col" class="c2" id="h-size2">Size 2</th>
+              <th scope="col">Change</th>
+            </tr>
+          </thead>
+          <tbody id="spec-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>Visualizer</h2>
+      <p>Both tires drawn to the same scale</p>
+    </div>
+    <div class="card pad viz">
+      <p class="viz-label">Cross-section &mdash; height and tread width</p>
+      <div id="side-view"></div>
+    </div>
+    <div class="card pad viz" style="margin-top:14px;">
+      <p class="viz-label">Face on &mdash; wheel, sidewall and rolling circumference</p>
+      <div id="face-view"></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>Speedometer error</h2>
+      <p>Assumes Size&nbsp;1 is the factory size</p>
+    </div>
+    <div class="card pad">
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Speedometer reads</th>
+              <th scope="col">You're actually going</th>
+              <th scope="col">Off by</th>
+            </tr>
+          </thead>
+          <tbody id="speedo-body"></tbody>
+        </table>
+      </div>
+      <p class="speedo-note" id="speedo-note"></p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>Alternate sizes</h2>
+      <p>Within &plusmn;3% of Size&nbsp;1 &mdash; tap one to load it as Size&nbsp;2</p>
+    </div>
+    <div class="card pad" id="alt-wrap"></div>
+  </section>
+
+  <footer class="notes">
+    <h3>HOW THESE NUMBERS ARE WORKED OUT</h3>
+    <p>A size like <code>265/65R18</code> reads as: 265&nbsp;mm across the tread, a sidewall 65% of
+      that width tall, wrapped around an 18&nbsp;inch wheel. So sidewall = <code>265 &times; 0.65 =
+      172.3&nbsp;mm</code>, and overall diameter = <code>18" + two sidewalls = 31.6"</code>.
+      Revolutions per mile = <code>63,360 &divide; circumference in inches</code>.</p>
+    <p style="margin-top:10px;">Percentages are taken from the rounded figures shown in the table, so
+      the column always adds up the way you see it. The &plusmn;3% window is the usual industry limit for
+      a plus-size or minus-size fitment &mdash; past that, the speedometer, odometer, ABS and traction
+      control are all working from the wrong rolling distance. These are nominal specs from the size
+      code; a real tire's molded dimensions vary a little by brand and tread pattern, and this
+      doesn't check whether the tire clears your fenders or suspension.</p>
+  </footer>
+</div>
+
+<script>
+(function(){
+  var MM = 25.4;
+  var DEFAULTS = { w1:265, a1:65, r1:18, w2:225, a2:55, r2:18 };
+  var unit = 'in';
+
+  var el = function(id){ return document.getElementById(id); };
+  var r1d = function(n){ return Math.round(n*10)/10; };
+  var f = function(n){ return Math.round(n*100)/100; };
+
+  /* ---------- math ---------- */
+  function calc(w, a, r){
+    var sidewallMm = w * a / 100;
+    var diaMm = r * MM + 2 * sidewallMm;
+    var diaIn = diaMm / MM;
+    var circIn = Math.PI * diaIn;
+    return {
+      label: w + '/' + a + 'R' + r,
+      w:w, a:a, rim:r,
+      widthIn: w / MM,      widthMm: w,
+      sidewallIn: sidewallMm / MM, sidewallMm: sidewallMm,
+      diaIn: diaIn,         diaMm: diaMm,
+      circIn: circIn,       circMm: Math.PI * diaMm,
+      revs: 63360 / circIn
+    };
+  }
+
+  /* percentage taken from the rounded, displayed inch figures */
+  function pctFromShown(aIn, bIn){
+    var A = r1d(aIn), B = r1d(bIn);
+    if(!A) return 0;
+    return (B - A) / A * 100;
+  }
+
+  function len(inches, mm){
+    return unit === 'in' ? r1d(inches).toFixed(1) + '"' : Math.round(mm) + ' mm';
+  }
+  function signed(p){ return (p > 0 ? '+' : '') + p.toFixed(1) + '%'; }
+  function signedInt(n){ return (n > 0 ? '+' : '') + Math.round(n); }
+
+  function readSize(n){
+    return {
+      w: parseFloat(el('w'+n).value),
+      a: parseFloat(el('a'+n).value),
+      r: parseFloat(el('r'+n).value)
+    };
+  }
+  function problem(s, which){
+    if(!isFinite(s.w) || !isFinite(s.a) || !isFinite(s.r)) return 'Size ' + which + ' is missing a number. Fill in all three boxes.';
+    if(s.w < 105 || s.w > 405) return 'Size ' + which + ': section width should be between 105 and 405 mm.';
+    if(s.a < 20 || s.a > 95)   return 'Size ' + which + ': aspect ratio should be between 20 and 95.';
+    if(s.r < 8 || s.r > 30)    return 'Size ' + which + ': wheel diameter should be between 8 and 30 inches.';
+    return null;
+  }
+
+  /* ---------- SVG helpers ---------- */
+  function dimH(x1, x2, y, cls){
+    return '<path d="M'+f(x1)+' '+f(y-4)+'V'+f(y+4)+'M'+f(x1)+' '+f(y)+'H'+f(x2)+'M'+f(x2)+' '+f(y-4)+'V'+f(y+4)+
+      '" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" class="'+cls+'"/>';
+  }
+  function dimV(x, y1, y2, cls){
+    return '<path d="M'+f(x-4)+' '+f(y1)+'H'+f(x+4)+'M'+f(x)+' '+f(y1)+'V'+f(y2)+'M'+f(x-4)+' '+f(y2)+'H'+f(x+4)+
+      '" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" class="'+cls+'"/>';
+  }
+  function txt(x, y, s, cls, anchor){
+    return '<text x="'+f(x)+'" y="'+f(y)+'" text-anchor="'+(anchor||'middle')+'" class="'+cls+'">'+s+'</text>';
+  }
+
+  /* ---------- side / cross-section view ---------- */
+  function sideView(t1, t2){
+    var S = 11, gap = 40, padX = 66, padTop = 42, padBot = 58;
+    var ts = [t1, t2];
+    var ws = [t1.widthIn*S, t2.widthIn*S];
+    var hs = [t1.diaIn*S,   t2.diaIn*S];
+    var maxH = Math.max(hs[0], hs[1]);
+    var vbW = padX*2 + ws[0] + gap + ws[1];
+    var vbH = padTop + maxH + padBot;
+    var xs = [padX, padX + ws[0] + gap];
+    var out = '';
+
+    for(var i=0; i<2; i++){
+      var x = xs[i], w = ws[i], h = hs[i];
+      var yTop = padTop + (maxH - h)/2, yBot = yTop + h;
+      var col = i === 0 ? 'var(--one)' : 'var(--two)';
+      var cls = i === 0 ? 'dim dim-1' : 'dim dim-2';
+      var rad = Math.min(w/2, 11);
+
+      out += '<rect x="'+f(x)+'" y="'+f(yTop)+'" width="'+f(w)+'" height="'+f(h)+'" rx="'+f(rad)+
+             '" fill="var(--rubber)" stroke="'+col+'" stroke-width="2"/>';
+      /* tread siping */
+      var grooves = Math.max(3, Math.round(h/26));
+      for(var g=1; g<grooves; g++){
+        var gy = yTop + h*g/grooves;
+        out += '<path d="M'+f(x+3)+' '+f(gy)+'H'+f(x+w-3)+'" stroke="var(--tread)" stroke-width="1.4"/>';
+      }
+      /* shoulder bead lines */
+      out += '<path d="M'+f(x+w*0.26)+' '+f(yTop+4)+'V'+f(yBot-4)+'M'+f(x+w*0.74)+' '+f(yTop+4)+'V'+f(yBot-4)+
+             '" stroke="var(--tread)" stroke-width="1.2" fill="none" opacity=".75"/>';
+      out += '<circle cx="'+f(x+w/2)+'" cy="'+f(yTop+h/2)+'" r="15" fill="'+col+'"/>';
+      out += '<text x="'+f(x+w/2)+'" y="'+f(yTop+h/2+10)+'" text-anchor="middle" class="badge">'+(i+1)+'</text>';
+
+      /* diameter bracket, outside edge */
+      var bx = i === 0 ? x - 16 : x + w + 16;
+      out += '<g color="'+col+'">' + dimV(bx, yTop, yBot, cls) + '</g>';
+      out += txt(x + w/2, padTop - 14, len(ts[i].diaIn, ts[i].diaMm), cls);
+      out += txt(x + w/2, padTop - 28, 'DIAMETER', 'sub');
+
+      /* width bracket below */
+      var wy = padTop + maxH + 20;
+      out += '<g color="'+col+'">' + dimH(x, x + w, wy, cls) + '</g>';
+      out += txt(x + w/2, wy + 18, len(ts[i].widthIn, ts[i].widthMm), cls);
+      out += txt(x + w/2, wy + 32, 'WIDTH', 'sub');
+    }
+    return '<svg viewBox="0 0 '+f(vbW)+' '+f(vbH)+'" role="img" aria-label="Cross-sections of '+
+           t1.label+' and '+t2.label+' drawn to scale">'+out+'</svg>';
+  }
+
+  /* ---------- face-on wheel view ---------- */
+  function wheel(t, cx, cy, S, index){
+    var r = t.diaIn * S / 2;
+    var rr = t.rim * S / 2;
+    var col = index === 0 ? 'var(--one)' : 'var(--two)';
+    var cls = index === 0 ? 'dim dim-1' : 'dim dim-2';
+    var out = '';
+
+    out += '<circle cx="'+f(cx)+'" cy="'+f(cy)+'" r="'+f(r)+'" fill="var(--rubber)" stroke="'+col+'" stroke-width="2.5"/>';
+    out += '<circle cx="'+f(cx)+'" cy="'+f(cy)+'" r="'+f((r+rr)/2)+'" fill="none" stroke="var(--tread)" stroke-width="1.2" opacity=".8"/>';
+    out += '<circle cx="'+f(cx)+'" cy="'+f(cy)+'" r="'+f(rr)+'" fill="var(--wheel)" stroke="var(--wheel-2)" stroke-width="1.5"/>';
+
+    /* ten spoke windows */
+    var spokes = 10;
+    for(var i=0; i<spokes; i++){
+      var ang = (i / spokes) * Math.PI * 2 - Math.PI/2;
+      var wx = cx + Math.cos(ang) * rr * 0.58;
+      var wy = cy + Math.sin(ang) * rr * 0.58;
+      var ww = rr * 0.24, wh = rr * 0.56;
+      var deg = ang * 180 / Math.PI + 90;
+      out += '<rect x="'+f(-ww/2)+'" y="'+f(-wh/2)+'" width="'+f(ww)+'" height="'+f(wh)+'" rx="'+f(ww*0.42)+
+             '" fill="var(--rubber-2)" transform="translate('+f(wx)+' '+f(wy)+') rotate('+f(deg)+')"/>';
+    }
+    out += '<circle cx="'+f(cx)+'" cy="'+f(cy)+'" r="'+f(rr*0.2)+'" fill="var(--hub)"/>';
+    out += '<circle cx="'+f(cx)+'" cy="'+f(cy)+'" r="'+f(rr*0.2)+'" fill="none" stroke="var(--wheel-2)" stroke-width="1"/>';
+
+    /* rim diameter bracket above */
+    out += '<g color="'+col+'">' + dimH(cx - rr, cx + rr, cy - r - 13, cls) + '</g>';
+    out += txt(cx, cy - r - 21, t.rim + '" wheel', 'sub');
+
+    /* sidewall bracket, bottom centre */
+    out += '<g color="'+col+'">' + dimV(cx, cy + rr, cy + r, cls) + '</g>';
+    out += txt(cx + 9, cy + rr + (r - rr)/2 + 4, len(t.sidewallIn, t.sidewallMm), cls, 'start');
+    out += txt(cx + 9, cy + rr + (r - rr)/2 + 17, 'SIDEWALL', 'sub', 'start');
+
+    /* circumference + revs below */
+    out += txt(cx, cy + r + 24, len(t.circIn, t.circMm), cls);
+    out += txt(cx, cy + r + 37, 'AROUND', 'sub');
+    out += txt(cx, cy + r + 54, Math.round(t.revs) + ' revs/mile', 'sub');
+    return out;
+  }
+
+  function faceView(t1, t2, stacked){
+    var S = 10.5, out = '';
+    var d1 = t1.diaIn * S, d2 = t2.diaIn * S;
+    var padTop = 50, padBot = 64, padX = 58, gap = 56;
+    var vbW, vbH;
+
+    if(stacked){
+      vbW = padX*2 + Math.max(d1, d2);
+      vbH = padTop + d1 + padBot + padTop + d2 + padBot;
+      out += wheel(t1, vbW/2, padTop + d1/2, S, 0);
+      out += wheel(t2, vbW/2, padTop + d1 + padBot + padTop + d2/2, S, 1);
+    } else {
+      vbW = padX*2 + d1 + gap + d2;
+      vbH = padTop + Math.max(d1, d2) + padBot;
+      var base = padTop + Math.max(d1, d2);
+      out += wheel(t1, padX + d1/2, base - d1/2, S, 0);
+      out += wheel(t2, padX + d1 + gap + d2/2, base - d2/2, S, 1);
+    }
+    return '<svg viewBox="0 0 '+f(vbW)+' '+f(vbH)+'" role="img" aria-label="'+t1.label+' and '+t2.label+
+           ' shown face on to scale">'+out+'</svg>';
+  }
+
+  /* ---------- alternate sizes ---------- */
+  var WIDTHS = [135,145,155,165,175,185,195,205,215,225,235,245,255,265,275,285,295,305,315,325,335,345,355];
+  var ASPECTS = [25,30,35,40,45,50,55,60,65,70,75,80];
+  function alternates(base){
+    var groups = {};
+    for(var rim = base.rim - 2; rim <= base.rim + 2; rim++){
+      if(rim < 12 || rim > 30) continue;
+      var list = [];
+      for(var i=0; i<WIDTHS.length; i++){
+        for(var j=0; j<ASPECTS.length; j++){
+          var c = calc(WIDTHS[i], ASPECTS[j], rim);
+          if(c.label === base.label) continue;
+          var p = pctFromShown(base.diaIn, c.diaIn);
+          if(Math.abs(p) > 3) continue;
+          list.push({ label:c.label, pct:p, width:WIDTHS[i], aspect:ASPECTS[j], rim:rim });
+        }
+      }
+      list.sort(function(a,b){ return Math.abs(a.pct) - Math.abs(b.pct) || a.width - b.width; });
+      if(list.length) groups[rim] = list.slice(0, 8);
+    }
+    return groups;
+  }
+
+  /* ---------- render ---------- */
+  function render(){
+    var s1 = readSize(1), s2 = readSize(2);
+    var bad = problem(s1, 1) || problem(s2, 2);
+    var errBox = el('error');
+    if(bad){
+      errBox.textContent = bad;
+      errBox.hidden = false;
+      el('verdict').hidden = true;
+      return;
+    }
+    errBox.hidden = true;
+
+    var t1 = calc(s1.w, s1.a, s1.r), t2 = calc(s2.w, s2.a, s2.r);
+    var dPct = pctFromShown(t1.diaIn, t2.diaIn);
+
+    /* verdict */
+    var v = el('verdict'), inTol = Math.abs(dPct) <= 3;
+    v.hidden = false;
+    v.className = 'verdict ' + (inTol ? 'ok' : 'bad');
+    el('verdict-num').textContent = signed(dPct);
+    el('verdict-head').textContent = inTol ? 'Safe swap' : 'Outside the fitment window';
+    el('verdict-body').textContent = inTol
+      ? t2.label + ' rolls within the ±3% window of ' + t1.label + '. Your speedometer, odometer and ABS stay close enough to correct.'
+      : t2.label + ' is ' + Math.abs(dPct).toFixed(1) + '% ' + (dPct < 0 ? 'shorter' : 'taller') +
+        ' than ' + t1.label + ', past the ±3% window. Expect the speedometer to read ' +
+        (dPct < 0 ? 'high' : 'low') + ' and the odometer to drift.';
+
+    /* spec table */
+    el('h-size1').textContent = t1.label;
+    el('h-size2').textContent = t2.label;
+    var rows = [
+      ['Overall diameter', len(t1.diaIn, t1.diaMm),       len(t2.diaIn, t2.diaMm),       signed(dPct)],
+      ['Tread width',      len(t1.widthIn, t1.widthMm),   len(t2.widthIn, t2.widthMm),   signed(pctFromShown(t1.widthIn, t2.widthIn))],
+      ['Sidewall height',  len(t1.sidewallIn, t1.sidewallMm), len(t2.sidewallIn, t2.sidewallMm), signed(pctFromShown(t1.sidewallIn, t2.sidewallIn))],
+      ['Circumference',    len(t1.circIn, t1.circMm),     len(t2.circIn, t2.circMm),     signed(dPct)],
+      ['Revolutions / mile', Math.round(t1.revs),         Math.round(t2.revs),           signedInt(t2.revs - t1.revs)]
+    ];
+    var body = '';
+    for(var i=0; i<rows.length; i++){
+      var d = String(rows[i][3]);
+      var dir = /^\+/.test(d) ? 'up' : (/^-/.test(d) ? 'down' : 'flat');
+      if(d === '+0.0%' || d === '+0') dir = 'flat';
+      body += '<tr><td>'+rows[i][0]+'</td><td class="c1">'+rows[i][1]+'</td><td class="c2">'+
+              rows[i][2]+'</td><td class="delta '+dir+'">'+d+'</td></tr>';
+    }
+    el('spec-body').innerHTML = body;
+
+    /* visualizer */
+    el('side-view').innerHTML = sideView(t1, t2);
+    el('face-view').innerHTML = faceView(t1, t2, window.innerWidth < 660);
+
+    /* speedometer */
+    var ratio = r1d(t2.diaIn) / r1d(t1.diaIn);
+    var sb = '';
+    for(var mph = 20; mph <= 90; mph += 10){
+      var actual = mph * ratio;
+      var off = actual - mph;
+      var cls = Math.abs(off) < 0.05 ? 'flat' : (off > 0 ? 'up' : 'down');
+      sb += '<tr><td>'+mph+' mph</td><td class="c2">'+actual.toFixed(1)+' mph</td>'+
+            '<td class="delta '+cls+'">'+(off>0?'+':'')+off.toFixed(1)+'</td></tr>';
+    }
+    el('speedo-body').innerHTML = sb;
+    var at60 = 60 * ratio;
+    el('speedo-note').innerHTML = Math.abs(at60 - 60) < 0.05
+      ? 'These two sizes roll the same distance &mdash; your speedometer stays accurate.'
+      : 'With ' + t2.label + ' fitted, an indicated <b>60 mph</b> is really <b>' + at60.toFixed(1) +
+        ' mph</b>, so the speedometer reads <b>' + Math.abs(at60 - 60).toFixed(1) + ' mph ' +
+        (at60 < 60 ? 'fast' : 'slow') + '</b>. Your odometer is off by the same percentage.';
+
+    /* alternates */
+    var groups = alternates(t1);
+    var keys = Object.keys(groups).sort(function(a,b){ return a - b; });
+    var html = '';
+    if(!keys.length){
+      html = '<p class="empty">No standard sizes land within &plusmn;3% of ' + t1.label + '.</p>';
+    } else {
+      for(var k=0; k<keys.length; k++){
+        var rim = keys[k], list = groups[rim];
+        html += '<div class="rim-group"><p class="rim-title">' + rim + '-inch wheels' +
+                (+rim === t1.rim ? ' &middot; same wheel' : '') + '</p><div class="chips">';
+        for(var m=0; m<list.length; m++){
+          var o = list[m];
+          var tight = Math.abs(o.pct) <= 1 ? ' tight' : '';
+          html += '<button class="chip" type="button" data-w="'+o.width+'" data-a="'+o.aspect+'" data-r="'+o.rim+
+                  '"><span class="sz">'+o.label+'</span><span class="pc'+tight+'">'+signed(o.pct)+' diameter</span></button>';
+        }
+        html += '</div></div>';
+      }
+    }
+    el('alt-wrap').innerHTML = html;
+  }
+
+  /* ---------- wiring ---------- */
+  var ids = ['w1','a1','r1','w2','a2','r2'];
+  ids.forEach(function(id){ el(id).addEventListener('input', render); });
+
+  el('unit-in').addEventListener('click', function(){
+    unit = 'in';
+    el('unit-in').setAttribute('aria-pressed','true');
+    el('unit-mm').setAttribute('aria-pressed','false');
+    render();
+  });
+  el('unit-mm').addEventListener('click', function(){
+    unit = 'mm';
+    el('unit-mm').setAttribute('aria-pressed','true');
+    el('unit-in').setAttribute('aria-pressed','false');
+    render();
+  });
+
+  el('swap').addEventListener('click', function(){
+    var a = [el('w1').value, el('a1').value, el('r1').value];
+    el('w1').value = el('w2').value; el('a1').value = el('a2').value; el('r1').value = el('r2').value;
+    el('w2').value = a[0]; el('a2').value = a[1]; el('r2').value = a[2];
+    render();
+  });
+
+  el('reset').addEventListener('click', function(){
+    for(var key in DEFAULTS){ el(key).value = DEFAULTS[key]; }
+    render();
+  });
+
+  el('alt-wrap').addEventListener('click', function(e){
+    var chip = e.target.closest('.chip');
+    if(!chip) return;
+    el('w2').value = chip.getAttribute('data-w');
+    el('a2').value = chip.getAttribute('data-a');
+    el('r2').value = chip.getAttribute('data-r');
+    render();
+    document.getElementById('spec-section').scrollIntoView({ behavior:'smooth', block:'start' });
+  });
+
+  var rt;
+  window.addEventListener('resize', function(){
+    clearTimeout(rt);
+    rt = setTimeout(render, 150);
+  });
+
+  render();
+})();
+</script>
